@@ -1,0 +1,153 @@
+/* Homepage responsive helpers */
+.homepage-body .kabataan-nav-inner,
+.homepage-body .kabataan-footer-shell {
+    max-width: 1280px;
+}
+
+.homepage-body .kabataan-hero,
+.homepage-body #about,
+.homepage-body #faq,
+.homepage-body #kabataanFooter {
+    scroll-margin-top: 88px;
+}
+
+.homepage-body .kabataan-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.homepage-body .kabataan-nav-auth-btn {
+    white-space: nowrap;
+}
+
+@media (max-width: 1199.98px) {
+    .homepage-body .kabataan-nav-links {
+        display: none;
+    }
+
+    .homepage-body .kabataan-nav-toggle {
+        display: inline-flex;
+    }
+
+    .homepage-body .kabataan-nav-auth-btn {
+        min-height: 34px;
+        padding: 0 12px;
+        font-size: 0.72rem;
+    }
+
+    .homepage-body .kabataan-nav-inner {
+        gap: 8px;
+    }
+
+    .homepage-body .kabataan-brand-copy small {
+        display: none;
+    }
+}
+
+@media (min-width: 1200px) {
+    .homepage-body .kabataan-drawer {
+        display: none !important;
+    }
+
+    .homepage-body .kabataan-nav-auth-btn {
+        min-height: 32px;
+        padding: 0 14px;
+        font-size: 0.8rem;
+    }
+}
+
+.homepage-body .about-hero {
+    padding: 56px 0 40px;
+}
+
+@media (max-width: 768px) {
+    .homepage-body .kabataan-section {
+        padding: 48px 0;
+    }
+
+    .homepage-body .kabataan-hero-panel {
+        align-items: stretch;
+    }
+
+    .homepage-body .kabataan-hero-logo {
+        width: 64px;
+        height: 64px;
+    }
+
+    .homepage-body .kabataan-hero-facts dd {
+        font-size: 0.7rem;
+        overflow-wrap: anywhere;
+    }
+
+    .homepage-body .kabataan-kk-panel,
+    .homepage-body .kabataan-explore-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .homepage-body .about-hero {
+        padding: 40px 0 32px;
+    }
+}
+
+@media (max-width: 375px) {
+    .homepage-body .kabataan-hero {
+        padding: 92px 0 36px;
+    }
+
+    .homepage-body .kabataan-hero-facts {
+        gap: 8px;
+    }
+
+    .homepage-body .kabataan-hero-facts div {
+        padding: 10px 6px;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .homepage-body .kabataan-hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .homepage-body .kabataan-hero-actions .kabataan-button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .homepage-body .kabataan-nav-auth-btn {
+        min-height: 32px;
+        padding: 0 10px;
+        font-size: 0.68rem;
+    }
+}
+
+@media (max-width: 414px) {
+    .homepage-body .kabataan-nav-actions .kabataan-nav-auth-btn {
+        display: none;
+    }
+}
+
+/* Nav: no stuck gray highlight on tap/focus */
+.homepage-body .kabataan-nav-link:focus,
+.homepage-body .kabataan-drawer-link:focus,
+.homepage-body .kabataan-nav-toggle:focus {
+    outline: none;
+}
+
+.homepage-body .kabataan-nav-link:focus-visible,
+.homepage-body .kabataan-drawer-link:focus-visible,
+.homepage-body .kabataan-nav-toggle:focus-visible {
+    outline: 2px solid #0450a8;
+    outline-offset: 2px;
+}
+
+.homepage-body .kabataan-nav-link:not(.active),
+.homepage-body .kabataan-drawer-link:not(.active) {
+    background-color: transparent;
+}
+
+.homepage-body .kabataan-nav-toggle.is-active {
+    background: rgba(15, 23, 42, 0.06);
+}

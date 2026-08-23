@@ -1,0 +1,347 @@
+/* Barangay stalk page — profile, officers, feed */
+html:has(.brgy-stalk-page),
+body.brgy-stalk-page {
+    overflow-x: clip;
+    max-width: 100%;
+}
+
+.brgy-stalk-page .profile-container,
+.brgy-stalk-page .bfp-wrap,
+.brgy-stalk-page .bfp-grid,
+.brgy-stalk-page .bfp-main,
+.brgy-stalk-page .bfp-sidebar,
+.brgy-stalk-page .info-card,
+.brgy-stalk-page .post-card,
+.brgy-stalk-page .post-content,
+.brgy-stalk-page .post-actions {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.bfp-profile-card .brgy-logo-fallback { line-height: 1; }
+
+.bfp-name,
+.bfp-loc {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.bfp-stat strong {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.bfp-stat--term strong {
+    white-space: nowrap;
+    overflow: visible;
+    font-size: 13px;
+    letter-spacing: -0.02em;
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+.brgy-officers-card .officer-item {
+    min-width: 0;
+}
+
+.brgy-officers-card .officer-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.brgy-officers-card .officer-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a1d25;
+    overflow-wrap: anywhere;
+}
+
+.brgy-officers-card .officer-role {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 1px;
+    overflow-wrap: anywhere;
+}
+
+.brgy-officers-card .officer-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink: 0;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+}
+
+.brgy-officers-card .officer-avatar.has-logo {
+    background: #fff;
+}
+
+.brgy-officers-card .officer-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+    display: block;
+}
+
+.brgy-feed-wrap.info-card,
+.brgy-feed-wrap .card-body,
+.brgy-feed-wrap .post-card,
+.brgy-feed-wrap .post-actions {
+    overflow: visible;
+}
+
+.brgy-feed-body {
+    padding-top: 0;
+}
+
+.brgy-feed-wrap .feed-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: #fff;
+    margin: 0 0 16px;
+    width: 100%;
+    max-width: 100%;
+    gap: 2px;
+    padding: 4px 0 0;
+    overflow: hidden;
+    flex-wrap: nowrap;
+    justify-content: stretch;
+}
+
+.brgy-feed-wrap .feed-tab,
+.brgy-feed-wrap .feed-tab--icon {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 4px 10px;
+    gap: 4px;
+}
+
+.brgy-feed-wrap .feed-tab-text {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.brgy-feed-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.brgy-feed-wrap .post-card {
+    box-shadow: none;
+    border: 1px solid #e8eef5;
+    margin: 0;
+    overflow: visible;
+}
+
+.brgy-feed-wrap .post-card[hidden] {
+    display: none !important;
+}
+
+.brgy-feed-wrap .post-author,
+.brgy-feed-wrap .post-title,
+.brgy-feed-wrap .post-text {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.brgy-feed-empty {
+    text-align: center;
+    padding: 28px 16px;
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.brgy-view-only-note {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.brgy-feed-wrap .action-btn.is-disabled,
+.brgy-feed-wrap .action-btn:disabled {
+    opacity: 0.72;
+    cursor: default;
+    pointer-events: none;
+}
+
+.brgy-feed-wrap button.reaction-summary-left {
+    cursor: pointer;
+}
+
+.brgy-feed-wrap .post-images {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px;
+    max-width: 100%;
+}
+
+.brgy-feed-wrap .post-images img {
+    max-width: 100%;
+}
+
+.brgy-feed-wrap .post-images--1 img {
+    width: 100%;
+    max-height: 320px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.brgy-feed-wrap .post-images--2,
+.brgy-feed-wrap .post-images--3,
+.brgy-feed-wrap .post-images--4 {
+    grid-template-columns: 1fr 1fr;
+}
+
+.brgy-feed-wrap .post-images img {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 10px;
+}
+
+.brgy-feed-wrap .reaction-picker {
+    max-width: min(100%, calc(100vw - 32px));
+}
+
+.brgy-posts-header h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 768px) {
+    .bfp-profile-card .brgy-logo,
+    .bfp-profile-head .brgy-logo {
+        width: 64px;
+        height: 64px;
+        font-size: 20px;
+    }
+
+    .bfp-name { font-size: 16px; }
+
+    .bfp-stat strong { font-size: 13px; }
+    .bfp-stat--term strong { font-size: 12px; }
+    .bfp-stat span { font-size: 9px; }
+
+    .brgy-officers-card .card-body {
+        padding: 12px 14px 16px;
+    }
+
+    .brgy-feed-wrap .feed-filter-bar {
+        top: 0;
+        gap: 0;
+        padding: 0;
+        overflow: hidden;
+        flex-wrap: nowrap;
+        justify-content: stretch;
+    }
+
+    .brgy-feed-wrap .feed-tab,
+    .brgy-feed-wrap .feed-tab--icon {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: none;
+        padding: 6px 1px 8px;
+        gap: 2px;
+    }
+
+    .brgy-feed-wrap .feed-tab-icon svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .brgy-feed-wrap .feed-tab-text {
+        font-size: 8px;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    .brgy-feed-wrap .post-actions {
+        flex-wrap: nowrap;
+    }
+
+    .brgy-feed-wrap .post-actions .action-btn {
+        font-size: 13px;
+        padding: 8px 6px;
+        min-width: 0;
+    }
+
+    .brgy-feed-wrap .reaction-picker {
+        left: 0;
+        right: auto;
+        max-width: calc(100vw - 24px);
+    }
+
+    .brgy-feed-wrap .reaction-picker-inner {
+        flex-wrap: nowrap;
+    }
+
+    .brgy-posts-header {
+        padding: 14px 14px 4px;
+    }
+
+    .brgy-posts-header h2 {
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 375px) {
+    .bfp-profile-card .brgy-logo,
+    .bfp-profile-head .brgy-logo {
+        width: 56px;
+        height: 56px;
+        font-size: 18px;
+    }
+
+    .bfp-name { font-size: 15px; }
+
+    .brgy-feed-wrap .feed-tab--icon {
+        padding: 5px 0 7px;
+    }
+
+    .brgy-feed-wrap .feed-tab-text {
+        font-size: 7px;
+    }
+
+    .brgy-feed-wrap .post-images img {
+        height: 132px;
+    }
+
+    .brgy-feed-wrap .reaction-option {
+        width: 34px;
+        height: 34px;
+        font-size: 20px;
+    }
+}
+
+@media (max-width: 320px) {
+    .bfp-stat strong { font-size: 12px; }
+    .bfp-stat--term strong { font-size: 11px; white-space: normal; }
+
+    .brgy-feed-wrap .feed-tab-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+}

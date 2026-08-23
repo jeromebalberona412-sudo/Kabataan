@@ -1,0 +1,42 @@
+/* Stable hover states — no layout shift on homepage controls */
+.homepage-body .kabataan-nav-link,
+.homepage-body .kabataan-drawer-link,
+.homepage-body .kabataan-nav-secondary,
+.homepage-body .kabataan-nav-primary,
+.homepage-body .kabataan-button,
+.homepage-body .kabataan-text-link,
+.homepage-body .kabataan-chip-button,
+.homepage-body .kabataan-tab,
+.homepage-body .about-btn,
+.homepage-body .kabataan-footer-social-link,
+.homepage-body .kabataan-footer-links a,
+.homepage-body .kabataan-footer-brand,
+.homepage-body .kabataan-value-card,
+.homepage-body .kabataan-program-card,
+.homepage-body .kabataan-barangay-card,
+.homepage-body .about-stat-card,
+.homepage-body .about-feature-card,
+.homepage-body .about-join-card,
+.homepage-body .about-impact-card,
+.homepage-body .faq-toggle {
+    transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.homepage-body .kabataan-nav-link:hover,
+.homepage-body .kabataan-drawer-link:hover,
+.homepage-body .kabataan-nav-secondary:hover,
+.homepage-body .kabataan-nav-primary:hover,
+.homepage-body .kabataan-button:hover,
+.homepage-body .kabataan-text-link:hover,
+.homepage-body .kabataan-chip-button:hover,
+.homepage-body .kabataan-tab:hover,
+.homepage-body .about-btn:hover,
+.homepage-body .kabataan-footer-social-link:hover,
+.homepage-body .kabataan-value-card:hover,
+.homepage-body .kabataan-program-card:hover,
+.homepage-body .kabataan-barangay-card:hover,
+.homepage-body .about-stat-card:hover,
+.homepage-body .about-feature-card:hover,
+.homepage-body .about-join-card:hover {
+    transform: none;
+}

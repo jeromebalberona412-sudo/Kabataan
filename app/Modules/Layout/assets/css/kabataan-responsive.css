@@ -1,0 +1,197 @@
+/* Kabataan authenticated pages — Bootstrap grid helpers + mobile/desktop responsive */
+
+.kabataan-app-page .profile-container,
+.youth-dashboard .dashboard-container {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.feed-section {
+    min-width: 0;
+}
+
+.feed-header {
+    margin-bottom: 12px;
+}
+
+.feed-header h1 {
+    font-size: clamp(1.1rem, 1.2vw, 1.35rem);
+    margin-bottom: 4px;
+}
+
+.feed-header p {
+    font-size: clamp(0.78rem, 0.9vw, 0.875rem);
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.feed-filter-bar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0;
+}
+
+.feed-tab {
+    border: none;
+    background: transparent;
+    padding: 10px 14px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+}
+
+.feed-tab.active {
+    color: var(--brand-mid);
+    border-bottom-color: var(--brand-mid);
+}
+
+#feed-posts {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-width: 100%;
+    overflow-x: clip;
+}
+
+#feed-posts .post-card {
+    margin-bottom: 0 !important;
+}
+
+.post-text,
+.post-link-preview {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.post-link-preview {
+    display: inline-block;
+    max-width: 100%;
+    font-size: 0.8125rem;
+    color: var(--brand-mid);
+}
+
+.program-answer-preview {
+    font-size: 0.8125rem;
+    color: #64748b;
+    margin: 4px 0 0;
+    overflow-wrap: anywhere;
+}
+
+.participation-answers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.participation-answer-item {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f8fafc;
+}
+
+.participation-answer-q {
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #111827;
+}
+
+.participation-answer-a {
+    color: #374151;
+    overflow-wrap: anywhere;
+}
+
+.abyip-programs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+}
+
+.abyip-program-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.abyip-program-emoji {
+    font-size: 1.25rem;
+}
+
+.abyip-program-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    margin: 0;
+    color: #111827;
+}
+
+.abyip-program-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin: 2px 0 0;
+}
+
+@media (max-width: 768px) {
+    html,
+    body.youth-dashboard {
+        overflow-x: clip;
+        max-width: 100%;
+    }
+
+    body.youth-dashboard {
+        overflow: auto;
+        height: auto;
+    }
+
+    .youth-dashboard .dashboard-container,
+    .kabataan-app-page .profile-content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .programs-sidebar-left {
+        order: 2;
+    }
+
+    .feed-section {
+        order: 1;
+    }
+
+    .profile-left-column,
+    .profile-right-column {
+        width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .feed-filter-bar {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+    }
+
+    .feed-tab {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 8px 6px;
+    }
+
+    .filter-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+    }
+
+    .filter-tabs .tab-btn {
+        flex-shrink: 0;
+    }
+}

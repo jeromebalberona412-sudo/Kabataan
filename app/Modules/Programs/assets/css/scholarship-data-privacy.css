@@ -1,0 +1,226 @@
+/* Scholarship Data Privacy Notice modal */
+
+.sch-dp-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10060;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 16px;
+}
+
+.sch-dp-modal[hidden] {
+    display: none !important;
+}
+
+.sch-dp-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.62);
+    backdrop-filter: blur(3px);
+}
+
+.sch-dp-shell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: min(720px, 100%);
+    max-height: calc(100vh - 40px);
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+    overflow: hidden;
+}
+
+.sch-dp-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
+    color: #fff;
+}
+
+.sch-dp-badge {
+    display: inline-block;
+    margin-bottom: 8px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.sch-dp-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.sch-dp-subtitle {
+    margin: 6px 0 0;
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.sch-dp-close {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.sch-dp-close:hover {
+    background: rgba(255, 255, 255, 0.24);
+}
+
+.sch-dp-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+    font-size: 14px;
+    line-height: 1.65;
+    color: #334155;
+}
+
+.sch-dp-intro {
+    margin: 0 0 16px;
+}
+
+.sch-dp-section {
+    margin-bottom: 16px;
+}
+
+.sch-dp-section h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.sch-dp-section p {
+    margin: 0 0 8px;
+}
+
+.sch-dp-section ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.sch-dp-section li + li {
+    margin-top: 4px;
+}
+
+.sch-dp-note {
+    margin: 8px 0 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 13px;
+}
+
+.sch-dp-footer {
+    padding: 16px 24px 20px;
+    border-top: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.sch-dp-agree {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.sch-dp-agree input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.sch-dp-checkbox-ui {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    border: 2px solid #94a3b8;
+    border-radius: 5px;
+    background: #fff;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.sch-dp-agree input:checked ~ .sch-dp-checkbox-ui {
+    border-color: #1a56db;
+    background: #1a56db;
+    box-shadow: inset 0 0 0 3px #fff;
+}
+
+.sch-dp-error {
+    margin: 10px 0 0;
+    font-size: 13px;
+    color: #dc2626;
+}
+
+.sch-dp-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.sch-dp-btn {
+    padding: 11px 18px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+}
+
+.sch-dp-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.sch-dp-btn-secondary {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.sch-dp-btn-primary {
+    background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
+    color: #fff;
+}
+
+.sch-dp-btn-primary:not(:disabled):hover,
+.sch-dp-btn-secondary:hover {
+    transform: translateY(-1px);
+}
+
+.apply-now-button.apply-view-btn {
+    background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+
+.apply-now-button.apply-view-btn:hover {
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+}

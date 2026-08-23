@@ -1,0 +1,154 @@
+/* Locked full-page yearly KK Profiling update — no app navigation */
+.kkpu-page-body {
+    background: #f0f1f5;
+    min-height: 100vh;
+    padding-top: 0;
+}
+
+.kkpu-lock-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 56px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #011e3c 0%, #0450a8 60%, #1a6fd4 100%);
+    box-shadow: 0 2px 16px rgba(2, 42, 84, 0.35);
+}
+
+.kkpu-lock-bar__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.kkpu-lock-bar__logo {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.kkpu-lock-bar__title {
+    display: flex;
+    flex-direction: column;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.15;
+    min-width: 0;
+}
+
+.kkpu-lock-bar__title small {
+    font-size: 11px;
+    font-weight: 500;
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.kkpu-lock-bar__logout {
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
+    min-height: 36px;
+    cursor: pointer;
+}
+
+.kkpu-lock-bar__logout:hover,
+.kkpu-lock-bar__logout:focus-visible {
+    background: rgba(255, 255, 255, 0.22);
+    outline: none;
+}
+
+.kkpu-page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 72px 16px 48px;
+}
+
+.kkpu-page-header {
+    margin-bottom: 18px;
+}
+
+.kkpu-page-title {
+    margin: 0 0 8px;
+    font-size: 26px;
+    font-weight: 800;
+    color: #111827;
+    line-height: 1.25;
+}
+
+.kkpu-page-subtitle {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #4b5563;
+    max-width: 720px;
+}
+
+.kkpu-paper {
+    margin-top: 8px;
+}
+
+.kkpu-page .kkp-alert {
+    margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+    .kkpu-page {
+        padding: 68px 12px 32px;
+    }
+
+    .kkpu-page-title {
+        font-size: 20px;
+    }
+
+    .kkpu-page-subtitle {
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 480px) {
+    .kkpu-lock-bar {
+        padding: 8px 10px;
+        gap: 8px;
+    }
+
+    .kkpu-lock-bar__title small {
+        display: none;
+    }
+
+    .kkpu-lock-bar__logout {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .kkpu-page {
+        padding: 64px 10px 28px;
+    }
+}
+
+@media (max-width: 320px) {
+    .kkpu-lock-bar__title {
+        font-size: 13px;
+    }
+
+    .kkpu-lock-bar__logo {
+        width: 28px;
+        height: 28px;
+    }
+}

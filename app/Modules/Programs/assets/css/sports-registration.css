@@ -1,0 +1,74 @@
+/* Sports apply form — complements scholarship_application.css */
+.sports-apply-page {
+    padding-bottom: 48px;
+}
+
+.sports-kk-card {
+    margin-bottom: 16px;
+}
+
+.sports-kk-note {
+    color: #64748b;
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.sports-kk-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.sports-class-list {
+    margin: 8px 0 0;
+    padding-left: 18px;
+}
+
+.sports-eligibility-warning {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.gf-subsection-title {
+    margin: 16px 0 8px;
+    font-size: 15px;
+}
+
+.sports-apply-form .gf-card {
+    margin-bottom: 16px;
+}
+
+.gf-checkbox-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 14px;
+    color: #334155;
+}
+
+.gf-checkbox-row input {
+    margin-top: 3px;
+}
+
+.gf-submit-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.sports-modal-tabs {
+    margin-bottom: 16px;
+}
+
+.sports-submitted-card {
+    margin-top: 16px;
+}
+
+.sports-submitted-answer {
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.sports-submitted-answer:last-child {
+    border-bottom: none;
+}

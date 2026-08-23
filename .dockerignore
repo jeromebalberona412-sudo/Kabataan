@@ -1,0 +1,83 @@
+# Git
+.git
+.gitignore
+.gitattributes
+.github
+
+# Documentation
+README.md
+CHANGELOG.md
+LICENSE
+docs/
+RENDER_DEPLOYMENT_GUIDE.md
+PERFORMANCE_OPTIMIZATIONS.md
+
+# Tests
+tests/
+phpunit.xml
+.phpunit.result.cache
+Pest.php
+phpunit.xml.backup
+
+# Development files
+.env.example
+.env.backup
+.env.local
+.env.production
+.env.testing
+
+# Build output (we build fresh in Docker)
+public/build/
+public/hot/
+public/storage
+
+# Storage (don't include local storage files, but keep the directory structure)
+storage/*.key
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/app/public/*
+storage/*.sqlite
+
+# Cache (keep directory structure)
+bootstrap/cache/*
+
+# Node modules (we install fresh in Docker)
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Misc
+*.log
+*.bak
+*.tmp
+*.temp
+composer.phar
+package-lock.json.backup
+check-feed.php
+test_legacy_ocr.php
+test_service_pipeline.php
+test_upload_pipeline.php

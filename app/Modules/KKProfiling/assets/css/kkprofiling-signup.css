@@ -1,0 +1,434 @@
+.kk-signup-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: linear-gradient(135deg, #022a54, #0450a8 55%, #1a6fd4);
+    overflow: hidden;
+}
+
+.kk-signup-container {
+    position: relative;
+    z-index: 10;
+    flex: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    width: 100%;
+    padding: 2rem 0;
+    animation: kkSignupFadeIn 0.6s ease forwards;
+    overflow-y: auto;
+}
+
+@keyframes kkSignupFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.kk-signup-section {
+    width: 100%;
+    max-width: 1080px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    margin: 0 auto;
+}
+
+.kk-signup-card {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(40px);
+    border-radius: 28px;
+    padding: 2.5rem 3rem;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.kk-signup-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 0;
+    background: none;
+}
+
+.kk-signup-header {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.kk-signup-title {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #000000;
+    -webkit-background-clip: initial;
+    -webkit-text-fill-color: initial;
+    background-clip: initial;
+    background: none;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+.kk-signup-subtitle {
+    font-size: 0.95rem;
+    color: #000000;
+    font-weight: 700;
+    margin: 0;
+}
+
+.kk-signup-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+    padding: 0.85rem 1rem;
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 12px;
+    font-size: 0.82rem;
+    color: #000000;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.kk-signup-notice strong {
+    color: #000000;
+    font-weight: 900;
+}
+
+.kk-signup-notice svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #000000;
+}
+
+.kk-signup-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.1rem;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    font-weight: 700;
+    line-height: 1.5;
+    position: relative;
+    animation: kkSignupAlertIn 0.3s ease forwards;
+}
+
+@keyframes kkSignupAlertIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.kk-signup-alert-error {
+    background: #fff0f0;
+    border: 2px solid #000000;
+    color: #000000;
+}
+
+.kk-signup-alert-error strong {
+    color: #000000;
+    font-weight: 900;
+}
+
+.kk-signup-alert svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: #b71c1c;
+}
+
+.kk-signup-alert > span {
+    flex: 1;
+    color: #000000;
+    font-weight: 800;
+}
+
+.kk-signup-alert-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #000000;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+}
+
+.kk-signup-alert-close:hover {
+    opacity: 1;
+}
+
+.kk-signup-alert-close svg {
+    width: 16px;
+    height: 16px;
+    color: #000000;
+    margin: 0;
+}
+
+.kk-signup-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    background: #f8f9ff;
+    border-radius: 8px;
+    border: 1px solid #e8eaf6;
+}
+
+.kk-signup-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    color: #555;
+}
+
+.kk-signup-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.kk-signup-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.kk-signup-filter {
+    border: 1px solid #d7dce8;
+    background: #fff;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.kk-signup-filter:hover {
+    border-color: #0450a8;
+    color: #0450a8;
+}
+
+.kk-signup-filter.is-active {
+    background: #0450a8;
+    border-color: #0450a8;
+    color: #fff;
+}
+
+.kk-signup-search {
+    margin-bottom: 1.25rem;
+}
+
+.kk-signup-search input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.kk-signup-search input:focus {
+    outline: none;
+    border-color: #44a53e;
+}
+
+.kk-signup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 0.85rem;
+    margin-bottom: 1.5rem;
+}
+
+.kk-signup-barangay {
+    padding: 0.9rem 0.75rem 0.8rem;
+    border: 2px solid #e8eaf0;
+    border-radius: 14px;
+    background: #fafbfc;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 132px;
+}
+
+.kk-signup-barangay:hover {
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+.kk-signup-barangay-logo-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #eef2ff;
+    border: 1px solid #dbe3f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.kk-signup-barangay-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.kk-signup-barangay-logo-fallback {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #0450a8;
+    line-height: 1;
+}
+
+.kk-signup-barangay-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    width: 100%;
+}
+
+.kk-signup-barangay-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #94a3b8;
+    line-height: 1.25;
+}
+
+.kk-signup-barangay.is-open {
+    cursor: pointer;
+    background: #fff;
+    border-color: #a5d6a7;
+    box-shadow: 0 4px 14px rgba(46, 125, 50, 0.12);
+}
+
+.kk-signup-barangay.is-open .kk-signup-barangay-name {
+    color: #1e293b;
+}
+
+.kk-signup-barangay.is-open:hover {
+    border-color: #44a53e;
+    background: #f5fff5;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(68, 165, 62, 0.18);
+}
+
+.kk-signup-barangay.has-schedule:not(.is-open) .kk-signup-barangay-name {
+    color: #475569;
+}
+
+.kk-signup-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.18rem 0.55rem;
+    border-radius: 20px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.kk-signup-badge-ongoing     { background: #e8f5e9; color: #2e7d32; }
+.kk-signup-badge-upcoming    { background: #e3f2fd; color: #1565c0; }
+.kk-signup-badge-completed   { background: #f3e5f5; color: #6a1b9a; }
+.kk-signup-badge-cancelled   { background: #fce4ec; color: #b71c1c; }
+.kk-signup-badge-rescheduled { background: #fff8e1; color: #e65100; }
+.kk-signup-badge-none        { background: #f1f5f9; color: #94a3b8; font-weight: 500; text-transform: none; font-size: 0.68rem; }
+
+.kk-signup-period {
+    display: block;
+    font-size: 0.66rem;
+    color: #64748b;
+    font-weight: 500;
+    line-height: 1.35;
+    max-width: 100%;
+}
+
+.kk-signup-period strong {
+    color: #334155;
+    font-weight: 700;
+}
+
+.kk-signup-open-hint {
+    display: block;
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: #2e7d32;
+    margin-top: 0.1rem;
+}
+
+.kk-signup-no-results {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #999;
+}
+
+.kk-signup-back-link {
+    position: fixed;
+    top: 1.25rem;
+    left: 1.25rem;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #ffffff;
+    text-decoration: none;
+    padding: 0.5rem 0.85rem;
+    border-radius: 999px;
+    background: rgba(2, 42, 84, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    backdrop-filter: blur(8px);
+    transition: background 0.15s, color 0.15s;
+}
+
+.kk-signup-back-link svg {
+    width: 14px;
+    height: 14px;
+}
+
+.kk-signup-back-link:hover {
+    color: #fff;
+    background: rgba(2, 42, 84, 0.95);
+}
+
+@media (max-width: 768px) {
+    .kk-signup-section { padding: 0 1.5rem 2.5rem; }
+    .kk-signup-card { padding: 2rem 1.5rem; border-radius: 24px; }
+    .kk-signup-title { font-size: 1.75rem; }
+}
+
+@media (max-width: 640px) {
+    .kk-signup-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+}

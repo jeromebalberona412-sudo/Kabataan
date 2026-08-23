@@ -1,0 +1,393 @@
+/* =============================================
+   NOTIFICATION POPOVER — Dashboard / Profile
+   ============================================= */
+
+.notif-nav-wrapper {
+    position: static;
+}
+
+.notif-nav-btn {
+    position: relative;
+}
+
+.notif-nav-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    box-shadow: 0 0 0 2px rgba(4, 80, 168, 0.9);
+    white-space: nowrap;
+    box-sizing: border-box;
+    font-variant-numeric: tabular-nums;
+}
+
+.notif-popover:not(.open) {
+    visibility: hidden;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden;
+    right: 0;
+    padding: 0;
+    border: 0;
+}
+
+.notif-popover {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 280px;
+    max-width: min(280px, calc(100vw - 16px));
+    background: #ffffff;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(2, 42, 84, 0.18), 0 2px 8px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    z-index: 500;
+    transform: scale(0.94) translateY(-8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.22s cubic-bezier(0.34,1.4,0.64,1), opacity 0.18s ease;
+    transform-origin: top right;
+}
+
+/* Caret arrow pointing up */
+.notif-popover::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: var(--np-arrow-right, 16px);
+    width: 16px;
+    height: 8px;
+    background: linear-gradient(135deg, #022a54 0%, #0450a8 100%);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    z-index: 1;
+}
+
+.notif-popover.open {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    pointer-events: all;
+    visibility: visible;
+    width: 280px;
+    max-width: min(280px, calc(100vw - 16px));
+    overflow: visible;
+}
+
+.np-inner {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 16px;
+}
+
+/* Header */
+.np-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px 12px;
+    background: linear-gradient(135deg, #022a54 0%, #0450a8 100%);
+    flex-shrink: 0;
+}
+
+.np-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.np-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.np-count-pill {
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    min-width: 18px;
+    text-align: center;
+    line-height: 16px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.np-mark-all-btn {
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 5px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.np-mark-all-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.np-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.np-close-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    color: #ffffff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.np-close-btn:hover { background: rgba(255,255,255,0.3); }
+.np-close-btn svg { width: 14px; height: 14px; }
+
+/* Body */
+.np-body {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 360px;
+}
+
+/* Empty state */
+.np-empty[hidden],
+.np-list[hidden] {
+    display: none !important;
+}
+
+.np-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px 36px;
+    text-align: center;
+    gap: 10px;
+}
+
+.np-empty svg {
+    opacity: 0.7;
+    margin-bottom: 4px;
+}
+
+.np-empty-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+    margin: 0;
+}
+
+.np-empty-sub {
+    font-size: 14px;
+    color: #94a3b8;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.np-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.np-item {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.np-item:last-child {
+    border-bottom: none;
+}
+
+.np-item:hover {
+    background: #f8fafc;
+}
+
+.np-item.np-unread {
+    background: #eff6ff;
+}
+
+.np-item.np-unread:hover {
+    background: #dbeafe;
+}
+
+.np-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.np-item-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #022a54;
+}
+
+.np-item-text {
+    font-size: 0.82rem;
+    color: #475569;
+    line-height: 1.4;
+}
+
+.np-item-time {
+    font-size: 0.74rem;
+    color: #94a3b8;
+}
+
+.np-unread-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ef4444;
+    margin-top: 6px;
+    flex-shrink: 0;
+}
+
+.np-footer {
+    border-top: 1px solid #e2e8f0;
+    padding: 10px 12px;
+    background: #f8fafc;
+}
+
+.np-see-all-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    text-decoration: none;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #0450a8;
+    padding: 8px 10px;
+    border-radius: 10px;
+}
+
+.np-see-all-btn:hover {
+    background: #eff6ff;
+}
+
+/* Responsive — Tablet + phone: same spot, smaller panel */
+@media (max-width: 768px) {
+    .notif-nav-badge {
+        min-width: 18px;
+        height: 13px;
+        font-size: 8px;
+        line-height: 13px;
+        padding: 0 3px;
+        top: 0;
+        right: 0;
+        box-shadow: 0 0 0 1.5px rgba(4, 80, 168, 0.9);
+    }
+
+    .np-count-pill {
+        font-size: 9px;
+        min-width: 16px;
+        padding: 0 5px;
+        line-height: 14px;
+    }
+
+    .notif-popover,
+    .notif-popover.open {
+        position: fixed;
+        top: calc(var(--kab-nav-h, 68px) + 6px);
+        right: 8px;
+        left: auto;
+        width: min(232px, calc(100vw - 16px));
+        max-width: calc(100vw - 16px);
+        max-height: min(58vh, 340px);
+        z-index: 500;
+        border-radius: 12px;
+    }
+
+    .np-inner {
+        border-radius: 12px;
+    }
+
+    .np-body {
+        max-height: min(42vh, 220px);
+    }
+
+    .np-header {
+        padding: 8px 10px;
+        gap: 6px;
+    }
+
+    .np-title {
+        font-size: 13px;
+    }
+
+    .np-mark-all-btn {
+        font-size: 10px;
+        padding: 4px 6px;
+    }
+
+    .np-item {
+        padding: 8px 10px;
+    }
+
+    .np-item-title {
+        font-size: 0.78rem;
+    }
+
+    .np-item-text {
+        font-size: 0.72rem;
+    }
+
+    .np-see-all-btn {
+        font-size: 0.75rem;
+        padding: 6px 8px;
+    }
+}
+
+@media (max-width: 375px) {
+    .notif-popover,
+    .notif-popover.open {
+        right: 6px;
+        width: min(210px, calc(100vw - 12px));
+        max-height: min(54vh, 300px);
+    }
+}
+
+@media (max-width: 480px) {
+    .notif-popover::before {
+        top: -8px;
+        display: block;
+    }
+}
+

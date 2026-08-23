@@ -1,0 +1,1107 @@
+/* ============================================
+   SK OnePortal - Youth Sign In
+   Clean, Professional Design
+   ============================================ */
+
+:root {
+    --youth-green: #44a53e;
+    --youth-yellow: #fdc020;
+    --youth-blue: #0450a8;
+    --youth-green-light: #5cb854;
+    --youth-green-dark: #357a30;
+    --youth-blue-light: #0d5fc4;
+    --youth-blue-dark: #033d7a;
+    --youth-blue-ultra: #022a54;
+    --youth-white: #ffffff;
+    --youth-gray-200: #e2e8f0;
+    --youth-gray-300: #cbd5e1;
+    --youth-gray-400: #94a3b8;
+    --youth-gray-500: #64748b;
+    --youth-gray-600: #475569;
+    --youth-gray-700: #334155;
+    --youth-gray-900: #0f172a;
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   Reset & Base
+   ============================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+    height: 100vh;
+}
+
+html {
+    overflow: hidden;
+    height: 100%;
+    scroll-behavior: smooth;
+}
+
+@media (max-width: 1024px) {
+    body {
+        overflow-y: auto;
+        overflow-x: hidden;
+        height: auto;
+    }
+    html {
+        overflow-y: auto;
+        overflow-x: hidden;
+        height: auto;
+    }
+}
+
+/* ============================================
+   Background
+   ============================================ */
+
+.youth-signin-page,
+.youth-login-page {
+    min-height: 100vh;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: linear-gradient(135deg, #022a54, #0450a8 55%, #1a6fd4);
+    overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+    .youth-signin-page,
+    .youth-login-page {
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+/* Background wrapper — kept for HTML compatibility but hidden */
+.youth-bg-wrapper,
+.youth-bg-image,
+.youth-gradient-overlay {
+    display: none;
+}
+
+/* Floating shapes — hidden, kept for HTML compatibility */
+.floating-shapes { display: none; }
+
+/* ============================================
+   Main Container
+   ============================================ */
+
+.youth-signin-container,
+.youth-login-container {
+    position: relative;
+    z-index: 10;
+    flex: 1;
+    display: flex;
+    min-height: 100vh;
+    height: 100vh;
+    max-width: 1600px;
+    margin: 0 auto;
+    width: 100%;
+    overflow: hidden;
+    animation: pageFadeIn 0.6s ease forwards;
+}
+
+@keyframes pageFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@media (max-width: 1024px) {
+    .youth-signin-container {
+        height: auto;
+        min-height: 100vh;
+        overflow-y: visible;
+    }
+}
+
+/* ============================================
+   Left Side - Branding
+   ============================================ */
+
+.youth-branding-section {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 6rem;
+}
+
+.branding-content {
+    max-width: 600px;
+    text-align: center;
+}
+
+.logo-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 3rem;
+    position: relative;
+}
+
+.logo-wrapper::before {
+    content: '';
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(4, 80, 168, 0.22) 0%, rgba(253, 192, 32, 0.10) 50%, transparent 70%);
+    border-radius: 50%;
+}
+
+.youth-logo {
+    width: 240px;
+    height: 240px;
+    object-fit: cover;
+    border-radius: 50%;
+    filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.4));
+    position: relative;
+    z-index: 1;
+    border: 4px solid rgba(253, 192, 32, 0.6);
+}
+
+.youth-main-title {
+    font-size: 5rem;
+    font-weight: 900;
+    color: var(--youth-white);
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+}
+
+.youth-tagline {
+    font-size: 1.5rem;
+    color: var(--youth-yellow);
+    font-weight: 600;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    white-space: nowrap;
+}
+
+/* ============================================
+   Right Side - Sign In Card
+   ============================================ */
+
+.youth-signin-section,
+.youth-login-section {
+    width: 580px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    margin-left: auto;
+    margin-right: 8rem;
+    overflow: hidden;
+}
+
+.youth-signin-card,
+.youth-login-card {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(40px);
+    border-radius: 28px;
+    padding: 1.75rem 2.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+/* ============================================
+   Card Header
+   ============================================ */
+
+.card-header {
+    display: block;
+    min-height: 0;
+    margin-bottom: 1.15rem;
+    text-align: center;
+}
+
+/* "Sign in to your account" — match SK Officials login title */
+.card-subtitle {
+    font-size: 1.4rem;
+    color: var(--youth-gray-900);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-align: center;
+    margin: 0;
+    line-height: 1.2;
+}
+
+/* Forgot-password card: single-line bold title */
+.card-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--youth-gray-900);
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+/* Small muted helper text below the title */
+.card-helper-text {
+    font-size: 0.9375rem;
+    color: var(--youth-gray-700);
+    font-weight: 500;
+    margin: 0.5rem 0 0;
+    line-height: 1.55;
+}
+
+/* ============================================
+   Alert Messages
+   ============================================ */
+
+.youth-alert {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1.125rem;
+    border-radius: 14px;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.youth-alert-success {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.12) 100%);
+    color: #15803d;
+    border: 1.5px solid rgba(34, 197, 94, 0.2);
+}
+
+.youth-alert-error {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.12) 100%);
+    color: #b91c1c;
+    border: 1.5px solid rgba(239, 68, 68, 0.2);
+}
+
+.alert-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+/* ============================================
+   Form
+   ============================================ */
+
+.youth-signin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.youth-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.youth-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--youth-gray-700);
+    letter-spacing: 0.01em;
+}
+
+.label-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--youth-blue);
+}
+
+.youth-input {
+    width: 100%;
+    padding: 0.875rem 1.125rem;
+    font-size: 0.95rem;
+    border: 2px solid var(--youth-gray-200);
+    border-radius: 12px;
+    background: var(--youth-white);
+    color: var(--youth-gray-900);
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    font-family: inherit;
+    font-weight: 500;
+}
+
+.youth-input:hover {
+    border-color: var(--youth-gray-300);
+}
+
+.youth-input:focus {
+    outline: none;
+    border-color: var(--youth-blue);
+    box-shadow: 0 0 0 4px rgba(4, 80, 168, 0.08);
+}
+
+.youth-input::placeholder {
+    color: var(--youth-gray-400);
+    font-weight: 400;
+}
+
+/* Password Field */
+.password-wrapper {
+    position: relative;
+}
+
+.password-wrapper .youth-input {
+    padding-right: 3rem;
+}
+
+.password-input::-ms-reveal,
+.password-input::-ms-clear {
+    display: none;
+}
+
+.password-input::-webkit-credentials-auto-fill-button,
+.password-input::-webkit-contacts-auto-fill-button {
+    visibility: hidden;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+}
+
+/* Password visibility toggle button */
+.pw-toggle-btn {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    color: var(--youth-gray-400);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: color 0.15s ease;
+    line-height: 0;
+    z-index: 2;
+}
+
+.pw-toggle-btn:hover  { color: var(--youth-blue); }
+.pw-toggle-btn:focus-visible { outline: 2px solid var(--youth-blue); outline-offset: 2px; }
+
+.pw-eye {
+    width: 20px;
+    height: 20px;
+    display: block;
+    transition: opacity 0.15s ease;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Wrapper needs relative so absolute eyes are contained */
+.pw-toggle-btn { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; }
+
+.pw-eye-show { opacity: 1; }
+.pw-eye-hide { opacity: 0; }
+
+.pw-toggle-btn.pw-visible .pw-eye-show { opacity: 0; }
+.pw-toggle-btn.pw-visible .pw-eye-hide { opacity: 1; }
+
+.toggle-password {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    color: var(--youth-gray-400);
+    transition: color var(--transition-base), background var(--transition-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    z-index: 10;
+}
+
+.toggle-password:hover {
+    color: var(--youth-blue);
+    background: rgba(4, 80, 168, 0.08);
+}
+
+.toggle-password:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.eye-icon {
+    width: 22px;
+    height: 22px;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    pointer-events: none;
+}
+
+.eye-open  { opacity: 1; transform: scale(1) rotate(0deg); }
+.eye-closed { opacity: 0; transform: scale(0.8) rotate(-10deg); }
+
+/* ============================================
+   Form Options
+   ============================================ */
+
+.youth-form-options {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0.35rem;
+}
+
+.youth-remember-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.youth-forgot-link {
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+}
+
+.youth-remember-modal-dialog {
+    max-width: 420px;
+}
+
+.youth-remember-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.youth-remember-modal-cancel {
+    min-height: 42px;
+    padding: 0 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: #fff;
+    color: #374151;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.youth-remember-modal-cancel:hover,
+.youth-remember-modal-cancel:focus-visible {
+    background: #f8fafc;
+    border-color: #94a3b8;
+}
+
+.youth-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.youth-checkbox input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--youth-blue);
+    border-radius: 6px;
+}
+
+.checkbox-label {
+    font-size: 0.95rem;
+    color: var(--youth-gray-600);
+    font-weight: 500;
+    white-space: nowrap;
+    display: inline-block;
+}
+
+.youth-link {
+    font-size: 0.95rem;
+    color: var(--youth-blue);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color var(--transition-fast);
+}
+
+.youth-link:hover {
+    color: var(--youth-blue-dark);
+    text-decoration: underline;
+}
+
+/* ============================================
+   Submit Button
+   ============================================ */
+
+.youth-submit-btn {
+    width: 100%;
+    padding: 0.875rem 1.5rem;
+    min-height: 48px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--youth-white);
+    background: linear-gradient(135deg, var(--youth-blue) 0%, var(--youth-blue-light) 100%);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    transition: background var(--transition-base), box-shadow var(--transition-base);
+    box-shadow: 0 8px 24px rgba(4, 80, 168, 0.25);
+    margin-top: 0.5rem;
+    letter-spacing: 0.02em;
+}
+
+.youth-submit-btn:hover {
+    background: linear-gradient(135deg, var(--youth-blue-dark) 0%, var(--youth-blue) 100%);
+    box-shadow: 0 12px 32px rgba(4, 80, 168, 0.35);
+}
+
+.youth-submit-btn:active {
+    transform: none;
+}
+
+a.youth-submit-btn,
+a.youth-submit-btn:hover,
+a.youth-submit-btn:focus,
+a.youth-submit-btn:visited {
+    text-decoration: none;
+    color: #ffffff;
+}
+
+/* Button Loading State */
+.youth-submit-btn.loading {
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+.youth-input[readonly] {
+    opacity: 0.7;
+    cursor: not-allowed;
+    background: #f1f5f9;
+}
+
+.youth-submit-btn.loading span {
+    opacity: 0.9;
+}
+
+.youth-homepage-btn {
+    width: 100%;
+    margin-top: 12px;
+    padding: 0.875rem 1.5rem;
+    min-height: 48px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--youth-blue);
+    background: #fff;
+    border: 2px solid var(--youth-blue);
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base);
+}
+
+.youth-homepage-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.youth-homepage-btn:hover,
+.youth-homepage-btn:focus-visible {
+    background: var(--youth-blue);
+    border-color: var(--youth-blue);
+    color: #ffffff;
+}
+
+.youth-login-secondary-actions {
+    margin-top: 0.5rem;
+}
+
+.youth-login-secondary-actions .youth-homepage-btn {
+    margin-top: 0;
+}
+
+.btn-icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* ============================================
+   Registration Section
+   ============================================ */
+
+.youth-register-section {
+    margin-top: 1.15rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--youth-gray-200);
+    text-align: center;
+}
+
+.register-text {
+    font-size: 0.95rem;
+    color: var(--youth-gray-600);
+    margin: 0;
+    font-weight: 500;
+}
+
+.register-link {
+    color: var(--youth-blue);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color var(--transition-fast);
+}
+
+.register-link:hover {
+    color: var(--youth-blue-dark);
+    text-decoration: underline;
+}
+
+.register-home-link {
+    display: inline-block;
+    margin-top: 12px;
+}
+
+@media (max-width: 480px) {
+    /* Keep register + back-home links readable on small screens */
+    .youth-register-section {
+        padding: 0 0.5rem;
+    }
+
+    .register-text {
+        font-size: 0.9rem;
+    }
+
+    .register-home-link {
+        display: block;
+        width: 100%;
+        text-align: center;
+        margin-top: 10px;
+    }
+
+    .register-link {
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .register-text {
+        font-size: 0.86rem;
+    }
+
+    .register-home-link {
+        margin-top: 8px;
+    }
+}
+
+/* ============================================
+   Footer
+   ============================================ */
+
+.youth-footer {
+    position: relative;
+    z-index: 10;
+    padding: 2rem;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.youth-footer p {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+
+@media (max-width: 1200px) {
+    .youth-signin-container { padding: 0 2rem; }
+    .youth-branding-section { padding: 3rem; }
+    .youth-main-title { font-size: 4rem; }
+    .youth-signin-section { width: 500px; padding: 3rem 3rem 3rem 2rem; }
+}
+
+@media (max-width: 1024px) {
+    .youth-signin-container,
+    .youth-login-container {
+        flex-direction: column;
+        padding: 0;
+        overflow-y: auto;
+        height: auto;
+    }
+    .youth-branding-section {
+        padding: 4rem 3rem 3rem;
+        text-align: center;
+    }
+    .branding-content {
+        max-width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .youth-main-title { font-size: 4rem; }
+    .youth-tagline { font-size: 1.35rem; max-width: none; }
+    .youth-signin-section,
+    .youth-login-section {
+        width: 100%;
+        max-width: 580px;
+        margin: 0 auto;
+        padding: 0 3rem 4rem;
+        overflow-y: visible;
+    }
+}
+
+@media (max-width: 768px) {
+    .youth-branding-section { padding: 3rem 2rem 2rem; }
+    .youth-main-title { font-size: 3rem; }
+    .youth-tagline { font-size: 1.2rem; }
+    .logo-wrapper::before { width: 240px; height: 240px; }
+    .youth-logo { width: 180px; height: 180px; }
+    .youth-signin-section { padding: 0 2rem 3rem; }
+    .youth-signin-card { padding: 2rem 2.5rem; border-radius: 28px; }
+    .card-header { min-height: 0; margin-bottom: 1.75rem; }
+    .card-subtitle { font-size: 1.35rem; }
+}
+
+@media (max-width: 640px) {
+    .youth-branding-section { padding: 2.5rem 1.5rem 2rem; }
+    .youth-main-title { font-size: 2.5rem; }
+    .youth-tagline { font-size: 1.1rem; }
+    .logo-wrapper { margin-bottom: 2rem; }
+    .logo-wrapper::before { width: 200px; height: 200px; }
+    .youth-logo { width: 150px; height: 150px; }
+    .youth-signin-section { padding: 0 1.5rem 2.5rem; }
+    .youth-signin-card { padding: 1.75rem 2rem; border-radius: 24px; }
+    .card-header { min-height: 0; margin-bottom: 1.5rem; }
+    .card-subtitle { font-size: 1.3rem; }
+    .youth-form-options {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: nowrap;
+    }
+
+    /* Mobile: keep Remember me + Forgot password on one line */
+    .youth-remember-block {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .youth-forgot-link {
+        flex-shrink: 1;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .youth-branding-section { padding: 2rem 1.25rem 1.5rem; }
+    .youth-main-title { font-size: 2rem; }
+    .youth-tagline { font-size: 1rem; }
+    .logo-wrapper { margin-bottom: 1.5rem; }
+    .logo-wrapper::before { width: 160px; height: 160px; }
+    .youth-logo { width: 120px; height: 120px; }
+    .youth-signin-section { padding: 0 1.25rem 2rem; }
+    .youth-signin-card { padding: 1.5rem 1.5rem; border-radius: 20px; }
+    .card-header { min-height: 0; margin-bottom: 1.25rem; }
+    .card-subtitle { font-size: 1.25rem; }
+    .youth-input { padding: 0.875rem 1rem; font-size: 0.95rem; }
+    .youth-submit-btn { padding: 1rem 1.5rem; font-size: 1rem; }
+
+    .youth-form-options {
+        margin-bottom: 0.25rem;
+    }
+
+    .checkbox-label {
+        font-size: 0.9rem;
+    }
+}
+
+/* ============================================
+   Accessibility
+   ============================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media print {
+    .youth-bg-wrapper, .floating-shapes, .youth-footer { display: none; }
+    .youth-signin-page { background: white; }
+    .youth-signin-card { box-shadow: none; border: 2px solid var(--youth-gray-300); }
+}
+
+*:focus-visible {
+    outline: 3px solid var(--youth-yellow);
+    outline-offset: 3px;
+}
+
+/* ============================================
+   States
+   ============================================ */
+
+.youth-input:disabled,
+.youth-submit-btn:disabled,
+.youth-submit-btn.auth-legal-submit-blocked {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Error State */
+.youth-input.error {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.04);
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.08);
+}
+
+.youth-input.error:focus {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
+/* Field Error Message */
+.youth-field-error {
+    font-size: 0.875rem;
+    color: #ef4444;
+    font-weight: 500;
+    margin-top: 0.375rem;
+    display: block;
+    animation: slideInError 0.2s ease forwards;
+}
+
+@keyframes slideInError {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Turnstile Widget */
+/* Submit button while waiting for Turnstile to complete */
+.youth-submit-btn.waiting-for-turnstile {
+    opacity: 0.65;
+    cursor: default;
+}
+
+.youth-submit-btn.waiting-for-turnstile::before {
+    display: none; /* Suppress hover shimmer */
+}
+
+/* ============================================
+   Forgot Password — card header override
+   ============================================ */
+
+/* Slightly narrower card (~half inch less than the 580px signin card) */
+.youth-signin-section--fp {
+    width: 484px;
+}
+
+@media (max-width: 1200px) {
+    .youth-signin-section--fp { width: 452px; }
+}
+
+@media (max-width: 1024px) {
+    .youth-signin-section--fp {
+        width: 100%;
+        max-width: 484px;
+    }
+}
+
+/* Centers title + helper text, stacks them vertically */
+.fp-card-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+    min-height: auto;
+    margin-bottom: 1.75rem;
+}
+
+.fp-card-header .card-subtitle {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--youth-gray-900);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    margin: 0;
+}
+
+.fp-card-header .card-helper-text {
+    font-size: 0.9375rem;
+    color: var(--youth-gray-700);
+    font-weight: 500;
+    line-height: 1.55;
+    margin: 0.5rem 0 0;
+    max-width: none;
+}
+
+/* ============================================
+   Activate Account
+   ============================================ */
+
+.youth-signin-page.youth-activate-page,
+.youth-login-page.youth-activate-page {
+    height: auto;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.youth-signin-page.youth-activate-page .youth-signin-container,
+.youth-login-page.youth-activate-page .youth-signin-container {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+}
+
+.activate-card-header .card-subtitle {
+    color: var(--youth-gray-900);
+}
+
+.activate-card-header .card-helper-text {
+    max-width: none;
+    color: var(--youth-gray-700);
+}
+
+.activate-card-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.activate-card-actions .youth-homepage-btn,
+.activate-card-actions .youth-submit-btn {
+    margin-top: 0;
+}
+
+.activate-no-email-teaser {
+    margin-top: 1.25rem;
+    padding: 0.9rem 1rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid var(--youth-blue);
+    border-radius: 12px;
+    text-align: left;
+}
+
+.activate-no-email-teaser p {
+    margin: 0 0 0.45rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--youth-gray-700);
+}
+
+.activate-no-email-teaser strong {
+    color: var(--youth-gray-900);
+}
+
+.activate-no-email-link {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--youth-blue);
+    text-decoration: underline;
+}
+
+.activate-no-email-link:hover,
+.activate-no-email-link:focus-visible {
+    color: var(--youth-blue-dark);
+}
+
+.activate-no-email-notice {
+    text-align: left;
+    color: var(--youth-gray-900);
+}
+
+.activate-no-email-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    color: var(--youth-gray-900);
+    margin: 0 0 0.75rem;
+}
+
+.activate-no-email-notice p {
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--youth-gray-700);
+    font-weight: 500;
+}
+
+.activate-no-email-tl {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--youth-gray-200);
+}
+
+.activate-no-email-tl p:last-child,
+.activate-no-email-notice > p:last-child {
+    margin-bottom: 0;
+}
+
+.activate-no-email-notice + .activate-card-actions {
+    margin-top: 1.5rem;
+}
+
+.youth-activate-page .youth-signin-section,
+.youth-activate-page .youth-signin-card {
+    overflow: visible;
+}
+
+@media (max-width: 380px) {
+    .youth-main-title,
+    .youth-tagline {
+        white-space: normal;
+    }
+}
+
+/* ============================================
+   Selection
+   ============================================ */
+
+::selection { background: var(--youth-yellow); color: var(--youth-blue-dark); }
+::-moz-selection { background: var(--youth-yellow); color: var(--youth-blue-dark); }

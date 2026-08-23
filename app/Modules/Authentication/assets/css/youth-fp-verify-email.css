@@ -1,0 +1,189 @@
+/* ============================================================
+   SK OnePortal Kabataan — Forgot Password / Verify Email Page
+   Requires: youth-signin.css
+   ============================================================ */
+
+/* ── Card header ── */
+.fpve-header {
+    text-align: center;
+    margin-top: -0.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.fpve-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(4, 80, 168, 0.08);
+    margin-bottom: 1rem;
+    color: var(--youth-blue);
+}
+
+.fpve-icon-wrap svg {
+    width: 32px;
+    height: 32px;
+}
+
+.fpve-title {
+    font-size: 1.35rem;
+    font-weight: 900;
+    color: var(--youth-gray-900);
+    letter-spacing: -0.01em;
+    margin: 0 0 0.4rem;
+}
+
+.fpve-subtitle {
+    font-size: 0.875rem;
+    color: var(--youth-gray-500);
+    font-weight: 400;
+    margin: 0;
+    line-height: 1.6;
+}
+
+.fpve-subtitle strong {
+    color: var(--youth-blue);
+    font-weight: 700;
+}
+
+/* ── Status messages ── */
+.fpve-status {
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.fpve-status-success {
+    background: rgba(34, 197, 94, 0.08);
+    color: #15803d;
+    border: 1.5px solid rgba(34, 197, 94, 0.2);
+}
+
+.fpve-status-error {
+    background: rgba(239, 68, 68, 0.08);
+    color: #b91c1c;
+    border: 1.5px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ── Resend section ── */
+.fpve-resend-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--youth-gray-200);
+}
+
+.fpve-cooldown {
+    font-size: 0.875rem;
+    color: var(--youth-gray-600);
+    text-align: center;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
+.fpve-cooldown strong {
+    color: var(--youth-blue-dark);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Resend button ── */
+.fpve-resend-btn {
+    width: 100%;
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--youth-white);
+    background: linear-gradient(135deg, var(--youth-green) 0%, var(--youth-green-light) 100%);
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: background var(--transition-base), box-shadow var(--transition-base);
+    letter-spacing: 0.02em;
+}
+
+.fpve-resend-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, var(--youth-green-dark) 0%, var(--youth-green) 100%);
+    box-shadow: 0 8px 24px rgba(68, 165, 62, 0.3);
+}
+
+.fpve-resend-btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* ── Loading spinner inside button ── */
+.fpve-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: fpve-spin 0.7s linear infinite;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* hidden attribute must win over display:inline-block */
+.fpve-spinner[hidden] {
+    display: none !important;
+}
+
+@keyframes fpve-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Accessibility: reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+    .fpve-spinner { animation-duration: 0.01ms !important; }
+}
+
+/* ── Cancel button ── */
+.fpve-cancel-btn {
+    display: block;
+    width: 100%;
+    margin-top: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    text-align: center;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--youth-gray-600);
+    background: transparent;
+    border: 2px solid var(--youth-gray-200);
+    border-radius: 12px;
+    text-decoration: none;
+    transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+    cursor: pointer;
+}
+
+.fpve-cancel-btn:hover {
+    background: #f1f5f9;
+    color: var(--youth-gray-700);
+    border-color: var(--youth-gray-300);
+    text-decoration: none;
+}
+
+/* ── Back to signin footer ── */
+.fpve-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--youth-blue);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.fpve-back-link:hover {
+    color: var(--youth-blue-dark);
+    text-decoration: underline;
+}

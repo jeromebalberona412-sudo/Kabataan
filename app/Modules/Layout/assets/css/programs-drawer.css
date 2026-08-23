@@ -1,0 +1,211 @@
+/* ── Programs drawer (mobile / tablet) ── */
+.programs-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.programs-drawer-backdrop.drawer-open,
+.programs-drawer-backdrop.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.programs-sidebar {
+    position: fixed;
+    top: 0;
+    right: -340px;
+    width: min(340px, 92vw);
+    height: 100%;
+    background: #ffffff;
+    z-index: 1050;
+    transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -4px 0 24px rgba(2, 42, 84, 0.18);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.programs-sidebar.drawer-open {
+    right: 0;
+}
+
+.programs-sidebar .sidebar-card {
+    padding: calc(var(--kabataan-header-h, 56px) + 16px) 20px 24px;
+}
+
+.programs-drawer-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 20px;
+}
+
+.programs-drawer-head__text {
+    min-width: 0;
+    flex: 1;
+}
+
+.programs-drawer-head .sidebar-title,
+.programs-sidebar .programs-drawer-head .sidebar-title {
+    margin: 0 0 4px;
+}
+
+.programs-drawer-head .sidebar-subtitle,
+.programs-sidebar .programs-drawer-head .sidebar-subtitle {
+    margin: 0;
+}
+
+.programs-drawer-close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    background: #f1f5f9;
+    color: #334155;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.programs-drawer-close svg {
+    width: 18px;
+    height: 18px;
+}
+
+.programs-drawer-close:hover,
+.programs-drawer-close:focus-visible {
+    background: #e2e8f0;
+    color: #0f172a;
+    outline: none;
+}
+
+.programs-sidebar .sidebar-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #202124;
+    margin: 0 0 4px;
+}
+
+.programs-sidebar .sidebar-subtitle {
+    font-size: 13px;
+    color: #64748b;
+    margin: 0 0 20px;
+}
+
+.programs-drawer-head .sidebar-subtitle {
+    margin: 0;
+}
+
+.programs-drawer-loading {
+    text-align: center;
+    color: #64748b;
+    padding: 16px;
+    font-size: 14px;
+    margin: 0;
+}
+
+.programs-sidebar .program-categories {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: visible;
+}
+
+.programs-sidebar .program-category {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #f8fafc;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    border: 1.5px solid transparent;
+    overflow: visible;
+}
+
+.programs-sidebar .program-category:hover,
+.programs-sidebar .program-category:focus-visible {
+    background: #e8f0fe;
+    border-color: #1a73e8;
+    box-shadow: 0 4px 12px rgba(26, 115, 232, 0.18);
+    outline: none;
+}
+
+.programs-sidebar .program-category:hover .category-content h3,
+.programs-sidebar .program-category:hover .category-content p,
+.programs-sidebar .program-category:focus-visible .category-content h3,
+.programs-sidebar .program-category:focus-visible .category-content p {
+    color: #1e293b;
+}
+
+.programs-sidebar .program-category:hover .chevron,
+.programs-sidebar .program-category:focus-visible .chevron {
+    color: #1a73e8;
+}
+
+.programs-sidebar .category-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.programs-sidebar .category-icon svg {
+    width: 20px;
+    height: 20px;
+    color: #ffffff;
+}
+
+.programs-sidebar .category-icon.education { background: #1a56db; }
+.programs-sidebar .category-icon.anti-drugs { background: #ef4444; }
+.programs-sidebar .category-icon.agriculture { background: #22c55e; }
+.programs-sidebar .category-icon.disaster { background: #f97316; }
+.programs-sidebar .category-icon.sports { background: #3b82f6; }
+.programs-sidebar .category-icon.gender { background: #a855f7; }
+.programs-sidebar .category-icon.health { background: #ec4899; }
+.programs-sidebar .category-icon.others { background: #64748b; }
+
+.programs-sidebar .category-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.programs-sidebar .category-content h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 2px;
+}
+
+.programs-sidebar .category-content p {
+    font-size: 12px;
+    color: #64748b;
+    margin: 0;
+}
+
+.programs-sidebar .chevron {
+    width: 16px;
+    height: 16px;
+    color: #94a3b8;
+    flex-shrink: 0;
+}
+
+@media (min-width: 1201px) {
+    .programs-drawer-backdrop,
+    .programs-sidebar#programsDrawerSidebar {
+        display: none !important;
+    }
+}

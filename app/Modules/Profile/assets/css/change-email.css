@@ -1,0 +1,328 @@
+/* ============================================================
+   Kabataan — Change Email Page
+   ============================================================ */
+
+.ce-verify-content {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ce-sent-header,
+.ce-sent-icon {
+    display: none !important;
+}
+
+#ceSubmitBtn {
+    gap: 0;
+}
+
+#ceSubmitBtn .btn-icon {
+    display: none !important;
+}
+
+/* ── Info box ────────────────────────────────────────────── */
+.ce-info-box {
+    width: 100%;
+    background: #fffbeb;
+    border: 1.5px solid #fbbf24;
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: #92400e;
+    line-height: 1.55;
+    margin-bottom: 0;
+}
+
+/* ── Status table ────────────────────────────────────────── */
+.ce-status-table {
+    width: 100%;
+    border-radius: 12px;
+    border: 1.5px solid #e5e7eb;
+    overflow: hidden;
+    margin-bottom: 0;
+}
+
+.ce-status-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    gap: 10px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.ce-status-row:last-child { border-bottom: none; }
+
+.ce-status-row:nth-child(even) { background: #f9fafb; }
+
+.ce-status-key {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 110px;
+    flex-shrink: 0;
+}
+
+.ce-status-val {
+    font-size: 13px;
+    color: #111827;
+    font-weight: 500;
+    word-break: break-all;
+}
+
+.ce-badge-awaiting {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ce-badge-awaiting::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #f59e0b;
+    flex-shrink: 0;
+}
+
+/* ── Resend timer ────────────────────────────────────────── */
+.ce-resend-timer {
+    font-size: 12px;
+    color: #9ca3af;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* ── Action buttons ──────────────────────────────────────── */
+.ce-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 0;
+}
+
+.ce-btn-resend {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+}
+
+.ce-btn-resend:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    transform: translateY(-2px);
+}
+
+.ce-btn-resend:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.ce-btn-cancel {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    border: 1.5px solid #e5e7eb;
+    background: #fff;
+    color: #374151;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ce-btn-cancel:hover {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+/* ── Back to Profile — no divider, plain link ────────────── */
+.ce-back-section {
+    margin-top: 0.25rem;
+    padding-top: 0;
+    border-top: none !important;
+    text-align: center;
+}
+
+/* Password eye toggle uses youth-login.css (.pw-toggle-btn / .pw-eye) */
+
+/* ── Scroll override so the form matches sign-in but can grow ─ */
+html,
+body {
+    overflow: visible !important;
+    height: auto !important;
+}
+
+body.youth-signin-page {
+    height: auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+.youth-signin-container {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+}
+
+.youth-signin-section {
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+    align-items: flex-start;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+.youth-signin-card {
+    max-width: 500px;
+    overflow: visible;
+}
+
+.ce-card-header {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.youth-signin-card .card-title {
+    white-space: normal;
+    text-align: center;
+    width: 100%;
+    margin: 0;
+}
+
+.youth-signin-card .card-helper-text {
+    text-align: center;
+}
+
+.cp-listening-badge {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: #eff6ff;
+    border: 1.5px solid #93c5fd;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.cp-listening-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3b82f6;
+    flex-shrink: 0;
+    animation: cpPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes cpPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+.cp-listening-badge.is-confirmed {
+    background: #f0fdf4;
+    border-color: #22c55e;
+    color: #166534;
+}
+
+.cp-listening-badge.is-confirmed .cp-listening-dot {
+    background: #22c55e;
+    animation: none;
+}
+
+/* ── Back to Profile on mobile — below submit, full width ─── */
+@media (max-width: 480px) {
+    .ce-back-section {
+        margin-top: 0.75rem;
+    }
+
+    .ce-back-section .register-text {
+        margin: 0;
+    }
+
+    .ce-back-section .register-link {
+        display: block;
+        width: 100%;
+        text-align: center;
+        font-size: 0.875rem;
+        padding: 10px 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .youth-signin-card {
+        max-width: 100%;
+        padding: 1.5rem 1.25rem;
+    }
+
+    .youth-signin-card .card-title {
+        font-size: 1.2rem;
+        white-space: normal;
+    }
+
+    .youth-signin-card .card-helper-text {
+        font-size: 0.85rem;
+        line-height: 1.45;
+    }
+
+    .ce-status-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .ce-status-key {
+        min-width: 0;
+    }
+
+    .ce-info-box,
+    .cp-listening-badge {
+        font-size: 12px;
+        padding: 10px 12px;
+    }
+
+    .ce-actions {
+        gap: 8px;
+    }
+
+    .ce-btn-resend,
+    .ce-btn-cancel {
+        padding: 11px 16px;
+        font-size: 13px;
+    }
+}

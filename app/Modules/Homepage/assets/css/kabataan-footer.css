@@ -1,0 +1,168 @@
+/* Kabataan footer — rich 4-column layout */
+.kabataan-footer {
+    margin-top: 0;
+    padding: 0;
+    background: #022a54;
+    border-top: none;
+    text-align: left;
+    animation: footerFadeInUp 0.5s ease both;
+}
+
+.kabataan-footer-shell {
+    width: min(1280px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 56px 0 28px;
+}
+
+.kabataan-footer-grid {
+    align-items: start;
+}
+
+.kabataan-footer-col {
+    min-width: 0;
+}
+
+.kabataan-footer-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    margin-bottom: 18px;
+}
+
+.kabataan-footer-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    object-fit: contain;
+    padding: 4px;
+    background: #fff;
+}
+
+.kabataan-footer-brand-text strong {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.2;
+}
+
+.kabataan-footer-brand-text small {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.kabataan-footer-desc {
+    margin: 0 0 22px;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: rgba(255, 255, 255, 0.82);
+    max-width: 320px;
+}
+
+.kabataan-footer-social {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.kabataan-footer-social-link {
+    display: inline-grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #fff;
+    color: #022a54;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kabataan-footer-social-link svg {
+    width: 18px;
+    height: 18px;
+}
+
+.kabataan-footer-social-link:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    color: #0450a8;
+}
+
+.kabataan-footer-heading {
+    margin: 0 0 18px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+}
+
+.kabataan-footer-links,
+.kabataan-footer-contact-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.kabataan-footer-links a {
+    color: rgba(255, 255, 255, 0.82);
+    text-decoration: none;
+    font-size: 0.92rem;
+    transition: color 0.2s ease;
+}
+
+.kabataan-footer-links a:hover {
+    color: #fff;
+}
+
+.kabataan-footer-contact-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.kabataan-footer-contact-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    color: #20b486;
+}
+
+.kabataan-footer-contact-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.kabataan-footer__copy {
+    margin: 40px 0 0;
+    padding-top: 22px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.55);
+    text-align: center;
+}
+
+@keyframes footerFadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 640px) {
+    .kabataan-footer-shell {
+        padding: 40px 0 24px;
+    }
+}

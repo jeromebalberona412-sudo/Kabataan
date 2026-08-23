@@ -1,0 +1,45 @@
+/* Contact section heading (above footer) */
+.kabataan-contact-intro {
+    padding: 72px 0 48px;
+    background: #f5f7fa;
+    text-align: center;
+    scroll-margin-top: 88px;
+}
+
+.kabataan-contact-intro .kabataan-contact-info-lead {
+    max-width: 640px;
+    margin: 16px auto 32px;
+    color: #64748b;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.kabataan-contact-intro .contact-info-cards {
+    text-align: left;
+    max-width: 960px;
+    margin: 0 auto;
+}
+
+.kabataan-contact-intro h2 {
+    margin: 0;
+    font-family: 'Poppins', 'Inter', sans-serif;
+    font-size: clamp(1.75rem, 3vw, 2.5rem);
+    font-weight: 800;
+    color: #13253b;
+    letter-spacing: -0.03em;
+}
+
+.kabataan-contact-intro-line {
+    display: block;
+    width: 56px;
+    height: 4px;
+    margin: 14px auto 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #0450a8, #20b486);
+}
+
+@media (max-width: 640px) {
+    .kabataan-contact-intro {
+        padding: 56px 0 36px;
+    }
+}

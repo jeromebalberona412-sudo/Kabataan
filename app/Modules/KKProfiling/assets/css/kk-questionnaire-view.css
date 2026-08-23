@@ -1,0 +1,350 @@
+
+/* ── Modal container overrides ── */
+.kk-view-modal-wide.kk-modal-box {
+    max-width: 900px !important;
+    width: min(900px, 96vw);
+    max-height: 92vh;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.kk-view-modal-wide .kk-view-modal-body {
+    flex: 1 1 auto;
+    min-height: 240px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.kk-profiling-view-root {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.kk-profiling-view-tabs {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0 0 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 1rem;
+    flex-shrink: 0;
+}
+
+.kk-profiling-view-tab {
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.kk-profiling-view-tab.is-active {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+    color: #fff;
+}
+
+.kk-profiling-view-tab-panel[hidden] {
+    display: none !important;
+}
+
+.kk-profiling-form-scroll {
+    max-height: none;
+    overflow: visible;
+}
+
+.kk-view-documents-panel {
+    padding: 16px 20px 24px;
+    background: #f9fafb;
+}
+
+.kk-view-documents-empty {
+    margin: 1rem 0 0;
+    padding: 1rem;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: #64748b;
+    text-align: center;
+    font-size: 12px;
+}
+
+.kk-view-modal-body.kk-qs-body {
+    padding: 0 !important;
+    background: #e8ecf0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.kk-qs-scroll-wrapper {
+    width: 100%;
+    padding: 12px 16px 16px;
+    box-sizing: border-box;
+}
+
+.kk-view-paper {
+    background: #fff;
+    border: 1px solid #b0b8c1;
+    border-radius: 6px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.10);
+    padding: 16px 20px 24px;
+    font-size: 12px;
+    color: #111;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.kk-view-evaluation-banner {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.45;
+    border: 1px solid #e5e7eb;
+    background: #f9fafb;
+    color: #374151;
+}
+
+.kk-view-evaluation-banner.is-success {
+    background: #ecfdf5;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.kk-view-evaluation-banner.is-warning {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+
+.kk-view-evaluation-banner.is-duplicate,
+.kk-view-evaluation-banner.is-pending {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+
+/* Read-only value spans styled like underline inputs */
+.kk-view-paper .kkp-view-value {
+    display: block;
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid #555;
+    background: transparent;
+    font-size: 12px;
+    color: #111;
+    padding: 2px 2px 1px;
+    text-align: center;
+    min-height: 18px;
+    box-sizing: border-box;
+    word-break: break-word;
+}
+
+.kk-view-paper #kkViewLastName,
+.kk-view-paper #kkViewFirstName,
+.kk-view-paper #kkViewMiddleName {
+    text-transform: uppercase;
+}
+
+.kk-view-paper .kkp-hdr-input.kkp-hdr-input-readonly {
+    display: inline-block;
+    min-width: 120px;
+    text-align: center;
+}
+
+.kk-view-paper .kkp-view-chk {
+    cursor: default;
+    pointer-events: none;
+}
+
+.kk-view-paper .kkp-sq-chk:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.kk-view-paper .kkp-sig-name-input.kkp-view-value {
+    border-bottom: 1.5px solid #1a1a1a;
+    min-height: 22px;
+}
+
+/* Inline edit / error states inside questionnaire */
+.kk-view-paper .kk-inline-field-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.kk-view-paper .kk-inline-edit-input {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid #dc2626;
+    background: transparent;
+    font-size: 12px;
+    text-align: center;
+    padding: 2px;
+}
+
+.kk-view-paper .kk-inline-edit-correct {
+    border-bottom-color: #16a34a;
+}
+
+.kk-view-rejection-wrap {
+    margin-top: 16px;
+    padding: 10px 12px;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 6px;
+}
+
+.kk-view-rejection-wrap .kk-view-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #991b1b;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.kk-view-rejection-text {
+    font-size: 12px;
+    color: #7f1d1d;
+    margin: 0;
+}
+
+/* Fix long checkbox labels in "If No, Why?" section */
+#kkViewAssemblyNoCell {
+    overflow: visible;
+}
+
+#kkViewAssemblyNoCell .kkp-demo-block-options {
+    overflow: visible;
+    padding: 3px 4px;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+#kkViewAssemblyNoCell .kkp-chk-lbl {
+    white-space: normal;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    font-size: 10px;
+    line-height: 1.3;
+    width: 100%;
+    max-width: 100%;
+}
+
+#kkViewAssemblyNoCell .kkp-sq-chk {
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+    .kk-view-modal-wide {
+        max-width: 98vw !important;
+    }
+
+    .kk-view-modal-body.kk-qs-body {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .kk-qs-scroll-wrapper {
+        min-width: 600px;
+    }
+}
+
+.kk-view-documents-wrap {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.kk-view-documents-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 10px;
+}
+
+.kk-view-id-verification {
+    font-size: 11px;
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+}
+
+.kk-view-id-verification.is-match {
+    border-color: #86efac;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.kk-view-id-verification.is-mismatch {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.kk-view-documents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.kk-view-document-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.kk-view-document-card-title {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+}
+
+.kk-view-document-side {
+    padding: 8px;
+}
+
+.kk-view-document-side-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+}
+
+.kk-view-document-preview {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #f3f4f6;
+    cursor: zoom-in;
+}
+
+.kk-view-document-link {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.kk-view-document-link:hover {
+    text-decoration: underline;
+}

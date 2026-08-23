@@ -1,0 +1,375 @@
+/* Sign In legal consent + modals (Kabataan & SK Officials) */
+
+.auth-legal-consent-wrap {
+    position: relative;
+    margin-top: 0;
+    margin-bottom: 0.15rem;
+}
+
+.auth-legal-consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.auth-legal-consent-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.auth-legal-consent-text {
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--auth-legal-text, #475569);
+    margin: 0;
+}
+
+.auth-legal-link {
+    display: inline;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--auth-legal-link, #0d9488);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.auth-legal-link:hover {
+    color: var(--auth-legal-link-hover, #0f766e);
+}
+
+.auth-legal-consent-error {
+    margin: 6px 0 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #ef4444;
+}
+
+/* Modal */
+.auth-legal-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.auth-legal-modal[hidden] {
+    display: none !important;
+}
+
+.auth-legal-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.62);
+    backdrop-filter: blur(2px);
+}
+
+.auth-legal-modal-dialog {
+    position: relative;
+    width: min(720px, 100%);
+    max-height: min(88vh, 820px);
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+    overflow: hidden;
+}
+
+.auth-legal-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8fafc;
+}
+
+.auth-legal-modal-title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #111827;
+}
+
+.auth-legal-modal-close {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #6b7280;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.auth-legal-modal-close:hover {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+.auth-legal-modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 22px;
+}
+
+.auth-legal-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 16px 20px;
+    border-top: 1px solid #e5e7eb;
+    background: #f8fafc;
+}
+
+.auth-legal-modal-ack {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1;
+    min-width: min(100%, 280px);
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    font-weight: 600;
+    color: #166534;
+    cursor: pointer;
+}
+
+.auth-legal-modal-ack input {
+    margin-top: 4px;
+    accent-color: var(--auth-legal-accent, #44a53e);
+    flex-shrink: 0;
+}
+
+.auth-legal-modal-ack--locked {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.auth-legal-modal-ack input:disabled {
+    cursor: not-allowed;
+}
+
+.auth-legal-modal-btn {
+    flex-shrink: 0;
+    align-self: flex-end;
+    min-width: 88px;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 8px;
+    background: var(--auth-legal-accent, #44a53e);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.auth-legal-modal-btn:hover {
+    filter: brightness(1.05);
+}
+
+.auth-legal-modal-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: none;
+}
+
+.auth-legal-modal-btn:disabled:hover {
+    filter: none;
+}
+
+/* Document content */
+.auth-legal-doc h3 {
+    margin: 18px 0 8px;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: #111827;
+}
+
+.auth-legal-doc h3:first-of-type {
+    margin-top: 0;
+}
+
+.auth-legal-doc p,
+.auth-legal-doc li {
+    font-size: 0.875rem;
+    line-height: 1.6;
+    color: #374151;
+}
+
+.auth-legal-doc ul {
+    margin: 6px 0 10px 1.25rem;
+}
+
+.auth-legal-doc-meta {
+    margin-bottom: 14px !important;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    color: #6b7280 !important;
+    font-size: 0.8125rem !important;
+}
+
+/* SK Officials dark signin card overrides */
+.sk-signin-card {
+    --auth-legal-text: #cbd5e1;
+    --auth-legal-link: #2dd4bf;
+    --auth-legal-link-hover: #5eead4;
+    --auth-legal-accent: #f5c518;
+}
+
+.sk-signin-card .auth-legal-consent-error {
+    color: #fca5a5;
+}
+
+.sk-signin-card .auth-legal-modal-btn {
+    color: #1a1a2e;
+}
+
+/* Kabataan light card */
+.youth-signin-card {
+    --auth-legal-accent: #44a53e;
+    --auth-legal-link: #0d9488;
+    --auth-legal-link-hover: #0f766e;
+}
+
+.youth-signin-page .youth-signin-card {
+    padding: 2.5rem 3rem;
+}
+
+.youth-signin-page .card-header {
+    display: block;
+    min-height: 0;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.youth-signin-page .card-subtitle {
+    font-size: 1.4rem;
+    font-weight: 800;
+    text-align: center;
+    color: var(--youth-gray-900);
+    letter-spacing: -0.02em;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.youth-signin-card .auth-legal-consent-radio {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    pointer-events: none;
+}
+
+.youth-signin-card .auth-legal-consent-radio:checked,
+.youth-signin-card .auth-legal-consent-radio:focus-visible {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    outline: none;
+}
+
+.youth-signin-form.auth-legal-consent-invalid .auth-legal-consent-radio {
+    box-shadow: none;
+}
+
+.youth-signin-form.auth-legal-consent-invalid .auth-legal-consent-error {
+    display: block;
+}
+
+.youth-signin-card .auth-legal-modal-ack input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: 4px;
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.youth-signin-card .auth-legal-modal-ack input[type="checkbox"]:checked {
+    background: #44a53e;
+    border-color: #44a53e;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23ffffff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='3.5 8.5 6.5 11.5 12.5 4.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 11px 11px;
+}
+
+.youth-signin-page .youth-alert {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+}
+
+.youth-signin-page .youth-register-section {
+    padding-top: 1rem;
+    margin-top: 0.25rem;
+}
+
+@media (max-width: 640px) {
+    .auth-legal-modal {
+        padding: 10px;
+    }
+
+    .auth-legal-modal-footer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .auth-legal-modal-btn {
+        width: 100%;
+        align-self: stretch;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Make inline legal buttons + text wrap nicely on phones */
+    .auth-legal-consent-wrap {
+        margin-bottom: 0.5rem;
+    }
+
+    .auth-legal-consent-text {
+        font-size: 0.75rem;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+
+    .auth-legal-link {
+        font-size: 0.75rem;
+        white-space: normal;
+    }
+}
