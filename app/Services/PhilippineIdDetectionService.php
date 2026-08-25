@@ -73,7 +73,6 @@ class PhilippineIdDetectionService
             'id_type' => $payload['id_type'] ?? null,
             'id_number' => $payload['id_number'] ?? null,
             'confidence' => $payload['confidence'] ?? null,
-            'raw_text' => $payload['raw_text'] ?? null,
         ], fn ($value) => $value !== null && $value !== '');
     }
 
@@ -115,15 +114,42 @@ class PhilippineIdDetectionService
             'name_match' => $nameMatch,
             'birthdate_match' => $birthdateMatch,
             'form_suggestions' => $formSuggestions,
+            'needs_review' => (bool) ($payload['needs_review'] ?? false),
+            'document_detected' => $payload['document_detected'] ?? null,
+            'ocr_status' => $payload['ocr_status'] ?? null,
             'ocr' => [
-                'front' => is_array($payload['front'] ?? null) ? $payload['front'] : null,
-                'back' => is_array($payload['back'] ?? null) ? $payload['back'] : null,
-                'raw_text' => $payload['raw_text'] ?? '',
-                'full_text' => $payload['raw_text'] ?? '',
+                'front' => $this->sanitizeOcrSide($payload['front'] ?? null),
+                'back' => $this->sanitizeOcrSide($payload['back'] ?? null),
+                'text_length' => (int) ($payload['text_length'] ?? 0),
             ],
             'message' => $payload['message'] ?? null,
             'validation_error' => (bool) ($payload['validation_error'] ?? false),
             'processed_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @param  mixed  $side
+     * @return array<string, mixed>|null
+     */
+    private function sanitizeOcrSide(mixed $side): ?array
+    {
+        if (! is_array($side)) {
+            return null;
+        }
+
+        return [
+            'success' => (bool) ($side['success'] ?? false),
+            'ocr_status' => $side['ocr_status'] ?? null,
+            'engine' => $side['engine'] ?? null,
+            'text_length' => (int) ($side['text_length'] ?? 0),
+            'processing_ms' => $side['processing_ms'] ?? null,
+            'image' => is_array($side['image'] ?? null) ? [
+                'bytes' => $side['image']['bytes'] ?? null,
+                'mime' => $side['image']['mime'] ?? null,
+                'width' => $side['image']['width'] ?? null,
+                'height' => $side['image']['height'] ?? null,
+            ] : null,
         ];
     }
 

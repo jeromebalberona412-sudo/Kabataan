@@ -23,9 +23,16 @@
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
             </svg>
             <p>
-                <strong>Note:</strong> Supporting documents are optional. However, uploading a valid ID or other proof of identity can help verify your information and may expedite the approval of your KK Profiling application.
+                <strong>Privacy notice:</strong> Upload one valid supporting ID/document if available.
+                Your document will be processed only for verification purposes. Only necessary verification
+                information will be retained. Original files are stored privately and deleted according to
+                the retention policy. Document appearance checks do not prove legal authenticity.
             </p>
         </div>
+
+        <p class="kkp-wizard-upload-formats" id="kkpDocFormatHint">
+            Supported formats: JPG, JPEG, PNG · Recommended maximum size: 5&nbsp;MB (server limit may allow up to 10&nbsp;MB)
+        </p>
 
         <fieldset class="kkp-wizard-doc-type-fieldset" id="kkpDocTypeFieldset">
             <legend class="kkp-wizard-doc-type-legend">Select document type (if uploading)</legend>
@@ -171,9 +178,9 @@
             </p>
         </div>
 
-        <div class="kkp-wizard-upload-panel" id="kkpSelfieUploadPanel" hidden>
+        <div class="kkp-wizard-upload-panel" id="kkpSelfieUploadPanel" hidden data-selfie-enabled="{{ config('documents.selfie_verification_enabled') ? '1' : '0' }}">
             <p class="kkp-wizard-upload-panel-title">Selfie verification</p>
-            <p class="kkp-wizard-panel-desc">After your ID is scanned, upload a clear selfie so we can match your face with your ID photo.</p>
+            <p class="kkp-wizard-panel-desc">After your ID is scanned, you may upload a clear selfie only if this option is enabled by administrators. Facial biometric matching is disabled by default.</p>
             <div class="kkp-wizard-upload-grid">
                 <div class="kkp-wizard-upload-shell" data-upload-shell="kkpSelfie">
                     <p class="kkp-wizard-upload-side-label">Selfie</p>

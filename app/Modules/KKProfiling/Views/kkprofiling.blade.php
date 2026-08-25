@@ -127,6 +127,7 @@
 
     @include('kkprofiling::partials.kk-profiling-signature-modals')
     @include('kkprofiling::partials.kk-profiling-no-email-modal')
+    @include('kkprofiling::partials.kk-profiling-clear-draft-modal')
 
     <div class="kkp-reg-success-overlay" id="kkpRegSuccessModal" @if(empty($registrationComplete ?? false)) hidden @endif aria-hidden="{{ ($registrationComplete ?? false) ? 'false' : 'true' }}">
         <div class="kkp-reg-success-modal" role="dialog" aria-labelledby="kkpRegSuccessTitle" aria-modal="true">

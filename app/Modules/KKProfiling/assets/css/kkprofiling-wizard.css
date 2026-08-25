@@ -42,9 +42,63 @@
     padding: 1.15rem 1.15rem 1rem;
 }
 
+.kkp-wizard-progress-top {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
 .kkp-wizard-progress-meta {
     text-align: center;
-    margin-bottom: 1rem;
+    padding-inline: 0 7.5rem;
+}
+
+.kkp-wizard-clear-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 2;
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.kkp-wizard-clear-btn:hover,
+.kkp-wizard-clear-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.22);
+    border-color: rgba(255, 255, 255, 0.7);
+    outline: none;
+}
+
+.kkp-wizard-clear-btn:focus-visible {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+}
+
+.kkp-wizard-clear-btn:active {
+    transform: scale(0.98);
+}
+
+.kkp-info-btn-danger {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    color: #fff;
+}
+
+.kkp-info-btn-danger:hover,
+.kkp-info-btn-danger:focus-visible {
+    background: #991b1b;
+    border-color: #991b1b;
+}
+
+.kkp-clear-draft-modal .kkp-info-modal-scroll {
+    max-height: none;
 }
 
 .kkp-wizard-progress-eyebrow {
@@ -262,6 +316,13 @@
     color: #1e3a8a;
     font-size: 0.88rem;
     line-height: 1.5;
+}
+
+.kkp-wizard-upload-formats {
+    margin: -0.35rem 0 1rem;
+    color: #64748b;
+    font-size: 0.84rem;
+    line-height: 1.45;
 }
 
 .kkp-wizard-info-callout svg {
@@ -916,8 +977,26 @@
         padding: 0.95rem 0.85rem 0.85rem;
     }
 
-    .kkp-wizard-progress-meta {
+    .kkp-wizard-progress-top {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.65rem;
         margin-bottom: 0.85rem;
+    }
+
+    .kkp-wizard-progress-meta {
+        padding-inline: 0;
+        margin-bottom: 0;
+        order: 1;
+    }
+
+    .kkp-wizard-clear-btn {
+        position: static;
+        align-self: flex-end;
+        order: 0;
+        font-size: 0.75rem;
+        padding: 0.4rem 0.7rem;
     }
 
     .kkp-wizard-panel-head {

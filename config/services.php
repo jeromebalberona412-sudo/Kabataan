@@ -56,4 +56,9 @@ return [
         'timeout' => env('TURNSTILE_TIMEOUT', 10),
     ],
 
+    'tesseract' => [
+        'path' => env('TESSERACT_PATH'),
+        'lang' => env('TESSERACT_LANG', 'eng'),
+    ],
+
 ];

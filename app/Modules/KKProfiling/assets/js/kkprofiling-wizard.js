@@ -47,6 +47,12 @@
     const navBar = document.getElementById('kkpWizardNav');
     const emailVerifyCard = document.getElementById('emailVerifyCard');
     const displayEmail = document.getElementById('displayEmail');
+    const clearAllBtn = document.getElementById('kkpWizardClearAllBtn');
+    const clearDraftModal = document.getElementById('kkpClearDraftModal');
+    const clearDraftBackdrop = document.getElementById('kkpClearDraftBackdrop');
+    const clearDraftCloseBtn = document.getElementById('kkpClearDraftCloseBtn');
+    const clearDraftCancelBtn = document.getElementById('kkpClearDraftCancelBtn');
+    const clearDraftConfirmBtn = document.getElementById('kkpClearDraftConfirmBtn');
 
     const DOC_MAX_BYTES = 10 * 1024 * 1024;
     const DOC_ALLOWED_TYPES = ['image/jpeg', 'image/png'];
@@ -68,6 +74,7 @@
     const docErrorEl = document.getElementById('kkpWizardDocError');
     const selfieUploadPanel = document.getElementById('kkpSelfieUploadPanel');
     const selfieInput = document.getElementById('kkpSelfie');
+    const selfieVerificationEnabled = selfieUploadPanel?.dataset?.selfieEnabled === '1';
 
     let ocrScanToken = 0;
     let lastOcrPayload = null;
@@ -122,6 +129,10 @@
     const initialStep = parseInt(root.dataset.initialStep, 10) || 1;
     let restoredStep = initialStep;
     let registrationCompletionPoll = null;
+    let step1DraftTimer = null;
+    let step1DraftInFlight = false;
+    let step1DraftQueued = false;
+    let suppressStep1Autosave = false;
 
     if (barangayNameEl && barangayName) {
         barangayNameEl.textContent = barangayName;
@@ -139,9 +150,7 @@
     function formatOcrMismatchMessage(payload, selectedDocumentType) {
         const selectedLabel = DOC_TYPE_LABELS[selectedDocumentType] || selectedDocumentType;
         const detectedType = payload?.detected_id_type || payload?.id_type;
-        const detectedLabel = detectedType && detectedType !== 'Unknown'
-            ? detectedType
-            : 'a different ID type';
+        const detectedLabel = formatIdTypeLabel(detectedType) || 'a different ID type';
 
         if (payload?.message) {
             return payload.message;
@@ -194,14 +203,90 @@
         }
     }
 
+    function formatIdTypeLabel(value) {
+        const raw = String(value || '').trim();
+        if (!raw || raw === 'Unknown') {
+            return null;
+        }
+
+        const map = {
+            national_id: 'PhilSys / National ID',
+            philhealth_id: 'PhilHealth ID',
+            voters_id: "Voter's ID",
+            school_id: 'School ID',
+            other_id: 'Other Supporting ID',
+        };
+
+        return map[raw] || raw;
+    }
+
+    function formatOcrStatusLabel(status) {
+        const map = {
+            ocr_success: 'Successfully processed',
+            ocr_low_confidence: 'Low confidence',
+            ocr_empty: 'No useful text detected',
+            ocr_failed: 'Processing failed',
+            tesseract_unavailable: 'OCR engine unavailable',
+            invalid_image: 'Invalid image',
+            invalid_upload: 'Invalid upload',
+            skipped: 'Skipped',
+        };
+
+        return map[String(status || '')] || (status ? String(status) : null);
+    }
+
+    function clearOcrUiState({ hidePanel = true } = {}) {
+        lastOcrPayload = null;
+        lastOcrBlockingError = null;
+        ocrScanToken += 1;
+        hideDocUploadError();
+
+        if (ocrFieldsEl) {
+            ocrFieldsEl.innerHTML = '';
+            ocrFieldsEl.hidden = true;
+        }
+
+        if (ocrStatusEl) {
+            ocrStatusEl.textContent = '';
+        }
+
+        if (ocrNoteEl) {
+            ocrNoteEl.hidden = true;
+        }
+
+        if (ocrPanel) {
+            setOcrPanelState('ok');
+            if (hidePanel) {
+                ocrPanel.hidden = true;
+            }
+        }
+
+        updateNavButtons(currentStep);
+    }
+
     function renderOcrFields(payload) {
         if (!ocrFieldsEl || !ocrStatusEl || !ocrPanel) {
             return;
         }
 
+        if (!payload) {
+            clearOcrUiState();
+            return;
+        }
+
+        const detectedType = payload?.detected_id_type || payload?.id_type;
+        const detectedLabel = formatIdTypeLabel(detectedType);
+        const confidenceValue = Number(payload?.confidence);
+        const confidenceLabel = Number.isFinite(confidenceValue) && confidenceValue > 0
+            ? `${Math.round(confidenceValue * 100)}%`
+            : null;
+
         const entries = [
-            ['ID type', payload?.id_type],
-            ['Confidence', payload?.confidence != null ? `${Math.round(Number(payload.confidence) * 100)}%` : null],
+            ['Document detected', payload?.document_detected ? String(payload.document_detected).toUpperCase() : (payload?.success ? 'YES' : null)],
+            ['ID type', detectedLabel],
+            ['Confidence', confidenceLabel],
+            ['OCR status', formatOcrStatusLabel(payload?.ocr_status)],
+            ['Verification', payload?.needs_review ? 'Needs administrator review' : (payload?.success ? 'Ready for review' : null)],
             ['Full name', payload?.full_name],
             ['Birthdate', payload?.birthdate],
             ['Sex', payload?.sex],
@@ -231,20 +316,23 @@
             ocrStatusEl.textContent = mismatchMessage;
             setOcrPanelState('error');
             showDocUploadError(mismatchMessage);
-        } else if (payload?.success) {
+        } else if (payload?.success || payload?.needs_review) {
             hideDocUploadError();
-            if (payload?.face_match) {
-                ocrStatusEl.textContent = 'ID and selfie verified successfully.';
-            } else if (payload?.face_verification?.decision === 'FAIL') {
-                ocrStatusEl.textContent = 'Your selfie does not match your ID photo. Please upload a clearer selfie.';
+            if (selfieVerificationEnabled && payload?.face_match) {
+                ocrStatusEl.textContent = payload?.message || 'Document appears valid for review.';
+            } else if (selfieVerificationEnabled && payload?.face_verification?.decision === 'FAIL') {
+                ocrStatusEl.textContent = 'We could not confirm the selfie against the ID photo. Please upload a clearer image.';
                 setOcrPanelState('error');
-                showDocUploadError('Your selfie does not match your ID photo. Please upload a clearer selfie.');
+                showDocUploadError('We could not confirm the selfie against the ID photo. Please upload a clearer image.');
                 return;
-            } else if (PHILIPPINE_OCR_DOC_TYPES.includes(getSelectedDocumentType()) && selfieUploadPanel) {
-                ocrStatusEl.textContent = 'ID scanned. Upload a selfie to verify your face matches your ID.';
+            } else if (selfieVerificationEnabled && PHILIPPINE_OCR_DOC_TYPES.includes(getSelectedDocumentType()) && selfieUploadPanel) {
+                ocrStatusEl.textContent = payload?.message || 'Document appears valid for review. You may upload a selfie if required.';
                 selfieUploadPanel.hidden = false;
             } else {
-                ocrStatusEl.textContent = 'ID scanned successfully. Review detected details below.';
+                ocrStatusEl.textContent = payload?.message || 'Document appears valid for review. Review detected details below.';
+                if (selfieUploadPanel) {
+                    selfieUploadPanel.hidden = true;
+                }
             }
             setOcrPanelState('ok');
         } else {
@@ -253,6 +341,70 @@
             setOcrPanelState('error');
             showDocUploadError(fallbackMessage);
         }
+    }
+
+    function migrateDocumentFiles(fromType, toType) {
+        if (!fromType || !toType || fromType === toType) {
+            return false;
+        }
+
+        const fromInputs = getDocumentInputsForType(fromType);
+        const toInputs = getDocumentInputsForType(toType);
+        let moved = false;
+
+        [0, 1].forEach((index) => {
+            const source = fromInputs[index];
+            const target = toInputs[index];
+            const file = source?.files?.[0];
+
+            if (!file || !target || typeof DataTransfer === 'undefined') {
+                return;
+            }
+
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            target.files = transfer.files;
+            updateFilePreview(target, { skipScan: true });
+            moved = true;
+        });
+
+        if (moved) {
+            fromInputs.forEach((input) => {
+                if (!input) {
+                    return;
+                }
+                resetFilePreview(input.id);
+                input.value = '';
+            });
+        }
+
+        return moved;
+    }
+
+    function applyAutoDetectedDocumentType(detectedType, { confidence = 0 } = {}) {
+        const allowed = ['national_id', 'philhealth_id', 'voters_id', 'school_id'];
+        if (!allowed.includes(detectedType) || Number(confidence) < 0.45) {
+            return false;
+        }
+
+        const currentType = getSelectedDocumentType();
+        if (currentType === detectedType) {
+            return false;
+        }
+
+        const radio = document.querySelector(`input[name="document_type"][value="${detectedType}"]`);
+        if (!radio) {
+            return false;
+        }
+
+        if (currentType) {
+            migrateDocumentFiles(currentType, detectedType);
+        }
+
+        radio.checked = true;
+        syncDocumentUploadPanels.lastType = detectedType;
+        syncDocumentUploadPanels();
+        return true;
     }
 
     function setFieldValue(fieldName, value, { onlyEmpty = true } = {}) {
@@ -326,20 +478,43 @@
         const documentType = getSelectedDocumentType();
 
         if (!PHILIPPINE_OCR_DOC_TYPES.includes(documentType) || !hasCompleteDocumentUpload()) {
-            hideDocUploadError();
-
-            if (ocrPanel) {
-                ocrPanel.hidden = true;
-            }
-
+            clearOcrUiState({ hidePanel: true });
             return;
         }
 
         const files = getActiveDocumentFiles();
+        const sameSideError = await validateDistinctFrontAndBack(files);
+
+        if (sameSideError) {
+            lastOcrPayload = {
+                success: false,
+                validation_error: true,
+                needs_review: false,
+                document_detected: 'no',
+                id_type: null,
+                confidence: 0,
+                ocr_status: 'invalid_upload',
+                message: sameSideError,
+            };
+            renderOcrFields(lastOcrPayload);
+            showDocUploadError(sameSideError);
+            updateNavButtons(currentStep);
+            return;
+        }
+
         const token = ++ocrScanToken;
+
+        hideDocUploadError();
+        lastOcrBlockingError = null;
+        lastOcrPayload = null;
 
         if (ocrPanel) {
             ocrPanel.hidden = false;
+        }
+
+        if (ocrFieldsEl) {
+            ocrFieldsEl.innerHTML = '';
+            ocrFieldsEl.hidden = true;
         }
 
         if (ocrStatusEl) {
@@ -354,7 +529,7 @@
             formData.append('front', files.front);
             formData.append('back', files.back);
 
-            const selfie = getSelfieFile();
+            const selfie = selfieVerificationEnabled ? getSelfieFile() : null;
             if (selfie) {
                 formData.append('selfie', selfie);
             }
@@ -385,6 +560,13 @@
                         message: data.message || formatOcrMismatchMessage({}, documentType),
                     };
                 }
+            } else {
+                const detectedType = lastOcrPayload?.detected_id_type || lastOcrPayload?.id_type;
+                if (lastOcrPayload?.auto_corrected || Number(lastOcrPayload?.confidence || 0) >= 0.45) {
+                    applyAutoDetectedDocumentType(detectedType, {
+                        confidence: lastOcrPayload?.confidence || 0,
+                    });
+                }
             }
 
             renderOcrFields(lastOcrPayload);
@@ -399,7 +581,7 @@
                 return;
             }
 
-            const offlineMessage = 'OCR service is unavailable right now. Please try again later or upload a clearer ID photo.';
+            const offlineMessage = 'We couldn\'t read this ID clearly. Please upload a clearer front and back photo and try again.';
             renderOcrFields({
                 success: false,
                 validation_error: true,
@@ -444,6 +626,59 @@
 
         if (file.size > DOC_MAX_BYTES) {
             return 'Image must be 10MB or smaller.';
+        }
+
+        return null;
+    }
+
+    async function filesAppearIdentical(front, back) {
+        if (!front || !back) {
+            return false;
+        }
+
+        if (front === back) {
+            return true;
+        }
+
+        if (
+            front.size === back.size
+            && front.name === back.name
+            && front.lastModified === back.lastModified
+        ) {
+            return true;
+        }
+
+        if (front.size !== back.size || front.size === 0) {
+            return false;
+        }
+
+        if (!window.crypto?.subtle) {
+            return false;
+        }
+
+        try {
+            const [frontHash, backHash] = await Promise.all([
+                crypto.subtle.digest('SHA-256', await front.arrayBuffer()),
+                crypto.subtle.digest('SHA-256', await back.arrayBuffer()),
+            ]);
+
+            const toHex = (buffer) => [...new Uint8Array(buffer)]
+                .map((byte) => byte.toString(16).padStart(2, '0'))
+                .join('');
+
+            return toHex(frontHash) === toHex(backHash);
+        } catch (error) {
+            return false;
+        }
+    }
+
+    async function validateDistinctFrontAndBack(files) {
+        if (!files?.front || !files?.back) {
+            return null;
+        }
+
+        if (await filesAppearIdentical(files.front, files.back)) {
+            return 'Front and back must be different photos. You uploaded the same image for both sides. Please upload the real front and the real back of your ID.';
         }
 
         return null;
@@ -495,7 +730,11 @@
 
         resetFilePreview(input.id);
         input.value = '';
-        scanPhilippineIdIfReady();
+        clearOcrUiState({ hidePanel: !hasCompleteDocumentUpload() });
+
+        if (hasCompleteDocumentUpload()) {
+            scanPhilippineIdIfReady();
+        }
     }
 
     function resetFilePreview(inputId) {
@@ -527,13 +766,14 @@
         }
     }
 
-    function updateFilePreview(input) {
+    function updateFilePreview(input, options = {}) {
         if (!input) {
             return;
         }
 
         const config = previewConfig[input.id];
         const file = input.files?.[0];
+        const skipScan = Boolean(options.skipScan);
 
         if (!config) {
             return;
@@ -541,6 +781,7 @@
 
         if (!file) {
             resetFilePreview(input.id);
+            clearOcrUiState({ hidePanel: !hasCompleteDocumentUpload() });
             updateNavButtons(currentStep);
             return;
         }
@@ -578,7 +819,18 @@
         }
 
         updateNavButtons(currentStep);
-        scanPhilippineIdIfReady();
+
+        if (!skipScan) {
+            // New image uploaded — clear previous OCR result before rescanning.
+            if (!hasCompleteDocumentUpload()) {
+                clearOcrUiState({ hidePanel: true });
+            } else {
+                lastOcrPayload = null;
+                lastOcrBlockingError = null;
+                hideDocUploadError();
+                scanPhilippineIdIfReady();
+            }
+        }
     }
 
     function resetAllDocumentPreviews() {
@@ -589,10 +841,11 @@
         const selectedType = getSelectedDocumentType();
         const previousType = syncDocumentUploadPanels.lastType || '';
 
-        hideDocUploadError();
-
         if (previousType && previousType !== selectedType) {
             clearDocumentInputsForType(previousType);
+            clearOcrUiState({ hidePanel: true });
+        } else {
+            hideDocUploadError();
         }
 
         syncDocumentUploadPanels.lastType = selectedType;
@@ -906,6 +1159,8 @@
             return;
         }
 
+        suppressStep1Autosave = true;
+
         Object.entries(step1).forEach(([key, value]) => {
             if (value === null || value === undefined || value === '') {
                 return;
@@ -1012,6 +1267,8 @@
         if (typeof window.kkpRefreshSignatureName === 'function') {
             window.kkpRefreshSignatureName();
         }
+
+        suppressStep1Autosave = false;
     }
 
     function restoreStep2Documents(step2) {
@@ -1216,6 +1473,10 @@
                 nextLabelEl.textContent = 'Continue';
             }
         }
+
+        if (clearAllBtn) {
+            clearAllBtn.hidden = registrationCompleted || step !== 1;
+        }
     }
 
     async function setStep(step, options = {}) {
@@ -1346,24 +1607,7 @@
         }
 
         try {
-            const assemblyHidden = document.getElementById('kkpKkAssembly');
-            const timesHidden = document.getElementById('kkpKkTimes');
-            const reasonHidden = document.getElementById('kkpKkReason');
-            const checkedAssembly = document.querySelector('input[name="kk_assemblyChk"]:checked');
-            const checkedTimes = document.querySelector('input[name="kk_timesChk"]:checked');
-            const checkedReason = document.querySelector('input[name="kk_reasonChk"]:checked');
-            if (assemblyHidden && checkedAssembly) {
-                assemblyHidden.disabled = false;
-                assemblyHidden.value = checkedAssembly.value;
-            }
-            if (timesHidden) {
-                timesHidden.disabled = false;
-                timesHidden.value = checkedTimes ? checkedTimes.value : (assemblyHidden?.value === 'Yes' ? timesHidden.value : '');
-            }
-            if (reasonHidden) {
-                reasonHidden.disabled = false;
-                reasonHidden.value = checkedReason ? checkedReason.value : (assemblyHidden?.value === 'No' ? reasonHidden.value : '');
-            }
+            syncHiddenCheckboxFields();
 
             const formData = new FormData(form);
             formData.append('respondent_number', root.dataset.respondentNumber || '');
@@ -1484,24 +1728,45 @@
             return false;
         }
 
+        const sameSideError = await validateDistinctFrontAndBack(files);
+        if (sameSideError) {
+            showDocUploadError(sameSideError);
+            lastOcrPayload = {
+                success: false,
+                validation_error: true,
+                message: sameSideError,
+            };
+            renderOcrFields(lastOcrPayload);
+            return false;
+        }
+
         if (PHILIPPINE_OCR_DOC_TYPES.includes(documentType)) {
             if (hasBlockingOcrError()) {
                 showDocUploadError(lastOcrBlockingError);
                 return false;
             }
 
-            if (!lastOcrPayload || lastOcrPayload.validation_error || !lastOcrPayload.success) {
-                showDocUploadError('Please wait for ID scanning to finish, or upload a clearer front and back photo of your selected ID.');
+            if (!lastOcrPayload || lastOcrPayload.validation_error || (!lastOcrPayload.success && !lastOcrPayload.needs_review)) {
+                showDocUploadError(
+                    lastOcrPayload?.message
+                    || 'Please wait for ID scanning to finish, or upload a clearer front and back photo of your selected ID.',
+                );
                 await scanPhilippineIdIfReady();
 
                 if (hasBlockingOcrError()) {
                     showDocUploadError(lastOcrBlockingError);
                     return false;
                 }
+
+                if (!lastOcrPayload || lastOcrPayload.validation_error || (!lastOcrPayload.success && !lastOcrPayload.needs_review)) {
+                    showDocUploadError(
+                        lastOcrPayload?.message
+                        || 'Please upload a clearer supporting ID photo before continuing.',
+                    );
+                    return false;
+                }
             }
         }
-
-        let saved = false;
 
         try {
             const formData = new FormData();
@@ -1509,7 +1774,7 @@
             formData.append(`${documentType}_front`, files.front);
             formData.append(`${documentType}_back`, files.back);
 
-            const selfie = getSelfieFile();
+            const selfie = selfieVerificationEnabled ? getSelfieFile() : null;
             if (selfie) {
                 formData.append('selfie', selfie);
             }
@@ -1522,6 +1787,15 @@
             if (response?.ocr) {
                 lastOcrPayload = response.ocr;
                 renderOcrFields(response.ocr);
+
+                if (response.ocr.validation_error) {
+                    const message = response.ocr.message
+                        || response.message
+                        || 'We couldn\'t validate this ID. Please upload a clearer front and back photo.';
+                    showDocUploadError(message);
+                    updateNavButtons(currentStep);
+                    return false;
+                }
             }
 
             if (response?.form_suggestions) {
@@ -1541,27 +1815,26 @@
                 }
             }
 
-            saved = true;
+            const skipAutoSend = Boolean(response?.verification_sent);
+            await setStep(3, { skipAutoSend });
 
-            if (saved) {
-                const skipAutoSend = Boolean(response?.verification_sent);
-                await setStep(3, { skipAutoSend });
-
-                if (response?.email_error) {
-                    showEmailStatus(response.email_error, 'error');
-                    enableResendButton();
-                }
+            if (response?.email_error) {
+                showEmailStatus(response.email_error, 'error');
+                enableResendButton();
             }
+
+            return true;
         } catch (error) {
             const message = error.errors?.document_type?.[0]
                 || error.errors?.registration?.[0]
                 || Object.values(error.errors || {}).flat?.()?.[0]
-                || error.message;
+                || error.message
+                || 'We couldn\'t validate this ID. Please upload a clearer front and back photo.';
 
             showDocUploadError(message);
+            updateNavButtons(currentStep);
+            return false;
         }
-
-        return saved;
     }
 
     async function sendVerificationEmail(isResend) {
@@ -1740,6 +2013,13 @@
     }
 
     async function resetWizardFormState() {
+        suppressStep1Autosave = true;
+
+        if (step1DraftTimer) {
+            clearTimeout(step1DraftTimer);
+            step1DraftTimer = null;
+        }
+
         if (form) {
             form.reset();
         }
@@ -1753,6 +2033,10 @@
 
         if (schoolIdUploadPanel) schoolIdUploadPanel.hidden = true;
         if (nationalIdUploadPanel) nationalIdUploadPanel.hidden = true;
+        if (votersIdUploadPanel) votersIdUploadPanel.hidden = true;
+        if (philhealthIdUploadPanel) philhealthIdUploadPanel.hidden = true;
+        if (otherIdUploadPanel) otherIdUploadPanel.hidden = true;
+        if (selfieUploadPanel) selfieUploadPanel.hidden = true;
 
         const sigInput = document.getElementById('kkpSignatureData');
         if (sigInput) {
@@ -1771,39 +2055,159 @@
         root.dataset.verificationSent = '0';
         restoredStep = 1;
         root.dataset.initialStep = '1';
-    }
+        delete root.dataset.draftEmail;
 
-    function isBrowserReload() {
-        const navEntry = performance.getEntriesByType('navigation')[0];
-        return navEntry?.type === 'reload';
-    }
-
-    async function clearDraftOnRefresh() {
-        if (!isBrowserReload() || registrationCompleted) {
-            return false;
+        if (ocrPanel) {
+            ocrPanel.hidden = true;
         }
 
-        const preserveStep = Math.max(1, Math.min(3, restoredStep || initialStep));
-        const shouldPreserveStep3 = preserveStep >= 3
-            || verificationSentOnLoad
-            || root.dataset.verificationSent === '1';
+        lastOcrPayload = null;
+        hideDocUploadError();
 
-        if (shouldPreserveStep3) {
-            return false;
+        suppressStep1Autosave = false;
+    }
+
+    function openClearDraftModal() {
+        if (!clearDraftModal || registrationCompleted) {
+            return;
+        }
+
+        clearDraftModal.hidden = false;
+        clearDraftConfirmBtn?.focus();
+    }
+
+    function closeClearDraftModal() {
+        if (!clearDraftModal) {
+            return;
+        }
+
+        clearDraftModal.hidden = true;
+        clearAllBtn?.focus();
+    }
+
+    async function confirmClearAllData() {
+        if (registrationCompleted) {
+            closeClearDraftModal();
+            return;
+        }
+
+        if (clearDraftConfirmBtn) {
+            clearDraftConfirmBtn.disabled = true;
         }
 
         try {
             await postJson(`${apiBase}/clear-draft`, {});
+            await resetWizardFormState();
+            await setStep(1, { skipAutoSend: true });
+            closeClearDraftModal();
         } catch (error) {
-            // Non-blocking — still reset the visible form
+            alert(error.message || 'Unable to clear draft data. Please try again.');
+        } finally {
+            if (clearDraftConfirmBtn) {
+                clearDraftConfirmBtn.disabled = false;
+            }
+        }
+    }
+
+    function syncHiddenCheckboxFields() {
+        const assemblyHidden = document.getElementById('kkpKkAssembly');
+        const timesHidden = document.getElementById('kkpKkTimes');
+        const reasonHidden = document.getElementById('kkpKkReason');
+        const checkedAssembly = document.querySelector('input[name="kk_assemblyChk"]:checked');
+        const checkedTimes = document.querySelector('input[name="kk_timesChk"]:checked');
+        const checkedReason = document.querySelector('input[name="kk_reasonChk"]:checked');
+
+        if (assemblyHidden && checkedAssembly) {
+            assemblyHidden.disabled = false;
+            assemblyHidden.value = checkedAssembly.value;
         }
 
-        await resetWizardFormState();
-        return true;
+        if (timesHidden) {
+            timesHidden.disabled = false;
+            timesHidden.value = checkedTimes
+                ? checkedTimes.value
+                : (assemblyHidden?.value === 'Yes' ? timesHidden.value : '');
+        }
+
+        if (reasonHidden) {
+            reasonHidden.disabled = false;
+            reasonHidden.value = checkedReason
+                ? checkedReason.value
+                : (assemblyHidden?.value === 'No' ? reasonHidden.value : '');
+        }
+    }
+
+    async function persistStep1Draft() {
+        if (!form || registrationCompleted || suppressStep1Autosave || currentStep !== 1) {
+            return;
+        }
+
+        if (step1DraftInFlight) {
+            step1DraftQueued = true;
+            return;
+        }
+
+        step1DraftInFlight = true;
+
+        try {
+            syncHiddenCheckboxFields();
+            const formData = new FormData(form);
+            formData.append('respondent_number', root.dataset.respondentNumber || '');
+            await postFormData(`${apiBase}/draft-step-1`, formData);
+        } catch (error) {
+            // Non-blocking — draft autosave must not interrupt typing
+        } finally {
+            step1DraftInFlight = false;
+
+            if (step1DraftQueued) {
+                step1DraftQueued = false;
+                scheduleStep1DraftSave(150);
+            }
+        }
+    }
+
+    function scheduleStep1DraftSave(delayMs = 700) {
+        if (!form || registrationCompleted || suppressStep1Autosave || currentStep !== 1) {
+            return;
+        }
+
+        if (step1DraftTimer) {
+            clearTimeout(step1DraftTimer);
+        }
+
+        step1DraftTimer = setTimeout(() => {
+            step1DraftTimer = null;
+            persistStep1Draft();
+        }, delayMs);
+    }
+
+    function bindStep1DraftAutosave() {
+        if (!form) {
+            return;
+        }
+
+        form.addEventListener('input', () => scheduleStep1DraftSave());
+        form.addEventListener('change', () => scheduleStep1DraftSave(350));
+    }
+
+    function bindClearAllDataControls() {
+        clearAllBtn?.addEventListener('click', openClearDraftModal);
+        clearDraftBackdrop?.addEventListener('click', closeClearDraftModal);
+        clearDraftCloseBtn?.addEventListener('click', closeClearDraftModal);
+        clearDraftCancelBtn?.addEventListener('click', closeClearDraftModal);
+        clearDraftConfirmBtn?.addEventListener('click', confirmClearAllData);
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && clearDraftModal && !clearDraftModal.hidden) {
+                closeClearDraftModal();
+            }
+        });
     }
 
     async function initWizard() {
         bindDocumentTypeControls();
+        bindStep1DraftAutosave();
+        bindClearAllDataControls();
 
         try {
             sessionStorage.removeItem(`kkp_wizard_step_${slug}`);
@@ -1821,15 +2225,11 @@
             return;
         }
 
-        const wasClearedOnRefresh = await clearDraftOnRefresh();
-
-        if (!wasClearedOnRefresh) {
-            if (root.dataset.draftEmail && displayEmail) {
-                displayEmail.textContent = root.dataset.draftEmail;
-            }
-
-            await restoreDraftState();
+        if (root.dataset.draftEmail && displayEmail) {
+            displayEmail.textContent = root.dataset.draftEmail;
         }
+
+        await restoreDraftState();
 
         const serverEmailError = root.dataset.emailError;
 
@@ -1845,7 +2245,7 @@
             return;
         }
 
-        const targetStep = Math.max(1, Math.min(3, wasClearedOnRefresh ? 1 : (restoredStep || initialStep)));
+        const targetStep = Math.max(1, Math.min(3, restoredStep || initialStep));
         const skipAutoSendOnStep3 = targetStep === 3 && (verificationSent || verificationSentOnLoad);
 
         await setStep(targetStep, {

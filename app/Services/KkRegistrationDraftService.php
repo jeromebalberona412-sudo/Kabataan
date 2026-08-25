@@ -142,6 +142,45 @@ class KkRegistrationDraftService
         $wizard['current_step'] = max((int) ($wizard['current_step'] ?? 1), 2);
         $wizard['expires_at'] = now()->addDays(7)->toIso8601String();
 
+        // New unfinished progress should dismiss a leftover success modal session.
+        $this->clearCompletedRegistration();
+
+        return $this->persist($wizard);
+    }
+
+    /**
+     * Persist unfinished Step 1 fields without advancing the wizard.
+     * Used for refresh recovery — does not require full validation.
+     *
+     * @param  array<string, mixed>  $partial
+     */
+    public function saveStep1Partial(Barangay $barangay, array $partial, ?string $respondentNumber = null): array
+    {
+        $wizard = $this->resolveWizard();
+
+        if (! $wizard || (int) ($wizard['barangay_id'] ?? 0) !== (int) $barangay->id) {
+            if ($wizard && ! empty($wizard['token'])) {
+                $this->deletePendingFiles($wizard['token']);
+            }
+
+            $this->clearCompletedRegistration();
+            $wizard = $this->blankWizard($barangay->id);
+        }
+
+        $existing = is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [];
+        $merged = array_merge($existing, $partial);
+
+        $wizard['respondent_number'] = $respondentNumber ?: ($wizard['respondent_number'] ?? null);
+        $wizard['step1_data'] = $merged;
+
+        $email = strtolower(trim((string) ($merged['email'] ?? '')));
+        $wizard['email'] = $email !== '' ? $email : ($wizard['email'] ?? null);
+
+        $wizard['current_step'] = max(1, (int) ($wizard['current_step'] ?? 1));
+        $wizard['expires_at'] = now()->addDays(7)->toIso8601String();
+
+        $this->clearCompletedRegistration();
+
         return $this->persist($wizard);
     }
 

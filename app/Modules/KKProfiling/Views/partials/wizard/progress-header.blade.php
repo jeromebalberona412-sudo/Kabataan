@@ -1,10 +1,21 @@
 {{-- 3-step progress indicator — above the registration form --}}
 <header class="kkp-wizard-progress-header" id="kkpWizardProgressHeader" aria-label="Registration progress">
     <div class="kkp-wizard-progress-inner">
-        <div class="kkp-wizard-progress-meta">
-            <p class="kkp-wizard-progress-eyebrow" id="kkpWizardEyebrow">KK Profiling · <span id="kkpWizardBarangayName"></span></p>
-            <h1 class="kkp-wizard-progress-title" id="kkpWizardStepTitle">Profiling Form</h1>
-            <p class="kkp-wizard-progress-desc" id="kkpWizardStepDesc">Complete your personal and demographic information.</p>
+        <div class="kkp-wizard-progress-top">
+            <div class="kkp-wizard-progress-meta">
+                <p class="kkp-wizard-progress-eyebrow" id="kkpWizardEyebrow">KK Profiling · <span id="kkpWizardBarangayName"></span></p>
+                <h1 class="kkp-wizard-progress-title" id="kkpWizardStepTitle">Profiling Form</h1>
+                <p class="kkp-wizard-progress-desc" id="kkpWizardStepDesc">Complete your personal and demographic information.</p>
+            </div>
+            <button
+                type="button"
+                class="kkp-wizard-clear-btn"
+                id="kkpWizardClearAllBtn"
+                hidden
+                aria-haspopup="dialog"
+            >
+                Clear All Data
+            </button>
         </div>
 
         <ol class="kkp-wizard-steps" id="kkpWizardSteps" aria-label="Registration steps">

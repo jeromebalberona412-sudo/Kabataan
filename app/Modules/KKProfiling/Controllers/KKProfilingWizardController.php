@@ -12,11 +12,13 @@ use App\Rules\FacebookProfileUrl;
 use App\Services\BarangayZoneService;
 use App\Services\DuplicateKabataanRegistrationService;
 use App\Services\KkProfilingDirectSubmitService;
+use App\Services\KkProfilingIdentityValidator;
 use App\Services\KkRegistrationDraftService;
 use App\Services\TurnstileService;
 use App\Services\PhilippineIdDetectionService;
 use App\Services\PhilippineIdPipelineService;
 use App\Services\RegistrationEvaluationService;
+use App\Services\SupportingDocumentVerificationRecorder;
 use App\Support\SupportingDocumentTypes;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -39,6 +41,8 @@ class KKProfilingWizardController extends Controller
         protected PhilippineIdPipelineService $philippineIdPipeline,
         protected TurnstileService $turnstileService,
         protected KkProfilingDirectSubmitService $directSubmitService,
+        protected SupportingDocumentVerificationRecorder $documentVerificationRecorder,
+        protected KkProfilingIdentityValidator $identityValidator,
     ) {}
 
     public function saveStep1(Request $request, string $barangay)
@@ -71,6 +75,37 @@ class KKProfilingWizardController extends Controller
             'step' => 2,
             'message' => 'Step 1 saved. Continue to supporting documents.',
             'email_verification_recommended' => true,
+        ]);
+    }
+
+    /**
+     * Autosave unfinished Step 1 fields for refresh / back-navigation recovery.
+     * Does not advance the wizard and does not run full Step 1 validation.
+     */
+    public function saveStep1Draft(Request $request, string $barangay): JsonResponse
+    {
+        $barangayRecord = $this->resolveBarangay($barangay);
+        $partial = $this->extractStep1DraftPayload($request);
+
+        if ($partial === []) {
+            return response()->json([
+                'success' => true,
+                'saved' => false,
+                'message' => 'Nothing to save.',
+            ]);
+        }
+
+        $wizard = $this->draftService->saveStep1Partial(
+            $barangayRecord,
+            $partial,
+            $request->input('respondent_number')
+        );
+
+        return response()->json([
+            'success' => true,
+            'saved' => true,
+            'token' => $wizard['token'],
+            'draft' => $this->draftService->wizardStatusPayload($wizard),
         ]);
     }
 
@@ -121,6 +156,7 @@ class KKProfilingWizardController extends Controller
         $fileRule = ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:10240'];
         $ocrPayload = null;
         $formSuggestions = null;
+        $privacyVerification = null;
 
         $validationRules = [
             'skip_documents' => ['sometimes', 'boolean'],
@@ -201,77 +237,81 @@ class KKProfilingWizardController extends Controller
             }
 
             if ($uploadedSides->count() === 2) {
-                $wizard = $this->draftService->saveStep2($wizard, (string) $documentType, $sides);
+                $frontUpload = $sides['front'] ?? null;
+                $backUpload = $sides['back'] ?? null;
 
-                if ($this->philippineIdDetection->isSupportedDocumentType((string) $documentType)) {
-                    try {
-                        $frontRealPath = $sides['front']?->getRealPath();
-                        $backRealPath = $sides['back']?->getRealPath();
-                        $selfieRealPath = $request->file('selfie')?->getRealPath();
-
-                        if (
-                            config('ocr.philippine_pipeline_enabled', true)
-                            && $this->philippineIdPipeline->isConfigured()
-                            && is_string($frontRealPath)
-                            && is_string($backRealPath)
-                        ) {
-                            $pipelineResult = $this->philippineIdPipeline->validate(
-                                (int) $barangayRecord->id,
-                                is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [],
-                                $frontRealPath,
-                                $backRealPath,
-                                (string) $documentType,
-                                is_string($selfieRealPath) ? $selfieRealPath : null,
-                            );
-
-                            if (is_array($pipelineResult)) {
-                                $ocrPayload = array_merge($pipelineResult, [
-                                    'form_suggestions' => $this->philippineIdDetection->mapToFormFields([
-                                        'success' => $pipelineResult['success'] ?? false,
-                                        'id_type' => $pipelineResult['id_type'] ?? 'Unknown',
-                                        'full_name' => $pipelineResult['detected_name'] ?? null,
-                                        'birthdate' => $pipelineResult['detected_birthdate'] ?? null,
-                                        'sex' => $pipelineResult['detected_sex'] ?? null,
-                                        'address' => $pipelineResult['detected_address'] ?? null,
-                                        'id_number' => $pipelineResult['id_number'] ?? null,
-                                        'confidence' => $pipelineResult['confidence'] ?? 0,
-                                    ]),
-                                ]);
-                                $wizard = $this->draftService->storeIdVerification($wizard, $ocrPayload);
-                                $formSuggestions = $ocrPayload['form_suggestions'] ?? null;
-                            }
-                        }
-
-                        if (! is_array($ocrPayload)) {
-                            $ocrPayload = $this->philippineIdDetection->detectUploadedPair(
-                                $sides['front'],
-                                $sides['back'],
-                                (string) $documentType,
-                            );
-
-                            $verification = $this->philippineIdDetection->buildVerificationRecord(
-                                $ocrPayload,
-                                (string) $documentType,
-                                is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [],
-                            );
-                            $wizard = $this->draftService->storeIdVerification($wizard, $verification);
-                            $formSuggestions = $verification['form_suggestions'] ?? null;
-                        }
-
-                        if (is_array($ocrPayload) && ($ocrPayload['validation_error'] ?? false) === true) {
-                            Log::info('KK wizard Step 2 OCR validation warning', [
-                                'document_type' => $documentType,
-                                'detected_id_type' => $ocrPayload['id_type'] ?? null,
-                                'message' => $ocrPayload['message'] ?? null,
-                            ]);
-                        }
-                    } catch (\Throwable $exception) {
-                        report($exception);
-                        Log::warning('KK wizard Step 2 OCR failed', [
-                            'document_type' => $documentType,
-                            'error' => $exception->getMessage(),
+                if ($frontUpload instanceof UploadedFile && $backUpload instanceof UploadedFile) {
+                    $sameSideError = $this->identicalFrontBackError($frontUpload, $backUpload);
+                    if ($sameSideError !== null) {
+                        throw ValidationException::withMessages([
+                            'document_type' => [$sameSideError],
                         ]);
                     }
+                }
+
+                $wizard = $this->draftService->saveStep2($wizard, (string) $documentType, $sides);
+
+                $selfieEnabled = (bool) config('documents.selfie_verification_enabled', false);
+                $selfieRealPath = $selfieEnabled ? $request->file('selfie')?->getRealPath() : null;
+                $registrationFields = is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [];
+
+                try {
+                    [$ocrPayload, $formSuggestions] = $this->runStep2DocumentValidation(
+                        (string) $documentType,
+                        $sides,
+                        (int) $barangayRecord->id,
+                        $registrationFields,
+                        is_string($selfieRealPath) ? $selfieRealPath : null,
+                    );
+                } catch (ValidationException $exception) {
+                    throw $exception;
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    Log::warning('KK wizard Step 2 document validation failed', [
+                        'document_type' => $documentType,
+                        'error' => $exception->getMessage(),
+                    ]);
+
+                    throw ValidationException::withMessages([
+                        'document_type' => ['We couldn\'t process this document. Please try uploading a clearer photo of your ID.'],
+                    ]);
+                }
+
+                $wizard = $this->draftService->storeIdVerification($wizard, is_array($ocrPayload) ? $ocrPayload : []);
+
+                $this->assertStep2DocumentAllowedToProceed((string) $documentType, is_array($ocrPayload) ? $ocrPayload : []);
+
+                try {
+                    $privacyVerification = $this->documentVerificationRecorder->record(
+                        $wizard,
+                        (int) $barangayRecord->id,
+                        (string) $documentType,
+                        $sides,
+                        is_array($ocrPayload) ? $ocrPayload : null,
+                    );
+
+                    $wizard = $this->draftService->storeIdVerification(
+                        $wizard,
+                        array_merge(
+                            is_array($wizard['step2_data']['id_verification'] ?? null)
+                                ? $wizard['step2_data']['id_verification']
+                                : [],
+                            [
+                                'privacy_verification' => [
+                                    'verification_status' => $privacyVerification['verification_status'] ?? null,
+                                    'duplicate_status' => $privacyVerification['duplicate_status'] ?? null,
+                                    'needs_review' => $privacyVerification['needs_review'] ?? false,
+                                    'user_message' => $privacyVerification['user_message'] ?? null,
+                                ],
+                            ]
+                        )
+                    );
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    Log::warning('KK wizard Step 2 privacy verification failed', [
+                        'document_type' => $documentType,
+                        'error' => $exception->getMessage(),
+                    ]);
                 }
             }
         }
@@ -302,14 +342,21 @@ class KKProfilingWizardController extends Controller
             'token' => $wizard['token'],
             'step' => 3,
             'email' => $email,
-            'message' => $hasAnyUpload
-                ? 'Supporting documents saved. Continue to email verification.'
-                : 'Continue to email verification. You may upload an ID later if needed.',
+            'message' => $privacyVerification['user_message']
+                ?? ($hasAnyUpload
+                    ? 'Supporting documents saved. Continue to email verification.'
+                    : 'Continue to email verification. You may upload an ID later if needed.'),
             'documents_uploaded' => $hasAnyUpload,
             'verification_sent' => $verificationSent,
             'email_error' => $emailError,
             'ocr' => isset($ocrPayload) && is_array($ocrPayload) ? $ocrPayload : null,
             'form_suggestions' => isset($formSuggestions) && is_array($formSuggestions) ? $formSuggestions : null,
+            'document_verification' => is_array($privacyVerification) ? [
+                'verification_status' => $privacyVerification['verification_status'] ?? null,
+                'duplicate_status' => $privacyVerification['duplicate_status'] ?? null,
+                'needs_review' => (bool) ($privacyVerification['needs_review'] ?? false),
+                'user_message' => $privacyVerification['user_message'] ?? null,
+            ] : null,
         ]);
     }
 
@@ -597,6 +644,23 @@ class KKProfilingWizardController extends Controller
     {
         $barangayRecord = $this->resolveBarangay($barangay);
 
+        $wizard = $this->draftService->resolveWizard();
+
+        if ($wizard && (int) ($wizard['barangay_id'] ?? 0) !== (int) $barangayRecord->id) {
+            $wizard = null;
+        }
+
+        $hasActiveUnfinishedDraft = is_array($wizard) && ! empty($wizard['step1_data']);
+
+        // Prefer restoring an unfinished draft over a leftover success session.
+        if ($hasActiveUnfinishedDraft) {
+            $this->draftService->clearCompletedRegistration();
+
+            return response()->json([
+                'draft' => $this->draftService->wizardStatusPayload($wizard),
+            ]);
+        }
+
         if ($completed = $this->draftService->resolveCompletedRegistration((int) $barangayRecord->id)) {
             $registration = KabataanRegistration::query()
                 ->where('barangay_id', $barangayRecord->id)
@@ -624,36 +688,6 @@ class KKProfilingWizardController extends Controller
                 'auto_approved' => $autoApproved,
                 'evaluation_status' => $registration?->evaluation_status ?? ($completed['evaluation_status'] ?? null),
             ]);
-        }
-
-        $wizard = $this->draftService->resolveWizard();
-
-        if ($wizard && (int) ($wizard['barangay_id'] ?? 0) !== (int) $barangayRecord->id) {
-            $wizard = null;
-        }
-
-        if ($wizard) {
-            $email = strtolower(trim($wizard['email'] ?? $wizard['step1_data']['email'] ?? ''));
-
-            if ($email !== '' && $this->draftService->isEmailRegistrationComplete($email, (int) $barangayRecord->id)) {
-                $registration = KabataanRegistration::query()
-                    ->where('barangay_id', $barangayRecord->id)
-                    ->where('email', $email)
-                    ->whereIn('status', ['password_set', 'active'])
-                    ->latest('id')
-                    ->first();
-
-                $this->draftService->markRegistrationComplete($email, (int) $barangayRecord->id, $registration);
-                $completed = $this->draftService->resolveCompletedRegistration((int) $barangayRecord->id);
-
-                return response()->json([
-                    'draft' => null,
-                    'registration_completed' => true,
-                    'email' => $email,
-                    'auto_approved' => (bool) ($completed['auto_approved'] ?? false),
-                    'evaluation_status' => $completed['evaluation_status'] ?? null,
-                ]);
-            }
         }
 
         return response()->json([
@@ -703,6 +737,7 @@ class KKProfilingWizardController extends Controller
     {
         $this->resolveBarangay($barangay);
         $this->draftService->clearSessionDraft();
+        $this->draftService->clearCompletedRegistration();
 
         return response()->json([
             'success' => true,
@@ -728,11 +763,38 @@ class KKProfilingWizardController extends Controller
             'selfie' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:10240'],
         ]);
 
+        $frontFile = $request->file('front');
+        $backFile = $request->file('back');
+
+        if ($frontFile instanceof UploadedFile && $backFile instanceof UploadedFile) {
+            $sameSideError = $this->identicalFrontBackError($frontFile, $backFile);
+            if ($sameSideError !== null) {
+                return response()->json([
+                    'success' => false,
+                    'validation_error' => true,
+                    'message' => $sameSideError,
+                    'ocr' => [
+                        'success' => false,
+                        'validation_error' => true,
+                        'needs_review' => false,
+                        'document_detected' => 'no',
+                        'id_type' => 'Unknown',
+                        'confidence' => 0,
+                        'ocr_status' => 'invalid_upload',
+                        'message' => $sameSideError,
+                    ],
+                    'form_suggestions' => [],
+                ], 422);
+            }
+        }
+
         $documentType = (string) $request->input('document_type');
         $registrationFields = is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [];
-        $frontPath = $request->file('front')?->getRealPath();
-        $backPath = $request->file('back')?->getRealPath();
-        $selfiePath = $request->file('selfie')?->getRealPath();
+        $frontPath = $frontFile?->getRealPath();
+        $backPath = $backFile?->getRealPath();
+        $selfiePath = config('documents.selfie_verification_enabled')
+            ? $request->file('selfie')?->getRealPath()
+            : null;
 
         if (
             config('ocr.philippine_pipeline_enabled', true)
@@ -750,7 +812,7 @@ class KKProfilingWizardController extends Controller
                     is_string($selfiePath) ? $selfiePath : null,
                 );
 
-                if (is_array($pipelineResult)) {
+                if (is_array($pipelineResult) && $this->pipelineResultHasReadableSignal($pipelineResult)) {
                     $payload = [
                         'success' => (bool) ($pipelineResult['success'] ?? false),
                         'id_type' => $pipelineResult['id_type'] ?? 'Unknown',
@@ -824,12 +886,37 @@ class KKProfilingWizardController extends Controller
         );
         $this->draftService->storeIdVerification($wizard, $verification);
 
+        $publicOcr = [
+            'success' => (bool) ($payload['success'] ?? false),
+            'validation_error' => (bool) ($payload['validation_error'] ?? false),
+            'needs_review' => (bool) ($payload['needs_review'] ?? false),
+            'document_detected' => $payload['document_detected'] ?? null,
+            'id_type' => $payload['id_type'] ?? 'Unknown',
+            'detected_id_type' => $payload['detected_id_type'] ?? null,
+            'expected_id_type' => $payload['expected_id_type'] ?? null,
+            'confidence' => $payload['confidence'] ?? 0,
+            'full_name' => $payload['full_name'] ?? null,
+            'birthdate' => $payload['birthdate'] ?? null,
+            'sex' => $payload['sex'] ?? null,
+            'address' => $payload['address'] ?? null,
+            'id_number' => $payload['id_number'] ?? null,
+            'ocr_status' => $payload['ocr_status'] ?? null,
+            'message' => $payload['message'] ?? null,
+            'face_match' => $payload['face_match'] ?? false,
+            'face_verification' => $payload['face_verification'] ?? null,
+            'text_length' => (int) ($payload['text_length'] ?? 0),
+            'source' => $payload['source'] ?? null,
+            'auto_detected' => (bool) ($payload['auto_detected'] ?? false),
+            'auto_corrected' => (bool) ($payload['auto_corrected'] ?? false),
+        ];
+
         return response()->json([
             'success' => (bool) ($payload['success'] ?? false),
-            'ocr' => $payload,
+            'ocr' => $publicOcr,
             'form_suggestions' => $formSuggestions,
             'message' => $payload['message'] ?? null,
             'validation_error' => (bool) ($payload['validation_error'] ?? false),
+            'needs_review' => (bool) ($payload['needs_review'] ?? false),
             'face_match' => (bool) ($payload['face_match'] ?? false),
         ], ($payload['validation_error'] ?? false) ? 422 : 200);
     }
@@ -914,6 +1001,266 @@ class KKProfilingWizardController extends Controller
         }
 
         return $wizard;
+    }
+
+    /**
+     * Detect/validate uploaded supporting ID images for Step 2.
+     *
+     * @param  array<string, UploadedFile|null>  $sides
+     * @param  array<string, mixed>  $registrationFields
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>|null}
+     */
+    private function runStep2DocumentValidation(
+        string $documentType,
+        array $sides,
+        int $barangayId,
+        array $registrationFields,
+        ?string $selfieRealPath = null,
+    ): array {
+        $front = $sides['front'] ?? null;
+        $back = $sides['back'] ?? null;
+        $frontPath = $front instanceof UploadedFile ? $front->getRealPath() : null;
+        $backPath = $back instanceof UploadedFile ? $back->getRealPath() : null;
+
+        if (! is_string($frontPath) || ! is_string($backPath)) {
+            throw ValidationException::withMessages([
+                'document_type' => ['Please upload both front and back images of your ID.'],
+            ]);
+        }
+
+        if ($documentType === SupportingDocumentTypes::SCHOOL_ID) {
+            $result = $this->identityValidator->validateUploadedId(
+                $barangayId,
+                $registrationFields,
+                $frontPath,
+                $backPath,
+                $documentType,
+            );
+
+            $payload = array_merge($result, [
+                'validation_error' => ! $this->step2DocumentLooksValid($documentType, $result),
+                'success' => (bool) ($result['success'] ?? false),
+                'id_type' => $result['id_type'] ?? 'School ID',
+                'confidence' => $result['overall_confidence'] ?? $result['confidence'] ?? 0,
+                'detected_name' => $result['detected_full_name'] ?? $result['detected_name'] ?? null,
+                'form_suggestions' => $result['form_suggestions'] ?? null,
+            ]);
+
+            return [$payload, is_array($payload['form_suggestions'] ?? null) ? $payload['form_suggestions'] : null];
+        }
+
+        if ($this->philippineIdDetection->isSupportedDocumentType($documentType)) {
+            $ocrPayload = null;
+
+            if (
+                config('ocr.philippine_pipeline_enabled', true)
+                && $this->philippineIdPipeline->isConfigured()
+            ) {
+                try {
+                    $pipelineResult = $this->philippineIdPipeline->validate(
+                        $barangayId,
+                        $registrationFields,
+                        $frontPath,
+                        $backPath,
+                        $documentType,
+                        $selfieRealPath,
+                    );
+
+                    if (is_array($pipelineResult) && $this->pipelineResultHasReadableSignal($pipelineResult)) {
+                        $ocrPayload = array_merge($pipelineResult, [
+                            'form_suggestions' => $this->philippineIdDetection->mapToFormFields([
+                                'success' => $pipelineResult['success'] ?? false,
+                                'id_type' => $pipelineResult['id_type'] ?? 'Unknown',
+                                'full_name' => $pipelineResult['detected_name'] ?? null,
+                                'birthdate' => $pipelineResult['detected_birthdate'] ?? null,
+                                'sex' => $pipelineResult['detected_sex'] ?? null,
+                                'address' => $pipelineResult['detected_address'] ?? null,
+                                'id_number' => $pipelineResult['id_number'] ?? null,
+                                'confidence' => $pipelineResult['confidence'] ?? 0,
+                            ]),
+                        ]);
+                    }
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    Log::warning('Philippine ID pipeline failed in step-2 validation', [
+                        'error' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
+            if (! is_array($ocrPayload)) {
+                if (! $front instanceof UploadedFile || ! $back instanceof UploadedFile) {
+                    throw ValidationException::withMessages([
+                        'document_type' => ['Please upload both front and back images of your ID.'],
+                    ]);
+                }
+
+                $detected = $this->philippineIdDetection->detectUploadedPair($front, $back, $documentType);
+                $ocrPayload = $this->philippineIdDetection->buildVerificationRecord(
+                    $detected,
+                    $documentType,
+                    $registrationFields,
+                );
+            }
+
+            return [$ocrPayload, is_array($ocrPayload['form_suggestions'] ?? null) ? $ocrPayload['form_suggestions'] : null];
+        }
+
+        // other_id — require the upload to look like a readable supporting document
+        if (! $front instanceof UploadedFile || ! $back instanceof UploadedFile) {
+            throw ValidationException::withMessages([
+                'document_type' => ['Please upload both front and back images of your ID.'],
+            ]);
+        }
+
+        $detected = $this->philippineIdDetection->detectUploadedPair($front, $back, $documentType);
+        $ocrPayload = $this->philippineIdDetection->buildVerificationRecord(
+            $detected,
+            $documentType,
+            $registrationFields,
+        );
+
+        return [$ocrPayload, is_array($ocrPayload['form_suggestions'] ?? null) ? $ocrPayload['form_suggestions'] : null];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function assertStep2DocumentAllowedToProceed(string $documentType, array $payload): void
+    {
+        if ($this->step2DocumentLooksValid($documentType, $payload)) {
+            return;
+        }
+
+        $label = SupportingDocumentTypes::label($documentType);
+        $message = trim((string) ($payload['message'] ?? ''));
+
+        if ($message === '') {
+            $message = "We couldn't confidently identify a valid {$label} from your upload. Please upload a clearer front and back photo.";
+        }
+
+        throw ValidationException::withMessages([
+            'document_type' => [$message],
+        ]);
+    }
+
+    /**
+     * Reject when front and back are the exact same image bytes.
+     */
+    private function identicalFrontBackError(UploadedFile $front, UploadedFile $back): ?string
+    {
+        $frontPath = $front->getRealPath();
+        $backPath = $back->getRealPath();
+
+        if (! is_string($frontPath) || ! is_string($backPath) || ! is_file($frontPath) || ! is_file($backPath)) {
+            return null;
+        }
+
+        $frontSize = (int) filesize($frontPath);
+        $backSize = (int) filesize($backPath);
+
+        if ($frontSize <= 0 || $backSize <= 0) {
+            return null;
+        }
+
+        $sameBytes = false;
+
+        if ($frontSize === $backSize) {
+            $frontHash = @hash_file('sha256', $frontPath);
+            $backHash = @hash_file('sha256', $backPath);
+            $sameBytes = is_string($frontHash) && is_string($backHash) && $frontHash !== '' && hash_equals($frontHash, $backHash);
+        }
+
+        if (! $sameBytes) {
+            return null;
+        }
+
+        return 'Front and back must be different photos. You uploaded the same image for both sides. Please upload the real front and the real back of your ID.';
+    }
+
+    /**
+     * Prefer local OCR when the Python pipeline returns an empty/unknown result.
+     *
+     * @param  array<string, mixed>  $pipelineResult
+     */
+    private function pipelineResultHasReadableSignal(array $pipelineResult): bool
+    {
+        if (($pipelineResult['success'] ?? false) === true) {
+            return true;
+        }
+
+        $idType = trim((string) ($pipelineResult['id_type'] ?? $pipelineResult['detected_id_type'] ?? ''));
+        $confidence = (float) ($pipelineResult['confidence'] ?? 0);
+        $rawText = trim((string) (
+            $pipelineResult['raw_text']
+            ?? data_get($pipelineResult, 'ocr.raw_text')
+            ?? data_get($pipelineResult, 'ocr.full_text')
+            ?? ''
+        ));
+        $detectedName = trim((string) ($pipelineResult['detected_name'] ?? $pipelineResult['full_name'] ?? ''));
+        $message = strtolower((string) ($pipelineResult['message'] ?? ''));
+
+        if (
+            str_contains($message, 'couldn\'t read any text')
+            || str_contains($message, 'no text')
+            || str_contains($message, 'unavailable')
+            || str_contains($message, 'timed out')
+        ) {
+            return false;
+        }
+
+        if ($detectedName !== '' || $rawText !== '') {
+            return true;
+        }
+
+        if ($idType !== '' && strcasecmp($idType, 'Unknown') !== 0 && $confidence > 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function step2DocumentLooksValid(string $documentType, array $payload): bool
+    {
+        if (($payload['validation_error'] ?? false) === true) {
+            return false;
+        }
+
+        if (($payload['success'] ?? false) === true) {
+            return true;
+        }
+
+        // Low OCR / weak classification should go to admin review, not hard-reject.
+        if (($payload['needs_review'] ?? false) === true) {
+            return true;
+        }
+
+        $decision = strtoupper(trim((string) ($payload['decision'] ?? '')));
+        if ($documentType === SupportingDocumentTypes::SCHOOL_ID && $decision === 'MANUAL_REVIEW') {
+            return true;
+        }
+
+        $errorCode = (string) ($payload['error_code'] ?? '');
+        if (in_array($errorCode, ['ocr_failed', 'pipeline_reject', 'duplicate'], true)) {
+            return false;
+        }
+
+        $confidence = (float) ($payload['confidence'] ?? $payload['overall_confidence'] ?? 0);
+        $idType = trim((string) ($payload['id_type'] ?? $payload['detected_id_type'] ?? ''));
+
+        if (
+            $documentType === SupportingDocumentTypes::OTHER_ID
+            && $idType !== ''
+            && strcasecmp($idType, 'Unknown') !== 0
+            && $confidence >= (float) config('ocr.min_detect_confidence', 0.35)
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     private function finalizeRegistrationResponse(KabataanRegistration $registration): JsonResponse
@@ -1099,6 +1446,100 @@ class KKProfilingWizardController extends Controller
         $validated['signature_name'] = $request->input('signature_name');
 
         return $validated;
+    }
+
+    /**
+     * Soft-extract Step 1 fields for draft autosave. Unknown keys are ignored.
+     *
+     * @return array<string, mixed>
+     */
+    private function extractStep1DraftPayload(Request $request): array
+    {
+        $allowed = [
+            'last_name',
+            'first_name',
+            'middle_name',
+            'suffix',
+            'custom_suffix',
+            'purok_zone',
+            'sex',
+            'age',
+            'birthday',
+            'email',
+            'contact_number',
+            'civil_status',
+            'youth_classification',
+            'youth_age_group',
+            'work_status',
+            'education',
+            'sk_voter',
+            'national_voter',
+            'sk_voted',
+            'kk_assembly',
+            'kk_times',
+            'kk_reason',
+            'facebook_profile_url',
+            'group_chat',
+            'signature',
+            'signature_name',
+            'data_agreement',
+        ];
+
+        $partial = [];
+
+        foreach ($allowed as $key) {
+            if (! $request->exists($key)) {
+                continue;
+            }
+
+            $value = $request->input($key);
+
+            if (is_string($value)) {
+                $value = trim($value);
+                if ($value === '') {
+                    continue;
+                }
+            }
+
+            if (is_array($value) && $value === []) {
+                continue;
+            }
+
+            if ($value === null) {
+                continue;
+            }
+
+            $partial[$key] = $value;
+        }
+
+        if (isset($partial['email'])) {
+            $partial['email'] = strtolower(trim((string) $partial['email']));
+        }
+
+        $kkAssembly = $request->input('kk_assembly') ?: $request->input('kk_assemblyChk');
+        if (is_string($kkAssembly) && $kkAssembly !== '') {
+            $partial['kk_assembly'] = $kkAssembly;
+        }
+
+        if (($partial['kk_assembly'] ?? null) === 'Yes') {
+            $times = $request->input('kk_times') ?: $request->input('kk_timesChk');
+            if (is_string($times) && $times !== '') {
+                $partial['kk_times'] = $times;
+            }
+        }
+
+        if (($partial['kk_assembly'] ?? null) === 'No') {
+            $reason = $request->input('kk_reason') ?: $request->input('kk_reasonChk');
+            if (is_string($reason) && $reason !== '') {
+                $partial['kk_reason'] = $reason;
+            }
+        }
+
+        if ($request->boolean('data_agreement')) {
+            $partial['data_agreement'] = '1';
+        }
+
+        return $partial;
     }
 
     private function resolveBarangay(string $barangay): Barangay

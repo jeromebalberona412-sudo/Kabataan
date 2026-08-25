@@ -190,7 +190,18 @@ class KKProfilingController extends Controller
         $wizardDraftEmail = null;
         $registrationAutoApproved = false;
 
-        $completedSession = $draftService->resolveCompletedRegistration((int) $barangayRecord->id);
+        $hasActiveUnfinishedDraft = is_array($wizard)
+            && (int) ($wizard['barangay_id'] ?? 0) === (int) $barangayRecord->id
+            && ! empty($wizard['step1_data']);
+
+        // An unfinished draft always wins over a leftover success session from a prior submit.
+        if ($hasActiveUnfinishedDraft) {
+            $draftService->clearCompletedRegistration();
+        }
+
+        $completedSession = $hasActiveUnfinishedDraft
+            ? null
+            : $draftService->resolveCompletedRegistration((int) $barangayRecord->id);
 
         if ($completedSession) {
             $registrationComplete = true;
@@ -219,32 +230,14 @@ class KKProfilingController extends Controller
         if ($wizard && (int) ($wizard['barangay_id'] ?? 0) === (int) $barangayRecord->id) {
             $verificationSent = ! empty($wizard['verification_sent_at']);
             $respondentNumber = $wizard['respondent_number'] ?? $respondentNumber;
-
-            $wizardEmail = strtolower(trim($wizard['email'] ?? $wizard['step1_data']['email'] ?? ''));
-
-            if (! $registrationComplete && $wizardEmail !== '' && $draftService->isEmailRegistrationComplete($wizardEmail, (int) $barangayRecord->id)) {
-                $registration = KabataanRegistration::query()
-                    ->where('barangay_id', $barangayRecord->id)
-                    ->where('email', $wizardEmail)
-                    ->whereIn('status', ['password_set', 'active'])
-                    ->latest('id')
-                    ->first();
-
-                $draftService->markRegistrationComplete($wizardEmail, (int) $barangayRecord->id, $registration);
-                $registrationComplete = true;
-                $completedEmail = $wizardEmail;
-                $registrationAutoApproved = $registration
-                    ? RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status)
-                    : false;
-            }
+            $wizardDraftEmail = strtolower(trim($wizard['email'] ?? $wizard['step1_data']['email'] ?? '')) ?: null;
+            $wizardInitialStep = max(1, min(3, (int) ($wizard['current_step'] ?? 1)));
         }
 
         if ($registrationComplete) {
             $wizardInitialStep = 3;
             $wizardDraftEmail = $completedEmail;
-        } else {
-            $wizardDraftEmail = null;
-            $verificationSent = false;
+            $verificationSent = true;
         }
 
         return view('kkprofiling::kkprofiling', [

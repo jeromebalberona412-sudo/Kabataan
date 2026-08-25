@@ -67,4 +67,16 @@ return [
         'philhealth_id',
         'voters_id',
     ],
+
+    'tesseract' => [
+        'path' => env('TESSERACT_PATH'),
+        'lang' => env('TESSERACT_LANG', 'eng'),
+        'timeout' => (int) env('TESSERACT_TIMEOUT', 90),
+        'psm_modes' => array_values(array_filter(array_map(
+            'intval',
+            explode(',', (string) env('TESSERACT_PSM_MODES', '6,11,12'))
+        ))),
+    ],
+
+    'diagnostics_enabled' => (bool) env('OCR_DIAGNOSTICS_ENABLED', false),
 ];
