@@ -248,7 +248,7 @@
                                     <label class="kkp-inline-label">Age: <span class="kkp-required">*</span></label>
 
                                     <div class="kkp-age-select-box">
-                                        <select name="age" id="kkpAge" class="kkp-uline kkp-uline-select kkp-uline-age kkp-age-select-compact" required>
+                                        <select name="age" id="kkpAge" class="kkp-uline kkp-uline-select kkp-uline-age" required>
                                             <option value="" disabled selected>Select</option>
                                             @for ($ageOption = 15; $ageOption <= 30; $ageOption++)
                                                 <option value="{{ $ageOption }}">{{ $ageOption }}</option>

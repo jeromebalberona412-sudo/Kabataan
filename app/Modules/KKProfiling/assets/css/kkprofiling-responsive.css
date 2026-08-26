@@ -200,6 +200,18 @@ body.kkpu-page-body {
         flex: 0 0 auto;
     }
 
+    .kkp-fs-scale-inner .kkp-age-select-box {
+        min-width: 78px;
+    }
+
+    .kkp-fs-scale-inner .kkp-uline-age {
+        width: 78px;
+        min-width: 78px;
+        min-height: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+
     .kkp-fs-scale-inner .kkp-inline-pair--email {
         flex-wrap: wrap;
         flex-direction: row;

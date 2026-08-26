@@ -681,29 +681,7 @@ function kkpValidateContact(value, requireEmpty) {
         });
     }
 
-    const ageSelectCompact = document.getElementById('kkpAge');
-    if (ageSelectCompact && ageSelectCompact.classList.contains('kkp-age-select-compact')) {
-        const collapseAgeSelect = () => {
-            ageSelectCompact.size = 1;
-            ageSelectCompact.classList.remove('is-expanded');
-        };
-
-        ageSelectCompact.addEventListener('mousedown', function () {
-            if (this.size === 1) {
-                this.size = 6;
-                this.classList.add('is-expanded');
-            }
-        });
-
-        ageSelectCompact.addEventListener('blur', collapseAgeSelect);
-        ageSelectCompact.addEventListener('change', collapseAgeSelect);
-
-        document.addEventListener('click', (event) => {
-            if (!ageSelectCompact.contains(event.target)) {
-                collapseAgeSelect();
-            }
-        });
-    }
+    // Age uses the same native select dropdown as Purok/Zone (no in-page expand).
 
     // ── Name fields: auto-uppercase + soft/hard length gates ──
     function resetLongNameConfirmInput() {
