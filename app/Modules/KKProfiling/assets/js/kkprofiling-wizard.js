@@ -89,7 +89,9 @@
     const DOC_MAX_BYTES = 10 * 1024 * 1024;
     const DOC_ALLOWED_TYPES = ['image/jpeg', 'image/png'];
     const DOC_ALLOWED_EXT = ['.jpg', '.jpeg', '.png'];
-    const PHILIPPINE_OCR_DOC_TYPES = ['national_id', 'philhealth_id', 'voters_id'];
+    const OCR_SCAN_DOC_TYPES = ['national_id', 'philhealth_id', 'voters_id', 'school_id', 'other_id'];
+    // Back-compat alias used by older helpers in this file.
+    const PHILIPPINE_OCR_DOC_TYPES = OCR_SCAN_DOC_TYPES;
 
     const DOC_TYPE_LABELS = {
         national_id: 'PhilSys / National ID',
@@ -103,6 +105,7 @@
     const ocrStatusEl = document.getElementById('kkpWizardOcrStatus');
     const ocrFieldsEl = document.getElementById('kkpWizardOcrFields');
     const ocrNoteEl = document.getElementById('kkpWizardOcrNote');
+    const ocrRetryEl = document.getElementById('kkpWizardOcrRetry');
     const docErrorEl = document.getElementById('kkpWizardDocError');
     const selfieUploadPanel = document.getElementById('kkpSelfieUploadPanel');
     const selfieInput = document.getElementById('kkpSelfie');
@@ -134,6 +137,7 @@
             img: document.getElementById(`${inputId}PreviewImg`),
             fileName: document.getElementById(`${inputId}FileName`),
             dropzone: document.getElementById(`${inputId}Dropzone`),
+            badge: document.getElementById(`${inputId}CapturedBadge`),
         };
     }
 
@@ -286,6 +290,10 @@
             ocrNoteEl.hidden = true;
         }
 
+        if (ocrRetryEl) {
+            ocrRetryEl.hidden = true;
+        }
+
         if (ocrPanel) {
             setOcrPanelState('ok');
             if (hidePanel) {
@@ -294,6 +302,39 @@
         }
 
         updateNavButtons(currentStep);
+    }
+
+    function formatConfidenceBandLabel(band) {
+        const map = {
+            high: 'High — text successfully detected',
+            medium: 'Medium — please review the information',
+            low: 'Low — please retake the photo',
+        };
+
+        return map[String(band || '')] || null;
+    }
+
+    function showOcrRetryActions(show) {
+        if (ocrRetryEl) {
+            ocrRetryEl.hidden = !show;
+        }
+    }
+
+    function openRetakeForActiveSide(side) {
+        const documentType = getSelectedDocumentType();
+        const ids = DOCUMENT_INPUT_IDS[documentType] || [];
+        const inputId = side === 'back' ? ids[1] : ids[0];
+
+        if (!inputId) {
+            return;
+        }
+
+        if (window.KkpIdCamera?.open) {
+            window.KkpIdCamera.open(inputId, side);
+            return;
+        }
+
+        document.getElementById(inputId)?.click();
     }
 
     function renderOcrFields(payload) {
@@ -317,6 +358,7 @@
             ['Document detected', payload?.document_detected ? String(payload.document_detected).toUpperCase() : (payload?.success ? 'YES' : null)],
             ['ID type', detectedLabel],
             ['Confidence', confidenceLabel],
+            ['Recognition quality', formatConfidenceBandLabel(payload?.confidence_band)],
             ['OCR status', formatOcrStatusLabel(payload?.ocr_status)],
             ['Verification', payload?.needs_review ? 'Needs administrator review' : (payload?.success ? 'Ready for review' : null)],
             ['Full name', payload?.full_name],
@@ -348,30 +390,34 @@
             ocrStatusEl.textContent = mismatchMessage;
             setOcrPanelState('error');
             showDocUploadError(mismatchMessage);
+            showOcrRetryActions(true);
         } else if (payload?.success || payload?.needs_review) {
             hideDocUploadError();
+            showOcrRetryActions(Boolean(payload?.needs_review) && !payload?.success);
             if (selfieVerificationEnabled && payload?.face_match) {
-                ocrStatusEl.textContent = payload?.message || 'Document appears valid for review.';
+                ocrStatusEl.textContent = payload?.message || 'ID text detected. Please review for accuracy.';
             } else if (selfieVerificationEnabled && payload?.face_verification?.decision === 'FAIL') {
                 ocrStatusEl.textContent = 'We could not confirm the selfie against the ID photo. Please upload a clearer image.';
                 setOcrPanelState('error');
                 showDocUploadError('We could not confirm the selfie against the ID photo. Please upload a clearer image.');
+                showOcrRetryActions(true);
                 return;
             } else if (selfieVerificationEnabled && PHILIPPINE_OCR_DOC_TYPES.includes(getSelectedDocumentType()) && selfieUploadPanel) {
-                ocrStatusEl.textContent = payload?.message || 'Document appears valid for review. You may upload a selfie if required.';
+                ocrStatusEl.textContent = payload?.message || 'ID text detected. You may upload a selfie if required.';
                 selfieUploadPanel.hidden = false;
             } else {
-                ocrStatusEl.textContent = payload?.message || 'Document appears valid for review. Review detected details below.';
+                ocrStatusEl.textContent = payload?.message || 'ID text detected. Please review detected details below.';
                 if (selfieUploadPanel) {
                     selfieUploadPanel.hidden = true;
                 }
             }
             setOcrPanelState('ok');
         } else {
-            const fallbackMessage = payload?.message || 'OCR could not identify this ID.';
+            const fallbackMessage = payload?.message || 'We couldn\'t read any text from this ID. Please make sure the ID is clear, properly aligned, and well lit.';
             ocrStatusEl.textContent = fallbackMessage;
             setOcrPanelState('error');
             showDocUploadError(fallbackMessage);
+            showOcrRetryActions(true);
         }
     }
 
@@ -415,7 +461,7 @@
 
     function applyAutoDetectedDocumentType(detectedType, { confidence = 0 } = {}) {
         const allowed = ['national_id', 'philhealth_id', 'voters_id', 'school_id'];
-        if (!allowed.includes(detectedType) || Number(confidence) < 0.45) {
+        if (!allowed.includes(detectedType) || Number(confidence) < 0.55) {
             return false;
         }
 
@@ -506,11 +552,16 @@
         return selfieInput?.files?.[0] || null;
     }
 
-    async function scanPhilippineIdIfReady() {
+    async function scanIdIfReady() {
         const documentType = getSelectedDocumentType();
 
-        if (!PHILIPPINE_OCR_DOC_TYPES.includes(documentType) || !hasCompleteDocumentUpload()) {
+        if (!documentType) {
             clearOcrUiState({ hidePanel: true });
+            return;
+        }
+
+        if (!OCR_SCAN_DOC_TYPES.includes(documentType) || !hasCompleteDocumentUpload()) {
+            clearOcrUiState({ hidePanel: !hasPartialDocumentUpload() });
             return;
         }
 
@@ -550,10 +601,21 @@
         }
 
         if (ocrStatusEl) {
-            ocrStatusEl.textContent = 'Scanning ID with OCR...';
+            ocrStatusEl.textContent = 'Checking image quality…';
         }
 
         setOcrPanelState('loading');
+        showOcrRetryActions(false);
+
+        // Brief UX step before upload so users see quality → OCR progress.
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+        if (token !== ocrScanToken) {
+            return;
+        }
+
+        if (ocrStatusEl) {
+            ocrStatusEl.textContent = 'Processing your ID…';
+        }
 
         try {
             const formData = new FormData();
@@ -564,6 +626,10 @@
             const selfie = selfieVerificationEnabled ? getSelfieFile() : null;
             if (selfie) {
                 formData.append('selfie', selfie);
+            }
+
+            if (ocrStatusEl) {
+                ocrStatusEl.textContent = 'Reading ID information…';
             }
 
             const response = await fetch(`${apiBase}/detect-id`, {
@@ -593,8 +659,9 @@
                     };
                 }
             } else {
-                const detectedType = lastOcrPayload?.detected_id_type || lastOcrPayload?.id_type;
-                if (lastOcrPayload?.auto_corrected || Number(lastOcrPayload?.confidence || 0) >= 0.45) {
+                // Only change document type when the server explicitly auto-corrected it.
+                if (lastOcrPayload?.auto_corrected) {
+                    const detectedType = lastOcrPayload?.detected_id_type || lastOcrPayload?.id_type;
                     applyAutoDetectedDocumentType(detectedType, {
                         confidence: lastOcrPayload?.confidence || 0,
                     });
@@ -603,7 +670,7 @@
 
             renderOcrFields(lastOcrPayload);
 
-            if (lastOcrPayload?.success && data.form_suggestions) {
+            if ((lastOcrPayload?.success || lastOcrPayload?.needs_review) && !lastOcrPayload?.validation_error && data.form_suggestions) {
                 applyFormSuggestions(data.form_suggestions, { onlyEmpty: true });
             }
 
@@ -614,18 +681,28 @@
             }
 
             const offlineMessage = 'We couldn\'t read this ID clearly. Please upload a clearer front and back photo and try again.';
-            renderOcrFields({
+            lastOcrPayload = {
                 success: false,
                 validation_error: true,
+                needs_review: false,
+                document_detected: 'no',
+                id_type: 'Unknown',
+                confidence: 0,
                 message: offlineMessage,
-            });
+            };
+            renderOcrFields(lastOcrPayload);
             showDocUploadError(offlineMessage);
             updateNavButtons(currentStep);
         }
     }
 
+    // Alias for existing call sites.
+    async function scanPhilippineIdIfReady() {
+        return scanIdIfReady();
+    }
+
     function hasBlockingOcrError() {
-        if (!PHILIPPINE_OCR_DOC_TYPES.includes(getSelectedDocumentType())) {
+        if (!OCR_SCAN_DOC_TYPES.includes(getSelectedDocumentType())) {
             return false;
         }
 
@@ -633,7 +710,117 @@
             return false;
         }
 
+        // Still scanning — block continue until a result arrives.
+        if (ocrPanel && !ocrPanel.hidden && ocrPanel.classList.contains('is-loading')) {
+            return true;
+        }
+
+        if (lastOcrPayload?.validation_error || lastOcrPayload?.document_detected === 'no') {
+            return true;
+        }
+
+        if (!lastOcrPayload) {
+            return true;
+        }
+
+        if (lastOcrPayload && !lastOcrPayload.success && !lastOcrPayload.needs_review) {
+            return true;
+        }
+
+        // Soft review is only allowed when OCR found an ID with usable confidence.
+        if (lastOcrPayload?.needs_review && !lastOcrPayload?.validation_error) {
+            const confidence = Number(lastOcrPayload?.confidence || 0);
+            const detectedType = lastOcrPayload?.detected_id_type || lastOcrPayload?.id_type || '';
+            const selectedType = getSelectedDocumentType();
+            if (
+                lastOcrPayload?.document_detected !== 'yes'
+                || confidence < 0.50
+                || !detectedType
+                || detectedType === 'Unknown'
+                || (selectedType && selectedType !== 'other_id' && detectedType !== selectedType)
+            ) {
+                return true;
+            }
+            return false;
+        }
+
+        // Successful OCR clears the blocking flag.
+        if (lastOcrPayload && lastOcrPayload.success && !lastOcrPayload.validation_error) {
+            const confidence = Number(lastOcrPayload.confidence || 0);
+            const detectedType = lastOcrPayload?.detected_id_type || lastOcrPayload?.id_type || '';
+            const selectedType = getSelectedDocumentType();
+            if (
+                confidence < 0.50
+                || !detectedType
+                || detectedType === 'Unknown'
+                || (selectedType && selectedType !== 'other_id' && detectedType !== selectedType)
+            ) {
+                return true;
+            }
+            return false;
+        }
+
         return Boolean(lastOcrBlockingError);
+    }
+
+    function ocrResultIsAcceptableForContinue() {
+        if (!lastOcrPayload || lastOcrPayload.validation_error || lastOcrPayload.document_detected === 'no') {
+            return false;
+        }
+
+        const selectedType = getSelectedDocumentType();
+        const detectedType = lastOcrPayload.detected_id_type || lastOcrPayload.id_type || '';
+        const confidence = Number(lastOcrPayload.confidence || 0);
+
+        if (!detectedType || detectedType === 'Unknown' || confidence < 0.50) {
+            return false;
+        }
+
+        if (
+            selectedType
+            && selectedType !== 'other_id'
+            && detectedType !== selectedType
+        ) {
+            return false;
+        }
+
+        if (lastOcrPayload.success) {
+            return true;
+        }
+
+        if (lastOcrPayload.needs_review) {
+            return lastOcrPayload.document_detected === 'yes';
+        }
+
+        return false;
+    }
+
+    function requireDocumentTypeSelected(actionLabel = 'scan or upload') {
+        if (getSelectedDocumentType()) {
+            return true;
+        }
+
+        showDocUploadError(`Please select a document type first, then ${actionLabel} your ID.`);
+        document.getElementById('kkpDocTypeFieldset')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return false;
+    }
+
+    function syncCaptureControlsEnabled() {
+        const enabled = Boolean(getSelectedDocumentType());
+        document.querySelectorAll('[data-kkp-open-camera], [data-kkp-trigger-upload]').forEach((button) => {
+            button.disabled = !enabled;
+            button.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+            button.title = enabled
+                ? ''
+                : 'Select a document type first';
+        });
+
+        document.querySelectorAll('.kkp-wizard-file-input').forEach((input) => {
+            if (input.id === 'kkpSelfie') {
+                return;
+            }
+            input.disabled = !enabled;
+        });
     }
 
     function isAllowedDocumentFile(file) {
@@ -657,10 +844,86 @@
         }
 
         if (file.size > DOC_MAX_BYTES) {
-            return 'Image must be 10MB or smaller.';
+            return 'Image file is too large. Please upload a smaller image.';
         }
 
         return null;
+    }
+
+    async function averageHashFromFile(file) {
+        if (!file || typeof createImageBitmap !== 'function') {
+            return null;
+        }
+
+        let bitmap = null;
+
+        try {
+            bitmap = await createImageBitmap(file);
+            const canvas = document.createElement('canvas');
+            canvas.width = 8;
+            canvas.height = 8;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) {
+                return null;
+            }
+
+            ctx.drawImage(bitmap, 0, 0, 8, 8);
+            const data = ctx.getImageData(0, 0, 8, 8).data;
+            const grays = [];
+            let sum = 0;
+
+            for (let i = 0; i < 64; i += 1) {
+                const offset = i * 4;
+                const gray = Math.round((data[offset] * 0.299) + (data[offset + 1] * 0.587) + (data[offset + 2] * 0.114));
+                grays.push(gray);
+                sum += gray;
+            }
+
+            const average = sum / 64;
+            let bits = '';
+            grays.forEach((gray) => {
+                bits += gray >= average ? '1' : '0';
+            });
+
+            let hex = '';
+            for (let i = 0; i < 64; i += 4) {
+                hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+            }
+
+            return hex.padStart(16, '0');
+        } catch (error) {
+            return null;
+        } finally {
+            if (bitmap && typeof bitmap.close === 'function') {
+                bitmap.close();
+            }
+        }
+    }
+
+    function hammingHexDistance(hashA, hashB) {
+        if (!hashA || !hashB || String(hashA).length !== String(hashB).length) {
+            return null;
+        }
+
+        const a = String(hashA).toLowerCase();
+        const b = String(hashB).toLowerCase();
+
+        if (!/^[0-9a-f]+$/.test(a) || !/^[0-9a-f]+$/.test(b)) {
+            return null;
+        }
+
+        let distance = 0;
+        for (let i = 0; i < a.length; i += 1) {
+            const nibbleA = parseInt(a[i], 16);
+            const nibbleB = parseInt(b[i], 16);
+            let xor = nibbleA ^ nibbleB;
+            while (xor > 0) {
+                distance += xor & 1;
+                xor >>= 1;
+            }
+        }
+
+        return distance;
     }
 
     async function filesAppearIdentical(front, back) {
@@ -680,28 +943,33 @@
             return true;
         }
 
-        if (front.size !== back.size || front.size === 0) {
-            return false;
+        if (front.size > 0 && front.size === back.size && window.crypto?.subtle) {
+            try {
+                const [frontHash, backHash] = await Promise.all([
+                    crypto.subtle.digest('SHA-256', await front.arrayBuffer()),
+                    crypto.subtle.digest('SHA-256', await back.arrayBuffer()),
+                ]);
+
+                const toHex = (buffer) => [...new Uint8Array(buffer)]
+                    .map((byte) => byte.toString(16).padStart(2, '0'))
+                    .join('');
+
+                if (toHex(frontHash) === toHex(backHash)) {
+                    return true;
+                }
+            } catch (error) {
+                // Fall through to perceptual hash.
+            }
         }
 
-        if (!window.crypto?.subtle) {
-            return false;
-        }
+        // Catch re-saved / resized copies of the same photo (different byte size).
+        const [phashFront, phashBack] = await Promise.all([
+            averageHashFromFile(front),
+            averageHashFromFile(back),
+        ]);
+        const distance = hammingHexDistance(phashFront, phashBack);
 
-        try {
-            const [frontHash, backHash] = await Promise.all([
-                crypto.subtle.digest('SHA-256', await front.arrayBuffer()),
-                crypto.subtle.digest('SHA-256', await back.arrayBuffer()),
-            ]);
-
-            const toHex = (buffer) => [...new Uint8Array(buffer)]
-                .map((byte) => byte.toString(16).padStart(2, '0'))
-                .join('');
-
-            return toHex(frontHash) === toHex(backHash);
-        } catch (error) {
-            return false;
-        }
+        return distance !== null && distance <= 5;
     }
 
     async function validateDistinctFrontAndBack(files) {
@@ -769,6 +1037,35 @@
         }
     }
 
+    function setCaptureBadge(inputId, captured) {
+        const badge = document.getElementById(`${inputId}CapturedBadge`);
+        if (badge) {
+            badge.hidden = !captured;
+        }
+    }
+
+    function updateIdCaptureProgress() {
+        const documentType = getSelectedDocumentType();
+        if (!documentType) {
+            return;
+        }
+
+        const files = getActiveDocumentFiles();
+        const panel = document.querySelector(`.kkp-wizard-id-progress[data-doc-type="${documentType}"]`);
+        if (!panel) {
+            return;
+        }
+
+        ['front', 'back'].forEach((side) => {
+            const item = panel.querySelector(`[data-progress-side="${side}"] [data-progress-label]`);
+            if (!item) {
+                return;
+            }
+            const hasFile = Boolean(files[side]);
+            item.textContent = hasFile ? '✓ Captured' : 'Not captured';
+        });
+    }
+
     function resetFilePreview(inputId) {
         const config = previewConfig[inputId];
 
@@ -796,6 +1093,9 @@
         if (config.fileName) {
             config.fileName.textContent = '';
         }
+
+        setCaptureBadge(inputId, false);
+        updateIdCaptureProgress();
     }
 
     function updateFilePreview(input, options = {}) {
@@ -814,6 +1114,13 @@
         if (!file) {
             resetFilePreview(input.id);
             clearOcrUiState({ hidePanel: !hasCompleteDocumentUpload() });
+            updateNavButtons(currentStep);
+            return;
+        }
+
+        if (input.id !== 'kkpSelfie' && !requireDocumentTypeSelected('upload')) {
+            input.value = '';
+            resetFilePreview(input.id);
             updateNavButtons(currentStep);
             return;
         }
@@ -850,17 +1157,24 @@
             config.preview.hidden = false;
         }
 
+        setCaptureBadge(input.id, true);
+        updateIdCaptureProgress();
         updateNavButtons(currentStep);
 
         if (!skipScan) {
             // New image uploaded — clear previous OCR result before rescanning.
             if (!hasCompleteDocumentUpload()) {
                 clearOcrUiState({ hidePanel: true });
+                if (ocrStatusEl && ocrPanel && hasPartialDocumentUpload()) {
+                    ocrPanel.hidden = false;
+                    ocrStatusEl.textContent = 'Front or back captured. Add the other side to auto-scan and validate your ID.';
+                    setOcrPanelState('ok');
+                }
             } else {
                 lastOcrPayload = null;
                 lastOcrBlockingError = null;
                 hideDocUploadError();
-                scanPhilippineIdIfReady();
+                scanIdIfReady();
             }
         }
     }
@@ -921,6 +1235,7 @@
         }
 
         updateNavButtons(currentStep);
+        syncCaptureControlsEnabled();
 
         if (selectedType) {
             const activePanel = [
@@ -938,7 +1253,7 @@
             }
         }
 
-        scanPhilippineIdIfReady();
+        scanIdIfReady();
     }
     syncDocumentUploadPanels.lastType = '';
 
@@ -1008,6 +1323,25 @@
                     updateNavButtons(currentStep);
                 }
             });
+        });
+
+        document.getElementById('kkpOcrRetakeFront')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            openRetakeForActiveSide('front');
+        });
+        document.getElementById('kkpOcrRetakeBack')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            openRetakeForActiveSide('back');
+        });
+        document.getElementById('kkpOcrUploadAnother')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            const documentType = getSelectedDocumentType();
+            const ids = DOCUMENT_INPUT_IDS[documentType] || [];
+            const missingFront = !getActiveDocumentFiles().front;
+            const inputId = missingFront ? ids[0] : ids[1];
+            if (inputId) {
+                document.getElementById(inputId)?.click();
+            }
         });
 
         syncDocumentUploadPanels();
@@ -1367,7 +1701,11 @@
             if (config.dropzone) {
                 config.dropzone.hidden = true;
             }
+
+            setCaptureBadge(inputId, true);
         });
+
+        updateIdCaptureProgress();
 
         if (PHILIPPINE_OCR_DOC_TYPES.includes(documentType) && step2.id_verification) {
             renderOcrFields({
@@ -1802,25 +2140,25 @@
             return false;
         }
 
-        if (PHILIPPINE_OCR_DOC_TYPES.includes(documentType)) {
+        if (OCR_SCAN_DOC_TYPES.includes(documentType)) {
             if (hasBlockingOcrError()) {
-                showDocUploadError(lastOcrBlockingError);
+                showDocUploadError(lastOcrBlockingError || lastOcrPayload?.message || 'Please upload a clear ID photo.');
                 return false;
             }
 
-            if (!lastOcrPayload || lastOcrPayload.validation_error || (!lastOcrPayload.success && !lastOcrPayload.needs_review)) {
+            if (!ocrResultIsAcceptableForContinue()) {
                 showDocUploadError(
                     lastOcrPayload?.message
                     || 'Please wait for ID scanning to finish, or upload a clearer front and back photo of your selected ID.',
                 );
-                await scanPhilippineIdIfReady();
+                await scanIdIfReady();
 
                 if (hasBlockingOcrError()) {
-                    showDocUploadError(lastOcrBlockingError);
+                    showDocUploadError(lastOcrBlockingError || lastOcrPayload?.message || 'Please upload a clear ID photo.');
                     return false;
                 }
 
-                if (!lastOcrPayload || lastOcrPayload.validation_error || (!lastOcrPayload.success && !lastOcrPayload.needs_review)) {
+                if (!ocrResultIsAcceptableForContinue()) {
                     showDocUploadError(
                         lastOcrPayload?.message
                         || 'Please upload a clearer supporting ID photo before continuing.',

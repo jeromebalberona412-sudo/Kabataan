@@ -27,6 +27,76 @@
     gap: 6px;
 }
 
+/* Youth Classification — paper/screenshot: left 4 + brace + right 3 */
+.kkp-demo-block-options.kkp-youth-class-layout {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 4px;
+    row-gap: 0;
+    align-items: end;
+    align-content: end;
+    width: 100%;
+    flex-direction: unset;
+    gap: 0 4px;
+}
+
+.kkp-youth-class-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.kkp-youth-class-main .kkp-chk-lbl {
+    white-space: nowrap;
+}
+
+.kkp-youth-class-side {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 3px;
+    min-width: 0;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    justify-self: start;
+}
+
+.kkp-youth-specific-brace {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.4rem;
+    font-weight: 400;
+    line-height: 0.85;
+    color: #222;
+    padding: 0;
+    margin: 0;
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    user-select: none;
+}
+
+.kkp-youth-specific-options {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+    min-width: 0;
+}
+
+.kkp-youth-specific-options .kkp-chk-lbl {
+    white-space: nowrap;
+}
+
+.kkp-demo-block-options.kkp-youth-class-layout > input[type="hidden"] {
+    grid-column: 1 / -1;
+    grid-row: 2;
+}
+
 .kkp-demo-block-label {
     font-size: 10px;
     font-weight: 800;
@@ -40,10 +110,12 @@
     justify-content: center;
     text-align: center;
     padding: 4px 5px;
-    line-height: 1.3;
+    line-height: 1.25;
     border-right: 1px solid #bbb;
     flex-shrink: 0;
-    word-break: break-word;
+    word-break: normal;
+    overflow-wrap: normal;
+    hyphens: none;
 }
 
 .kkp-demo-block-options {
@@ -116,14 +188,16 @@
 }
 
 .kkp-sq-chk:checked::after {
-    content: '\2713';
+    content: '';
     position: absolute;
-    top: -2px;
-    left: 0px;
-    font-size: 11px;
-    font-weight: 900;
-    color: #111;
-    line-height: 1;
+    left: 50%;
+    top: 45%;
+    width: 3.5px;
+    height: 6.5px;
+    border: solid #111;
+    border-width: 0 1.5px 1.5px 0;
+    transform: translate(-50%, -50%) rotate(45deg);
+    box-sizing: border-box;
 }
 
 /* â”€â”€ VOTER SECTION â”€â”€ */
@@ -311,28 +385,36 @@
 .kkp-inline-pair--email {
     width: 100%;
     min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    flex-direction: row;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
 }
 
 .kkp-inline-pair--email .kkp-inline-label {
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
+/* Keep underline on the same row as the label (like Contact #) */
 .kkp-inline-pair--email .kkp-uline-med,
 .kkp-inline-pair--email .kkp-email-input {
-    width: 100%;
+    display: block;
+    width: auto;
     min-width: 0;
-    max-width: 100%;
-    flex: 1 1 auto;
+    max-width: none;
+    flex: 1 1 0;
     text-align: center;
     box-sizing: border-box;
     overflow: hidden;
+    font-size: 12px;
 }
 
 .kkp-email-input {
     text-transform: lowercase;
     text-align: center;
+    font-size: 12px;
 }
 
 .kkp-footer-chat {

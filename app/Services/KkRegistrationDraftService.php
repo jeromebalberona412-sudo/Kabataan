@@ -312,7 +312,7 @@ class KkRegistrationDraftService
 
         if ($existingUser || $existingRegistration) {
             throw ValidationException::withMessages([
-                'email' => ['This email is already registered. Please use a different Gmail address.'],
+                'email' => ['This email is already registered. Please use a different email address.'],
             ]);
         }
     }

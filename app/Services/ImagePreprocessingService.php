@@ -32,7 +32,14 @@ class ImagePreprocessingService
 
         $variants = [$imagePath];
 
-        if (PHP_OS_FAMILY === 'Windows') {
+        if (extension_loaded('gd') && function_exists('imagecreatefromstring')) {
+            $prepared = $this->prepareWithGd($imagePath);
+            foreach ($prepared as $path) {
+                if (is_string($path) && is_file($path) && ! in_array($path, $variants, true)) {
+                    $variants[] = $path;
+                }
+            }
+        } elseif (PHP_OS_FAMILY === 'Windows') {
             $prepared = $this->prepareWithWindowsDrawing($imagePath);
             foreach ($prepared as $path) {
                 if (is_string($path) && is_file($path) && ! in_array($path, $variants, true)) {
@@ -76,12 +83,20 @@ class ImagePreprocessingService
     public function inspectImage(string $imagePath): array
     {
         $imagePath = $this->normalizePath($imagePath);
-        $size = is_file($imagePath) ? (int) filesize($imagePath) : 0;
+        $bytes = is_file($imagePath) ? (int) filesize($imagePath) : 0;
         $mime = is_file($imagePath) ? (@mime_content_type($imagePath) ?: null) : null;
         $width = null;
         $height = null;
 
-        if (is_file($imagePath) && PHP_OS_FAMILY === 'Windows') {
+        if (is_file($imagePath) && function_exists('getimagesize')) {
+            $dimensions = @getimagesize($imagePath);
+            if (is_array($dimensions)) {
+                $width = (int) ($dimensions[0] ?? 0) ?: null;
+                $height = (int) ($dimensions[1] ?? 0) ?: null;
+            }
+        }
+
+        if (($width === null || $height === null) && is_file($imagePath) && PHP_OS_FAMILY === 'Windows') {
             $dims = $this->readDimensionsWithWindows($imagePath);
             $width = $dims['width'] ?? null;
             $height = $dims['height'] ?? null;
@@ -89,12 +104,80 @@ class ImagePreprocessingService
 
         return [
             'path_basename' => is_file($imagePath) ? basename($imagePath) : null,
-            'bytes' => $size,
+            'bytes' => $bytes,
             'mime' => $mime,
             'width' => $width,
             'height' => $height,
             'extension' => strtolower((string) pathinfo($imagePath, PATHINFO_EXTENSION)),
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function prepareWithGd(string $imagePath): array
+    {
+        $binary = @file_get_contents($imagePath);
+        if ($binary === false || $binary === '') {
+            return [];
+        }
+
+        $image = @imagecreatefromstring($binary);
+        if ($image === false) {
+            return [];
+        }
+
+        $srcW = imagesx($image);
+        $srcH = imagesy($image);
+        if ($srcW < 1 || $srcH < 1) {
+            imagedestroy($image);
+
+            return [];
+        }
+
+        $maxSide = 2000;
+        $scale = min(1.0, $maxSide / max($srcW, $srcH));
+        if (max($srcW, $srcH) < 900) {
+            $scale = max($scale, 1200 / max($srcW, $srcH));
+        }
+
+        $width = max(1, (int) round($srcW * $scale));
+        $height = max(1, (int) round($srcH * $scale));
+        $token = bin2hex(random_bytes(6));
+        $outDir = sys_get_temp_dir();
+        $standard = $outDir.DIRECTORY_SEPARATOR."kkp_ocr_prep_{$token}_std.jpg";
+        $contrast = $outDir.DIRECTORY_SEPARATOR."kkp_ocr_prep_{$token}_hi.jpg";
+
+        $resized = imagecreatetruecolor($width, $height);
+        if ($resized === false) {
+            imagedestroy($image);
+
+            return [];
+        }
+
+        imagecopyresampled($resized, $image, 0, 0, 0, 0, $width, $height, $srcW, $srcH);
+        imagedestroy($image);
+
+        $okStd = @imagejpeg($resized, $standard, 90);
+
+        // Mild contrast grayscale variant for stubborn OCR.
+        if (function_exists('imagefilter')) {
+            imagefilter($resized, IMG_FILTER_GRAYSCALE);
+            imagefilter($resized, IMG_FILTER_CONTRAST, -18);
+            imagefilter($resized, IMG_FILTER_BRIGHTNESS, 8);
+        }
+        $okHi = @imagejpeg($resized, $contrast, 95);
+        imagedestroy($resized);
+
+        $out = [];
+        if ($okStd && is_file($standard) && filesize($standard) > 0) {
+            $out[] = $standard;
+        }
+        if ($okHi && is_file($contrast) && filesize($contrast) > 0) {
+            $out[] = $contrast;
+        }
+
+        return $out;
     }
 
     /**
@@ -129,6 +212,7 @@ try {
   $params = New-Object System.Drawing.Imaging.EncoderParameters(1)
   $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter($encoder, 90L)
 
+  # Standard: resized color JPEG for OCR.
   $std = New-Object System.Drawing.Bitmap $width, $height
   $g1 = [System.Drawing.Graphics]::FromImage($std)
   $g1.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
@@ -136,15 +220,24 @@ try {
   $std.Save($StandardPath, $codec, $params)
   $g1.Dispose(); $std.Dispose()
 
-  # Fast second pass: slightly larger JPEG quality for alternate OCR attempt.
+  # High-contrast grayscale variant (fast ColorMatrix; original untouched).
   $params2 = New-Object System.Drawing.Imaging.EncoderParameters(1)
   $params2.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter($encoder, 95L)
   $hi = New-Object System.Drawing.Bitmap $width, $height
   $g2 = [System.Drawing.Graphics]::FromImage($hi)
   $g2.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-  $g2.DrawImage($img, 0, 0, $width, $height)
+  $cm = New-Object System.Drawing.Imaging.ColorMatrix
+  # Grayscale + mild contrast boost
+  $cm.Matrix00 = 0.404; $cm.Matrix01 = 0.404; $cm.Matrix02 = 0.404
+  $cm.Matrix10 = 0.792; $cm.Matrix11 = 0.792; $cm.Matrix12 = 0.792
+  $cm.Matrix20 = 0.154; $cm.Matrix21 = 0.154; $cm.Matrix22 = 0.154
+  $cm.Matrix33 = 1; $cm.Matrix44 = 1
+  $cm.Matrix40 = -0.08; $cm.Matrix41 = -0.08; $cm.Matrix42 = -0.08
+  $ia = New-Object System.Drawing.Imaging.ImageAttributes
+  $ia.SetColorMatrix($cm)
+  $g2.DrawImage($img, (New-Object System.Drawing.Rectangle 0, 0, $width, $height), 0, 0, $img.Width, $img.Height, [System.Drawing.GraphicsUnit]::Pixel, $ia)
   $hi.Save($ContrastPath, $codec, $params2)
-  $g2.Dispose(); $hi.Dispose()
+  $ia.Dispose(); $g2.Dispose(); $hi.Dispose()
   Write-Output 'OK'
 } finally {
   $img.Dispose()

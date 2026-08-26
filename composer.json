@@ -12,6 +12,7 @@
         "php": "^8.2",
         "altcha-org/altcha": "^2.1",
         "cloudinary/cloudinary_php": "*",
+        "egulias/email-validator": "^4.0",
         "giggsey/libphonenumber-for-php": "^9.0",
         "google/cloud-vision": "*",
         "laravel/framework": "^12.0",

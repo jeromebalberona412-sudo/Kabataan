@@ -39,7 +39,9 @@ Route::post('/api/kkprofiling/wizard/set-password/{token}/finalize', [KKProfilin
 
 Route::prefix('/api/kkprofiling/{barangay}/wizard')->group(function () {
     Route::get('/status', [KKProfilingWizardController::class, 'status'])->name('kkprofiling.wizard.status');
-    Route::post('/detect-id', [KKProfilingWizardController::class, 'detectId'])->name('kkprofiling.wizard.detect-id');
+    Route::post('/detect-id', [KKProfilingWizardController::class, 'detectId'])
+        ->middleware('throttle:20,1')
+        ->name('kkprofiling.wizard.detect-id');
     Route::get('/document/{type}/{side?}', [KKProfilingWizardController::class, 'documentPreview'])
         ->where('type', 'school_id|national_id|voters_id|philhealth_id|other_id')
         ->where('side', 'front|back')

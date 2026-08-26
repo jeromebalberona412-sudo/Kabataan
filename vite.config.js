@@ -126,6 +126,7 @@ export default defineConfig({
                 'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
+                'app/Modules/KKProfiling/assets/js/kkprofiling-id-camera.js',
             ],
             refresh: true,
         }),

@@ -4,8 +4,21 @@
     display: block;
     font-weight: 600;
     color: #0f172a;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.35rem;
     font-size: 0.92rem;
+}
+
+.kkp-wizard-doc-type-help {
+    margin: 0 0 0.85rem;
+    color: #475569;
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+.kkp-id-capture-btn:disabled,
+.kkp-wizard-dropzone-retake:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .kkp-wizard-doc-type-options {
@@ -579,7 +592,7 @@
         bottom: 0;
         z-index: 20;
         margin: 0 -8px;
-        padding: 0.85rem 8px calc(0.85rem + env(safe-area-inset-bottom, 0px));
+        padding: 0.75rem 8px calc(0.75rem + env(safe-area-inset-bottom, 0px));
         background: transparent;
         width: calc(100% + 16px);
         max-width: none;
@@ -587,16 +600,38 @@
         border-top: none;
         backdrop-filter: none;
         box-shadow: none;
+        gap: 0.65rem;
     }
 
     .kkp-wizard-nav-actions {
-        flex: 1;
+        flex: 0 0 auto;
         justify-content: flex-end;
+        margin-left: auto;
+        max-width: 100%;
+    }
+
+    .kkp-wizard-btn {
+        padding: 0.55rem 0.95rem;
+        font-size: 0.82rem;
+        border-radius: 8px;
+        gap: 0.35rem;
+        min-height: 40px;
+    }
+
+    .kkp-wizard-btn svg {
+        width: 0.85rem;
+        height: 0.85rem;
     }
 
     .kkp-wizard-btn-primary {
-        flex: 1;
-        max-width: 14rem;
+        flex: 0 1 auto;
+        width: auto;
+        max-width: min(12.5rem, 100%);
+    }
+
+    .kkp-wizard-btn-secondary {
+        flex: 0 0 auto;
+        padding: 0.55rem 0.85rem;
     }
 }
 
@@ -606,3 +641,330 @@
         display: inline;
     }
 }
+
+/* ID camera + capture actions */
+.kkp-wizard-upload-panel-hint {
+    margin: 0 0 0.75rem;
+    color: #475569;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.kkp-wizard-id-progress {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1.25rem;
+    margin-bottom: 0.85rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-size: 0.86rem;
+    color: #334155;
+}
+
+.kkp-wizard-upload-side-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.45rem;
+}
+
+.kkp-id-capture-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #166534;
+    background: #dcfce7;
+    border: 1px solid #86efac;
+    border-radius: 999px;
+    padding: 0.15rem 0.55rem;
+}
+
+.kkp-id-capture-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.65rem;
+}
+
+.kkp-id-capture-btn {
+    appearance: none;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+    border-radius: 10px;
+    padding: 0.7rem 0.75rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.25;
+    cursor: pointer;
+    min-height: 2.75rem;
+}
+
+.kkp-id-capture-btn:hover,
+.kkp-id-capture-btn:focus-visible {
+    border-color: var(--kkp-brand, #0450a8);
+    outline: 2px solid rgba(4, 80, 168, 0.25);
+    outline-offset: 1px;
+}
+
+.kkp-id-capture-btn--camera {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1e3a8a;
+}
+
+.kkp-id-capture-btn--upload {
+    background: #f8fafc;
+}
+
+.kkp-id-capture-btn--primary {
+    width: 100%;
+    background: var(--kkp-brand, #0450a8);
+    border-color: var(--kkp-brand, #0450a8);
+    color: #fff;
+    font-size: 1rem;
+    min-height: 3rem;
+}
+
+.kkp-wizard-dropzone-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.kkp-wizard-dropzone-retake {
+    appearance: none;
+    border: 1px solid #93c5fd;
+    background: #eff6ff;
+    color: #1e3a8a;
+    border-radius: 8px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.kkp-wizard-ocr-retry {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+
+.kkp-id-camera-modal {
+    border: none;
+    padding: 0;
+    max-width: min(560px, calc(100vw - 1.25rem));
+    width: 100%;
+    border-radius: 16px;
+    background: transparent;
+}
+
+.kkp-id-camera-modal::backdrop {
+    background: rgba(15, 23, 42, 0.65);
+}
+
+.kkp-id-camera-dialog {
+    background: #fff;
+    border-radius: 16px;
+    padding: 1rem 1rem 1.15rem;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.28);
+}
+
+.kkp-id-camera-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.kkp-id-camera-eyebrow {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.kkp-id-camera-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.kkp-id-camera-header h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: #0f172a;
+}
+
+.kkp-id-camera-close {
+    appearance: none;
+    border: none;
+    background: #f1f5f9;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #334155;
+}
+
+.kkp-id-camera-instructions {
+    margin: 0.65rem 0 0.35rem;
+    color: #475569;
+    font-size: 0.9rem;
+    line-height: 1.45;
+}
+
+.kkp-id-camera-tips {
+    margin: 0 0 0.75rem;
+    padding-left: 1.15rem;
+    color: #64748b;
+    font-size: 0.82rem;
+}
+
+.kkp-id-camera-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0f172a;
+}
+
+.kkp-id-camera-stage video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.kkp-id-camera-guide {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(15, 23, 42, 0.35), rgba(15, 23, 42, 0.2));
+    transition: background 0.2s ease;
+}
+
+.kkp-id-camera-guide-frame {
+    width: min(86%, 420px);
+    aspect-ratio: 1.586 / 1;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.45);
+    display: grid;
+    place-items: center;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kkp-id-camera-guide-frame span {
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+
+.kkp-id-camera-guide[data-state="detected"] .kkp-id-camera-guide-frame {
+    border-color: #fbbf24;
+    box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.4), 0 0 0 3px rgba(251, 191, 36, 0.55);
+}
+
+.kkp-id-camera-guide[data-state="steady"] .kkp-id-camera-guide-frame {
+    border-color: #4ade80;
+    box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.35), 0 0 0 3px rgba(74, 222, 128, 0.65);
+}
+
+.kkp-id-camera-guide[data-state="capturing"] .kkp-id-camera-guide-frame {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.5), 0 0 0 4px rgba(56, 189, 248, 0.7);
+}
+
+.kkp-id-camera-detect {
+    margin: 0.65rem 0 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #0f172a;
+    min-height: 1.35em;
+}
+
+.kkp-id-camera-status {
+    margin: 0.45rem 0 0;
+    font-size: 0.88rem;
+    color: #334155;
+}
+
+.kkp-id-camera-status[data-tone="error"] {
+    color: #b91c1c;
+}
+
+.kkp-id-camera-fallback,
+.kkp-id-camera-help {
+    margin-top: 0.75rem;
+    padding: 0.85rem;
+    border-radius: 10px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+}
+
+.kkp-id-camera-help {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.kkp-id-camera-fallback p,
+.kkp-id-camera-help p {
+    margin: 0 0 0.65rem;
+    color: #9a3412;
+    font-size: 0.9rem;
+}
+
+.kkp-id-camera-help p {
+    color: #1e3a8a;
+}
+
+.kkp-id-camera-help-actions,
+.kkp-id-camera-footer {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+
+.kkp-id-camera-footer {
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 480px) {
+    .kkp-id-camera-footer {
+        grid-template-columns: 1.2fr 1fr;
+    }
+
+    .kkp-id-camera-help-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 520px) {
+    .kkp-id-capture-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .kkp-id-camera-modal {
+        max-width: calc(100vw - 0.75rem);
+    }
+
+    .kkp-id-camera-stage {
+        aspect-ratio: 3 / 4;
+    }
+}
+

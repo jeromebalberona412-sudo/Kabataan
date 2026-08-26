@@ -60,7 +60,14 @@ return [
 
     'api_key' => env('OCR_API_KEY'),
 
-    'min_detect_confidence' => (float) env('OCR_MIN_DETECT_CONFIDENCE', 0.35),
+    // Floor for treating a Step 2 ID scan as readable (stricter to reject random photos).
+    'min_detect_confidence' => (float) env('OCR_MIN_DETECT_CONFIDENCE', 0.50),
+
+    // Prefer keeping the user's selected type unless OCR clearly disagrees.
+    'auto_correct_min_confidence' => (float) env('OCR_AUTO_CORRECT_MIN_CONFIDENCE', 0.55),
+
+    // When Step 1 name is present, require an identity signal for full success.
+    'require_name_signal_for_success' => (bool) env('OCR_REQUIRE_NAME_SIGNAL', true),
 
     'supported_philippine_ids' => [
         'national_id',

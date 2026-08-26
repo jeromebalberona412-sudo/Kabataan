@@ -9,10 +9,13 @@ use App\Models\User;
 use App\Notifications\KabataanSetPasswordEmail;
 use App\Rules\PhilippineMobileNumber;
 use App\Rules\ParticipantSignatureImage;
+use App\Rules\ValidEmailAddress;
 use App\Services\BarangayZoneService;
 use App\Services\DuplicateKabataanRegistrationService;
+use App\Services\IdImageQualityService;
 use App\Services\KkProfilingIdentityValidator;
 use App\Services\KkRegistrationDraftService;
+use App\Services\OCRService;
 use App\Services\PhilippineIdDetectionService;
 use App\Services\PhilippineIdPipelineService;
 use App\Services\PhoneNumberService;
@@ -45,6 +48,8 @@ class KKProfilingWizardController extends Controller
         protected TurnstileAttemptGuard $turnstileGuard,
         protected SupportingDocumentVerificationRecorder $documentVerificationRecorder,
         protected KkProfilingIdentityValidator $identityValidator,
+        protected IdImageQualityService $idImageQuality,
+        protected OCRService $ocrService,
     ) {}
 
     public function saveStep1(Request $request, string $barangay)
@@ -54,7 +59,7 @@ class KKProfilingWizardController extends Controller
 
         if (trim((string) ($validated['email'] ?? '')) === '') {
             throw ValidationException::withMessages([
-                'email' => ['Enter a Gmail address to continue to the next steps, or leave it blank and use Submit KK Profiling.'],
+                'email' => ['Enter an email address to continue to the next steps, or leave it blank and use Submit KK Profiling.'],
             ]);
         }
 
@@ -211,6 +216,23 @@ class KKProfilingWizardController extends Controller
             }
 
             if ($uploadedSides->count() === 2) {
+                if (config('documents.quality.enabled', true)) {
+                    foreach (['front', 'back'] as $side) {
+                        $sideFile = $sides[$side] ?? null;
+                        if (! ($sideFile instanceof UploadedFile)) {
+                            continue;
+                        }
+
+                        $quality = $this->idImageQuality->validateUpload($sideFile, $side);
+                        if (! ($quality['ok'] ?? false)) {
+                            throw ValidationException::withMessages([
+                                $documentType.'_'.$side => [
+                                    (string) ($quality['message'] ?? 'Please retake or upload a clearer ID photo.'),
+                                ],
+                            ]);
+                        }
+                    }
+                }
                 $frontUpload = $sides['front'] ?? null;
                 $backUpload = $sides['back'] ?? null;
 
@@ -762,6 +784,10 @@ class KKProfilingWizardController extends Controller
 
     public function detectId(Request $request, string $barangay)
     {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(180);
+        }
+
         $barangayRecord = $this->resolveBarangay($barangay);
         $wizard = $this->requireWizard();
 
@@ -772,7 +798,7 @@ class KKProfilingWizardController extends Controller
         }
 
         $request->validate([
-            'document_type' => ['required', Rule::in(['national_id', 'philhealth_id', 'voters_id'])],
+            'document_type' => ['required', Rule::in(['national_id', 'philhealth_id', 'voters_id', 'school_id', 'other_id'])],
             'front' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:10240'],
             'back' => ['required', 'file', 'mimes:jpg,jpeg,png', 'max:10240'],
             'selfie' => ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:10240'],
@@ -803,6 +829,40 @@ class KKProfilingWizardController extends Controller
             }
         }
 
+        if (config('documents.quality.enabled', true)) {
+            foreach ([['file' => $frontFile, 'side' => 'front'], ['file' => $backFile, 'side' => 'back']] as $item) {
+                if (! ($item['file'] instanceof UploadedFile)) {
+                    continue;
+                }
+
+                $quality = $this->idImageQuality->validateUpload($item['file'], $item['side']);
+                if (! ($quality['ok'] ?? false)) {
+                    $message = (string) ($quality['message'] ?? 'Please retake or upload a clearer ID photo.');
+
+                    return response()->json([
+                        'success' => false,
+                        'validation_error' => true,
+                        'quality_error' => true,
+                        'quality_code' => $quality['code'] ?? null,
+                        'message' => $message,
+                        'ocr' => [
+                            'success' => false,
+                            'validation_error' => true,
+                            'quality_error' => true,
+                            'quality_code' => $quality['code'] ?? null,
+                            'needs_review' => false,
+                            'document_detected' => 'no',
+                            'id_type' => 'Unknown',
+                            'confidence' => 0,
+                            'ocr_status' => 'invalid_image',
+                            'message' => $message,
+                        ],
+                        'form_suggestions' => [],
+                    ], 422);
+                }
+            }
+        }
+
         $documentType = (string) $request->input('document_type');
         $registrationFields = is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [];
         $frontPath = $frontFile?->getRealPath();
@@ -812,7 +872,8 @@ class KKProfilingWizardController extends Controller
             : null;
 
         if (
-            config('ocr.philippine_pipeline_enabled', true)
+            $this->philippineIdDetection->isSupportedDocumentType($documentType)
+            && config('ocr.philippine_pipeline_enabled', true)
             && $this->philippineIdPipeline->isConfigured()
             && is_string($frontPath)
             && is_string($backPath)
@@ -827,7 +888,18 @@ class KKProfilingWizardController extends Controller
                     is_string($selfiePath) ? $selfiePath : null,
                 );
 
-                if (is_array($pipelineResult) && $this->pipelineResultHasReadableSignal($pipelineResult)) {
+                if (
+                    is_array($pipelineResult)
+                    && $this->pipelineResultHasReadableSignal($pipelineResult)
+                    && $this->pipelineResultMatchesSelectedType($pipelineResult, $documentType)
+                ) {
+                    $pipelineRaw = trim((string) (
+                        $pipelineResult['raw_text']
+                        ?? data_get($pipelineResult, 'ocr.raw_text')
+                        ?? data_get($pipelineResult, 'ocr.full_text')
+                        ?? ''
+                    ));
+
                     $payload = [
                         'success' => (bool) ($pipelineResult['success'] ?? false),
                         'id_type' => $pipelineResult['id_type'] ?? 'Unknown',
@@ -842,9 +914,18 @@ class KKProfilingWizardController extends Controller
                         'face_match' => $pipelineResult['face_match'] ?? false,
                         'face_verification' => $pipelineResult['face_verification'] ?? null,
                         'validation_error' => (bool) ($pipelineResult['validation_error'] ?? false),
+                        'needs_review' => (bool) ($pipelineResult['needs_review'] ?? false),
+                        'document_detected' => $pipelineResult['document_detected'] ?? 'yes',
                         'message' => $pipelineResult['message'] ?? null,
                         'ocr' => $pipelineResult['ocr'] ?? [],
+                        'raw_text' => $pipelineRaw,
                     ];
+
+                    if (($payload['document_detected'] ?? '') === 'no' && ! ($payload['success'] ?? false)) {
+                        $payload['validation_error'] = true;
+                        $payload['message'] = $payload['message']
+                            ?: 'This does not appear to be a valid ID. Please scan or upload a clear front and back photo of your selected ID.';
+                    }
 
                     $formSuggestions = $this->philippineIdDetection->mapToFormFields($payload);
                     $verification = array_merge($pipelineResult, [
@@ -857,11 +938,11 @@ class KKProfilingWizardController extends Controller
                         'ocr' => $payload,
                         'form_suggestions' => $formSuggestions,
                         'message' => $pipelineResult['message'] ?? null,
-                        'validation_error' => (bool) ($pipelineResult['validation_error'] ?? false),
+                        'validation_error' => (bool) ($payload['validation_error'] ?? false),
                         'face_match' => (bool) ($pipelineResult['face_match'] ?? false),
                         'requires_selfie' => ! ($pipelineResult['face_match'] ?? false)
                             && empty($pipelineResult['face_verification']['available']),
-                    ], ($pipelineResult['validation_error'] ?? false) ? 422 : 200);
+                    ], ($payload['validation_error'] ?? false) ? 422 : 200);
                 }
             } catch (\Throwable $exception) {
                 report($exception);
@@ -910,6 +991,7 @@ class KKProfilingWizardController extends Controller
             'detected_id_type' => $payload['detected_id_type'] ?? null,
             'expected_id_type' => $payload['expected_id_type'] ?? null,
             'confidence' => $payload['confidence'] ?? 0,
+            'confidence_band' => $payload['confidence_band'] ?? null,
             'full_name' => $payload['full_name'] ?? null,
             'birthdate' => $payload['birthdate'] ?? null,
             'sex' => $payload['sex'] ?? null,
@@ -1081,7 +1163,11 @@ class KKProfilingWizardController extends Controller
                         $selfieRealPath,
                     );
 
-                    if (is_array($pipelineResult) && $this->pipelineResultHasReadableSignal($pipelineResult)) {
+                    if (
+                        is_array($pipelineResult)
+                        && $this->pipelineResultHasReadableSignal($pipelineResult)
+                        && $this->pipelineResultMatchesSelectedType($pipelineResult, $documentType)
+                    ) {
                         $ocrPayload = array_merge($pipelineResult, [
                             'form_suggestions' => $this->philippineIdDetection->mapToFormFields([
                                 'success' => $pipelineResult['success'] ?? false,
@@ -1160,7 +1246,7 @@ class KKProfilingWizardController extends Controller
     }
 
     /**
-     * Reject when front and back are the exact same image bytes.
+     * Reject when front and back are the same photo (exact or near-duplicate).
      */
     private function identicalFrontBackError(UploadedFile $front, UploadedFile $back): ?string
     {
@@ -1171,22 +1257,7 @@ class KKProfilingWizardController extends Controller
             return null;
         }
 
-        $frontSize = (int) filesize($frontPath);
-        $backSize = (int) filesize($backPath);
-
-        if ($frontSize <= 0 || $backSize <= 0) {
-            return null;
-        }
-
-        $sameBytes = false;
-
-        if ($frontSize === $backSize) {
-            $frontHash = @hash_file('sha256', $frontPath);
-            $backHash = @hash_file('sha256', $backPath);
-            $sameBytes = is_string($frontHash) && is_string($backHash) && $frontHash !== '' && hash_equals($frontHash, $backHash);
-        }
-
-        if (! $sameBytes) {
+        if (! $this->ocrService->frontAndBackAreSameImage($frontPath, $backPath)) {
             return null;
         }
 
@@ -1194,25 +1265,22 @@ class KKProfilingWizardController extends Controller
     }
 
     /**
-     * Prefer local OCR when the Python pipeline returns an empty/unknown result.
+     * Prefer local OCR when the Python pipeline returns an empty/unknown/non-ID result.
      *
      * @param  array<string, mixed>  $pipelineResult
      */
     private function pipelineResultHasReadableSignal(array $pipelineResult): bool
     {
-        if (($pipelineResult['success'] ?? false) === true) {
-            return true;
+        if (($pipelineResult['validation_error'] ?? false) === true) {
+            return false;
         }
 
-        $idType = trim((string) ($pipelineResult['id_type'] ?? $pipelineResult['detected_id_type'] ?? ''));
-        $confidence = (float) ($pipelineResult['confidence'] ?? 0);
         $rawText = trim((string) (
             $pipelineResult['raw_text']
             ?? data_get($pipelineResult, 'ocr.raw_text')
             ?? data_get($pipelineResult, 'ocr.full_text')
             ?? ''
         ));
-        $detectedName = trim((string) ($pipelineResult['detected_name'] ?? $pipelineResult['full_name'] ?? ''));
         $message = strtolower((string) ($pipelineResult['message'] ?? ''));
 
         if (
@@ -1224,15 +1292,33 @@ class KKProfilingWizardController extends Controller
             return false;
         }
 
-        if ($detectedName !== '' || $rawText !== '') {
-            return true;
+        // Name-only / type-only hits without ID-like OCR text are not trustworthy.
+        if ($rawText === '' || ! $this->ocrService->looksLikeSupportingIdText($rawText)) {
+            return false;
         }
 
-        if ($idType !== '' && strcasecmp($idType, 'Unknown') !== 0 && $confidence > 0) {
-            return true;
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $pipelineResult
+     */
+    private function pipelineResultMatchesSelectedType(array $pipelineResult, string $documentType): bool
+    {
+        $rawText = trim((string) (
+            $pipelineResult['raw_text']
+            ?? data_get($pipelineResult, 'ocr.raw_text')
+            ?? data_get($pipelineResult, 'ocr.full_text')
+            ?? ''
+        ));
+
+        if ($rawText === '') {
+            return false;
         }
 
-        return false;
+        $scores = is_array($pipelineResult['scores'] ?? null) ? $pipelineResult['scores'] : [];
+
+        return $this->ocrService->supportsSelectedIdType($rawText, $documentType, $scores);
     }
 
     /**
@@ -1244,18 +1330,37 @@ class KKProfilingWizardController extends Controller
             return false;
         }
 
-        if (($payload['success'] ?? false) === true) {
+        $detected = strtolower((string) ($payload['document_detected'] ?? ''));
+        if ($detected === 'no' || $detected === '') {
+            return false;
+        }
+
+        $confidence = (float) ($payload['confidence'] ?? $payload['overall_confidence'] ?? 0);
+        $minConfidence = (float) config('ocr.min_detect_confidence', 0.45);
+
+        if (($payload['success'] ?? false) === true && $confidence >= $minConfidence) {
             return true;
         }
 
-        // Low OCR / weak classification should go to admin review, not hard-reject.
+        // Review path: require ID detected + confidence at least the detect floor
+        // (do not let weak/random OCR through as "needs review").
         if (($payload['needs_review'] ?? false) === true) {
-            return true;
+            $idType = trim((string) ($payload['id_type'] ?? $payload['detected_id_type'] ?? ''));
+            if (
+                $documentType !== SupportingDocumentTypes::OTHER_ID
+                && $idType !== ''
+                && strcasecmp($idType, 'Unknown') !== 0
+                && strcasecmp($idType, $documentType) !== 0
+            ) {
+                return false;
+            }
+
+            return $detected === 'yes' && $confidence >= $minConfidence;
         }
 
         $decision = strtoupper(trim((string) ($payload['decision'] ?? '')));
         if ($documentType === SupportingDocumentTypes::SCHOOL_ID && $decision === 'MANUAL_REVIEW') {
-            return true;
+            return $detected === 'yes' && $confidence >= $minConfidence;
         }
 
         $errorCode = (string) ($payload['error_code'] ?? '');
@@ -1263,14 +1368,14 @@ class KKProfilingWizardController extends Controller
             return false;
         }
 
-        $confidence = (float) ($payload['confidence'] ?? $payload['overall_confidence'] ?? 0);
         $idType = trim((string) ($payload['id_type'] ?? $payload['detected_id_type'] ?? ''));
 
         if (
             $documentType === SupportingDocumentTypes::OTHER_ID
             && $idType !== ''
             && strcasecmp($idType, 'Unknown') !== 0
-            && $confidence >= (float) config('ocr.min_detect_confidence', 0.35)
+            && $confidence >= $minConfidence
+            && $detected === 'yes'
         ) {
             return true;
         }
@@ -1370,7 +1475,7 @@ class KKProfilingWizardController extends Controller
             'sex' => 'required|in:Male,Female',
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
-            'email' => ['required', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i'],
+            'email' => ValidEmailAddress::profilingRules(),
             'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
@@ -1398,12 +1503,11 @@ class KKProfilingWizardController extends Controller
             'last_name.max' => '150 maximum characters only.',
             'first_name.max' => '150 maximum characters only.',
             'middle_name.max' => '150 maximum characters only.',
-            'email.required' => 'E-mail address is required.',
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
             'signature_name.max' => config('signature.messages.name_max'),
             'signature.required' => config('signature.messages.required'),
-        ]);
+        ] + ValidEmailAddress::profilingMessages());
 
         if (($validated['suffix'] ?? null) === 'Others') {
             $customSuffix = trim((string) ($validated['custom_suffix'] ?? ''));

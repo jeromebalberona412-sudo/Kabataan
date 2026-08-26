@@ -70,7 +70,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'messages' => [
-        'required' => 'Signature is required. Please upload your signature.',
+        'required' => 'Signature is required. Please sign.',
         'invalid' => 'Please upload a valid image.',
         'format' => 'Only PNG, JPG, and JPEG images are allowed.',
         'too_large' => 'Image size must not exceed 2 MB.',

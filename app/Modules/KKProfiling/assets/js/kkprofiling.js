@@ -19,6 +19,12 @@ const KKP_NAME_SOFT_MAX = 50;
 const KKP_NAME_MAX_CHARS = 150;
 const KKP_NAME_MAX_MSG = '150 maximum characters only.';
 
+/** KK Profiling practical email limits (not RFC 254). */
+const KKP_EMAIL_TOTAL_MAX = 64;
+/** Local-part (before @): min 6 / max 30 for every domain. */
+const KKP_EMAIL_LOCAL_MIN = 6;
+const KKP_EMAIL_LOCAL_MAX = 30;
+
 /** Live typing: letters/.- , one space between words, no leading/pure multi-space. */
 function kkpSanitizeNameInput(value) {
     return String(value || '')
@@ -201,18 +207,8 @@ function kkpValidateMiddleName(value, touched) {
 
 function kkpFitEmailInputFont(el) {
     if (!el) return;
-    kkpFitInputTextToWidth(el, {
-        baseSize: 11,
-        minSize: 8.5,
-        uppercase: false,
-        pad: 4,
-        tiers: [
-            [28, 9],
-            [22, 9.5],
-            [16, 10],
-            [12, 10.5],
-        ],
-    });
+    // Match other .kkp-uline fields (12px) — do not shrink typed email text.
+    el.style.fontSize = '';
     el.style.textAlign = 'center';
 }
 
@@ -220,28 +216,100 @@ function kkpHasAnySpace(value) {
     return /\s/.test(value || '');
 }
 
-function kkpValidateEmail(value, touched) {
+function kkpEmailLooksComplete(value) {
+    const v = String(value || '').trim().toLowerCase();
+    if (!v || /\s/.test(v)) {
+        return false;
+    }
+    const atCount = (v.match(/@/g) || []).length;
+    if (atCount !== 1) {
+        return false;
+    }
+    const atIndex = v.indexOf('@');
+    const localPart = v.slice(0, atIndex);
+    const domain = v.slice(atIndex + 1);
+    if (!localPart || !domain || !domain.includes('.')) {
+        return false;
+    }
+    return /^[a-z0-9](?:[a-z0-9._+-]*[a-z0-9])?$/i.test(localPart)
+        && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain);
+}
+
+/**
+ * @param {string} value
+ * @param {boolean} touched
+ * @param {{ strict?: boolean }} [options] - strict on blur/submit; while typing only format-check complete emails
+ */
+function kkpValidateEmail(value, touched, options = {}) {
+    const strict = options.strict === true;
     const v = (value || '').trim().toLowerCase();
+
     if (!v) {
-        return touched ? 'E-mail address is required.' : null;
+        return (touched && strict) ? 'Email is required.' : null;
     }
-    if (kkpHasAnySpace(v)) {
-        return 'Email must not contain spaces.';
+
+    if (v.length > KKP_EMAIL_TOTAL_MAX) {
+        return 'Email must not exceed 64 characters.';
     }
-    if (v.length > 254) {
-        return 'Email must not exceed 254 characters.';
+
+    if (kkpHasAnySpace(v) || (v.match(/@/g) || []).length > 1) {
+        return 'Please enter a valid email address.';
     }
-    const match = v.match(/^([^@]+)@gmail\.com$/i);
-    if (!match) {
-        return 'Use valid @gmail.com only.';
+
+    const atIndex = v.indexOf('@');
+
+    // Local-part (before @): min 6 / max 30 — all domains.
+    if (atIndex >= 0) {
+        const localPart = v.slice(0, atIndex);
+        if (localPart.length < KKP_EMAIL_LOCAL_MIN) {
+            return 'Email username must be at least 6 characters.';
+        }
+        if (localPart.length > KKP_EMAIL_LOCAL_MAX) {
+            return 'Email username must not exceed 30 characters.';
+        }
+    } else if (strict && v.length < KKP_EMAIL_LOCAL_MIN) {
+        return 'Email username must be at least 6 characters.';
+    } else if (!strict && v.length > KKP_EMAIL_LOCAL_MAX) {
+        // Typing username only — still enforce 30 before @.
+        return 'Email username must not exceed 30 characters.';
     }
-    const localPart = match[1];
-    if (localPart.length > 64) {
-        return 'Email username must not exceed 64 characters.';
+
+    const complete = kkpEmailLooksComplete(v);
+
+    // While typing an incomplete domain after @, do not spam format errors.
+    if (!strict && !complete) {
+        return null;
     }
-    if (localPart.length < 6 || localPart.length > 30) {
-        return 'Sorry, your username must be between 6 and 30 characters long.';
+
+    if ((v.match(/@/g) || []).length !== 1) {
+        return 'Please enter a valid email address.';
     }
+
+    const localPart = v.slice(0, atIndex);
+    const domain = v.slice(atIndex + 1);
+
+    if (!localPart || !domain) {
+        return 'Please enter a valid email address.';
+    }
+    if (
+        localPart.startsWith('.')
+        || localPart.endsWith('.')
+        || localPart.includes('..')
+        || domain.startsWith('.')
+        || domain.endsWith('.')
+        || domain.includes('..')
+        || domain.startsWith('-')
+        || domain.endsWith('-')
+    ) {
+        return 'Please enter a valid email address.';
+    }
+    if (!/^[a-z0-9](?:[a-z0-9._+-]*[a-z0-9])?$/i.test(localPart)) {
+        return 'Please enter a valid email address.';
+    }
+    if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(domain)) {
+        return 'Please enter a valid email address.';
+    }
+
     return null;
 }
 
@@ -417,6 +485,16 @@ function kkpValidateContact(value, requireEmpty) {
         return el.parentNode;
     }
 
+    function clearFieldError(el) {
+        const host = getFieldErrorHost(el);
+        if (!el || !host) return;
+        el.classList.remove('kkp-input-err');
+        host.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
+        if (el.closest('.kkp-name-col')) {
+            kkpSyncNameMaxIndicator(el);
+        }
+    }
+
     function showFieldError(el, msg) {
         const host = getFieldErrorHost(el);
         if (!el || !host) return;
@@ -432,16 +510,6 @@ function kkpValidateContact(value, requireEmpty) {
     }
 
     window.showFieldError = showFieldError;
-
-    function clearFieldError(el) {
-        const host = getFieldErrorHost(el);
-        if (!el || !host) return;
-        el.classList.remove('kkp-input-err');
-        host.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
-        if (el.closest('.kkp-name-col')) {
-            kkpSyncNameMaxIndicator(el);
-        }
-    }
 
     // ── Navigation Drawer ──
     const navHamburger = document.getElementById('navHamburger');
@@ -837,7 +905,18 @@ function kkpValidateContact(value, requireEmpty) {
             },
             body: JSON.stringify(payload),
         });
-        return response.json();
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const validationError = data.errors?.email?.[0]
+                || data.message
+                || 'Please enter a valid email address.';
+            return {
+                exists: false,
+                validation_error: validationError,
+                message: validationError,
+            };
+        }
+        return data;
     }
 
     function clearDemoBlockError(hiddenId) {
@@ -852,6 +931,12 @@ function kkpValidateContact(value, requireEmpty) {
 
     function clearSignatureError() {
         document.querySelector('.kkp-sig-section-left')?.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
+        const statusEl = document.getElementById('kkpSignatureStatus');
+        if (statusEl) {
+            statusEl.hidden = true;
+            statusEl.textContent = '';
+            statusEl.classList.remove('is-valid', 'is-invalid');
+        }
     }
 
     window.clearSignatureError = clearSignatureError;
@@ -987,9 +1072,29 @@ function kkpValidateContact(value, requireEmpty) {
             let value = (this.value || '').replace(/[^A-Za-z.\s]/g, '');
             value = value.replace(/\s{2,}/g, ' ').trimStart();
             this.value = value.slice(0, 5);
+            if (suffixSelect.value === 'Others') {
+                const trimmed = (this.value || '').trim();
+                if (!trimmed) {
+                    showFieldError(this, 'Please specify your suffix.');
+                } else if (!isValidSuffixText(trimmed)) {
+                    showFieldError(this, 'Only text and valid Roman numeral suffixes are allowed.');
+                } else {
+                    clearFieldError(this);
+                }
+            }
         });
         customSuffixInput.addEventListener('blur', function () {
             this.value = (this.value || '').trim();
+            if (suffixSelect.value === 'Others') {
+                const trimmed = this.value;
+                if (!trimmed) {
+                    showFieldError(this, 'Please specify your suffix.');
+                } else if (!isValidSuffixText(trimmed)) {
+                    showFieldError(this, 'Only text and valid Roman numeral suffixes are allowed.');
+                } else {
+                    clearFieldError(this);
+                }
+            }
         });
 
         suffixSelect.addEventListener('change', toggleCustomSuffix);
@@ -1038,8 +1143,8 @@ function kkpValidateContact(value, requireEmpty) {
             }
         };
 
-        const runEmailValidation = async (checkExists) => {
-            const message = kkpValidateEmail(emailInput.value, emailTouched);
+        const runEmailValidation = async (checkServer) => {
+            const message = kkpValidateEmail(emailInput.value, emailTouched, { strict: checkServer });
             if (message) {
                 showFieldError(emailInput, message);
                 return;
@@ -1047,11 +1152,16 @@ function kkpValidateContact(value, requireEmpty) {
 
             clearFieldError(emailInput);
 
-            if (!checkExists || isWizardForm || !emailTouched) {
+            // DNS / existence only on blur/submit — no "email is valid" success text.
+            if (!checkServer || !emailTouched) {
                 return;
             }
 
             const value = (emailInput.value || '').trim();
+            if (!value) {
+                return;
+            }
+
             const originalEmail = (window.__KK_PROFILING_ORIGINAL_EMAIL || emailInput.dataset.originalEmail || '').trim().toLowerCase();
             if (originalEmail && value.toLowerCase() === originalEmail) {
                 delete emailInput.dataset.emailExists;
@@ -1062,20 +1172,28 @@ function kkpValidateContact(value, requireEmpty) {
             emailCheckTimer = setTimeout(async () => {
                 try {
                     const result = await checkEmailExists(value);
-                    if (result.exists) {
+                    if (result.validation_error) {
+                        showFieldError(emailInput, result.validation_error);
+                        return;
+                    }
+                    if (!isWizardForm && result.exists) {
                         emailInput.dataset.emailExists = 'true';
                         showFieldError(emailInput, result.message || 'This email already exists. Please use a different email address.');
                     } else {
                         delete emailInput.dataset.emailExists;
+                        clearFieldError(emailInput);
                     }
                 } catch (err) {
-                    // Non-blocking
+                    // Non-blocking network errors; submit still validates on the server.
                 }
             }, 300);
         };
 
         emailInput.addEventListener('input', () => {
             normalizeEmailValue();
+            if ((emailInput.value || '').length > KKP_EMAIL_TOTAL_MAX) {
+                emailInput.value = (emailInput.value || '').slice(0, KKP_EMAIL_TOTAL_MAX);
+            }
             kkpFitEmailInputFont(emailInput);
             if ((emailInput.value || '').length > 0) {
                 emailTouched = true;
@@ -1086,12 +1204,13 @@ function kkpValidateContact(value, requireEmpty) {
 
         emailInput.addEventListener('blur', () => {
             normalizeEmailValue();
-            emailInput.value = (emailInput.value || '').trim().toLowerCase();
+            emailInput.value = (emailInput.value || '').trim().toLowerCase().slice(0, KKP_EMAIL_TOTAL_MAX);
             kkpFitEmailInputFont(emailInput);
             emailTouched = true;
             runEmailValidation(true);
         });
 
+        emailInput.maxLength = KKP_EMAIL_TOTAL_MAX;
         kkpFitEmailInputFont(emailInput);
     }
 
@@ -1436,7 +1555,7 @@ window.validateKkProfilingForm = async function (options = {}) {
     if (email) {
         email.value = (email.value || '').trim().toLowerCase();
     }
-    const emailMsg = kkpValidateEmail(email?.value, true);
+    const emailMsg = kkpValidateEmail(email?.value, true, { strict: true });
     if (emailMsg) {
         errors.push(emailMsg);
         fieldError(email, emailMsg);
@@ -1539,21 +1658,18 @@ window.validateKkProfilingForm = async function (options = {}) {
 
     const sigData = document.getElementById('kkpSignatureData');
     if (!sigData || !sigData.value.trim()) {
-        errors.push('Signature is required. Please upload your signature.');
-        const sigSection = document.querySelector('.kkp-sig-section-left');
-        if (sigSection) {
-            let err = sigSection.querySelector('.kkp-field-error');
-            if (!err) {
-                err = document.createElement('span');
-                err.className = 'kkp-field-error';
-                err.textContent = 'Signature is required. Please upload your signature.';
-                sigSection.appendChild(err);
+        const sigRequiredMsg = 'Signature is required. Please sign.';
+        errors.push(sigRequiredMsg);
+        // Show only under Sign/Clear — avoid duplicate .kkp-field-error above.
+        document.querySelector('.kkp-sig-section-left')?.querySelectorAll('.kkp-field-error').forEach((node) => {
+            if ((node.textContent || '').toLowerCase().includes('signature is required')) {
+                node.remove();
             }
-        }
+        });
         const statusEl = document.getElementById('kkpSignatureStatus');
         if (statusEl) {
             statusEl.hidden = false;
-            statusEl.textContent = '✗ Signature is required. Please upload your signature.';
+            statusEl.textContent = sigRequiredMsg;
             statusEl.classList.add('is-invalid');
             statusEl.classList.remove('is-valid');
         }
@@ -1561,7 +1677,7 @@ window.validateKkProfilingForm = async function (options = {}) {
 
     // ── If errors, scroll to first error and stop ──
     if (errors.length > 0) {
-        const firstErr = document.querySelector('.kkp-field-error');
+        const firstErr = document.querySelector('.kkp-field-error, .kkp-demo-block-error, #kkpSignatureStatus.is-invalid');
         if (firstErr) {
             firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -1592,7 +1708,15 @@ window.validateKkProfilingForm = async function (options = {}) {
                     current_email: originalEmail || undefined,
                 }),
             });
-            const emailCheckResult = await emailCheckResponse.json();
+            const emailCheckResult = await emailCheckResponse.json().catch(() => ({}));
+            if (!emailCheckResponse.ok) {
+                const validationError = emailCheckResult.errors?.email?.[0]
+                    || emailCheckResult.message
+                    || 'Please enter a valid email address.';
+                fieldError(emailField, validationError);
+                emailField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
             if (emailCheckResult.exists) {
                 emailField.dataset.emailExists = 'true';
                 fieldError(emailField, emailCheckResult.message || 'This email already exists. Please use a different email address.');
@@ -2329,6 +2453,86 @@ function showEmailVerification(email) {
     const MSG_TOO_LARGE = 'Image size must not exceed 2 MB.';
     const MSG_NON_WHITE = 'Please upload an image with a plain white background.';
     const MSG_BLANK = 'Please upload an image containing visible text or a signature.';
+    const VIEWPORT_LOCK = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+
+    let viewportMetaPrev = null;
+    let visualViewportBound = false;
+
+    function syncOverlayToVisualViewport() {
+        if (!overlay || overlay.style.display === 'none') {
+            return;
+        }
+        const vv = window.visualViewport;
+        if (!vv) {
+            return;
+        }
+        overlay.style.top = vv.offsetTop + 'px';
+        overlay.style.left = vv.offsetLeft + 'px';
+        overlay.style.width = vv.width + 'px';
+        overlay.style.height = vv.height + 'px';
+        overlay.style.right = 'auto';
+        overlay.style.bottom = 'auto';
+    }
+
+    function clearOverlayViewportStyles() {
+        if (!overlay) {
+            return;
+        }
+        overlay.style.top = '';
+        overlay.style.left = '';
+        overlay.style.width = '';
+        overlay.style.height = '';
+        overlay.style.right = '';
+        overlay.style.bottom = '';
+    }
+
+    function lockViewportForSignatureModal() {
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (meta) {
+            if (viewportMetaPrev === null) {
+                viewportMetaPrev = meta.getAttribute('content') || 'width=device-width, initial-scale=1.0';
+            }
+            // Force browser zoom back to 100% so the modal is fully visible and centered.
+            meta.setAttribute('content', VIEWPORT_LOCK);
+        }
+
+        document.documentElement.classList.add('kkp-sig-modal-open');
+        document.body.classList.add('kkp-sig-modal-open');
+
+        try {
+            window.scrollTo({ left: 0, top: window.scrollY, behavior: 'auto' });
+        } catch (e) {
+            window.scrollTo(0, window.scrollY);
+        }
+
+        syncOverlayToVisualViewport();
+
+        const vv = window.visualViewport;
+        if (vv && !visualViewportBound) {
+            vv.addEventListener('resize', syncOverlayToVisualViewport);
+            vv.addEventListener('scroll', syncOverlayToVisualViewport);
+            visualViewportBound = true;
+        }
+    }
+
+    function unlockViewportForSignatureModal() {
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (meta && viewportMetaPrev !== null) {
+            meta.setAttribute('content', viewportMetaPrev);
+            viewportMetaPrev = null;
+        }
+
+        const vv = window.visualViewport;
+        if (vv && visualViewportBound) {
+            vv.removeEventListener('resize', syncOverlayToVisualViewport);
+            vv.removeEventListener('scroll', syncOverlayToVisualViewport);
+            visualViewportBound = false;
+        }
+
+        clearOverlayViewportStyles();
+        document.documentElement.classList.remove('kkp-sig-modal-open');
+        document.body.classList.remove('kkp-sig-modal-open');
+    }
 
     function setSignatureStatus(message, isValid) {
         if (!statusEl) return;
@@ -2441,25 +2645,32 @@ function showEmailVerification(email) {
     }
 
     function openPad() {
+        lockViewportForSignatureModal();
         overlay.style.display = 'flex';
         setPadStatus('', false);
-        setupCanvas(false);
-        if (sigInput && sigInput.value) {
-            const img = new Image();
-            img.onload = function () {
-                const rect = canvas.getBoundingClientRect();
-                ctx.drawImage(img, 0, 0, rect.width || 500, rect.height || 260);
-                hasSignature = true;
-                hidePlaceholder();
-            };
-            img.src = sigInput.value;
-        } else {
-            clearCanvas();
-        }
+
+        // Wait for viewport scale reset + layout so canvas sizing/centering are correct.
+        requestAnimationFrame(function () {
+            syncOverlayToVisualViewport();
+            setupCanvas(false);
+            if (sigInput && sigInput.value) {
+                const img = new Image();
+                img.onload = function () {
+                    const rect = canvas.getBoundingClientRect();
+                    ctx.drawImage(img, 0, 0, rect.width || 500, rect.height || 260);
+                    hasSignature = true;
+                    hidePlaceholder();
+                };
+                img.src = sigInput.value;
+            } else {
+                clearCanvas();
+            }
+        });
     }
 
     function closePad() {
         overlay.style.display = 'none';
+        unlockViewportForSignatureModal();
         setPadStatus('', false);
         if (uploadInput) uploadInput.value = '';
     }

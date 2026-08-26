@@ -18,7 +18,7 @@ class ParticipantSignatureValidationService
         $messages = config('signature.messages', []);
 
         if ($value === null || trim($value) === '') {
-            return $this->fail($messages['required'] ?? 'Signature is required. Please upload your signature.');
+            return $this->fail($messages['required'] ?? 'Signature is required. Please sign.');
         }
 
         $parsed = $this->parseDataUrl(trim($value));

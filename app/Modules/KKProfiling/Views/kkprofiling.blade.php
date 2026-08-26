@@ -20,6 +20,7 @@
         'app/Modules/Authentication/assets/js/turnstile-gate.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
+        'app/Modules/KKProfiling/assets/js/kkprofiling-id-camera.js',
     ])
     @inject('turnstileService', 'App\Services\TurnstileService')
 </head>

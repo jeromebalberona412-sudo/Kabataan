@@ -11,6 +11,7 @@ use App\Notifications\KabataanProfilingUpdatedEmail;
 use App\Notifications\KabataanVerifyEmail;
 use App\Rules\PhilippineMobileNumber;
 use App\Rules\ParticipantSignatureImage;
+use App\Rules\ValidEmailAddress;
 use App\Services\BarangayLogoUrlService;
 use App\Services\BarangayZoneService;
 use App\Services\KabataanNotificationService;
@@ -324,7 +325,7 @@ class KKProfilingController extends Controller
             'sex' => 'required|in:Male,Female',
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
-            'email' => ['required', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i'],
+            'email' => ValidEmailAddress::profilingRules(),
             'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber((int) $registration->id)],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
@@ -350,7 +351,7 @@ class KKProfilingController extends Controller
             'signature_name.min' => config('signature.messages.name_required'),
             'signature_name.max' => config('signature.messages.name_max'),
             'signature.required' => config('signature.messages.required'),
-        ]);
+        ] + ValidEmailAddress::profilingMessages());
 
         $canonicalContact = app(PhoneNumberService::class)->normalize($validated['contact_number'] ?? null);
         if ($canonicalContact === null) {
@@ -796,7 +797,7 @@ class KKProfilingController extends Controller
             'sex' => 'required|in:Male,Female',
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
-            'email' => ['required', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i'],
+            'email' => ValidEmailAddress::profilingRules(),
             'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
@@ -822,7 +823,7 @@ class KKProfilingController extends Controller
             'signature_name.min' => config('signature.messages.name_required'),
             'signature_name.max' => config('signature.messages.name_max'),
             'signature.required' => config('signature.messages.required'),
-        ]);
+        ] + ValidEmailAddress::profilingMessages());
 
         $canonicalContact = app(PhoneNumberService::class)->normalize($validated['contact_number'] ?? null);
         if ($canonicalContact === null) {
@@ -982,10 +983,13 @@ class KKProfilingController extends Controller
      */
     public function checkEmailExists(Request $request)
     {
-        $request->validate([
-            'email' => ['required', 'email', 'regex:/^[^\s]+@gmail\.com$/i'],
-            'current_email' => ['nullable', 'email'],
-        ]);
+        $request->validate(
+            [
+                'email' => ValidEmailAddress::profilingRules(),
+                'current_email' => ['nullable', 'string', 'max:'.ValidEmailAddress::MAX_LENGTH],
+            ],
+            ValidEmailAddress::profilingMessages()
+        );
 
         $email = strtolower(trim($request->email));
         $currentEmail = strtolower(trim((string) $request->input('current_email', '')));

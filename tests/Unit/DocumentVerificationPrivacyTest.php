@@ -49,7 +49,7 @@ test('document fingerprint differs for different document numbers', function () 
     expect($a)->not->toBe($b);
 });
 
-test('perceptual hash matches identical synthetic images and differs for solid colors', function () {
+test('perceptual hash matches identical synthetic images and differs for patterned images', function () {
     if (! function_exists('imagecreatetruecolor')) {
         $this->markTestSkipped('GD extension is required.');
     }
@@ -61,17 +61,22 @@ test('perceptual hash matches identical synthetic images and differs for solid c
     $pathB = $dir.DIRECTORY_SEPARATOR.'kkp_phash_b_'.uniqid('', true).'.png';
     $pathC = $dir.DIRECTORY_SEPARATOR.'kkp_phash_c_'.uniqid('', true).'.png';
 
-    $make = function (string $path, int $r, int $g, int $b): void {
+    $make = function (string $path, int $seed): void {
         $img = imagecreatetruecolor(64, 64);
-        $color = imagecolorallocate($img, $r, $g, $b);
-        imagefilledrectangle($img, 0, 0, 63, 63, $color);
+        for ($y = 0; $y < 64; $y += 4) {
+            for ($x = 0; $x < 64; $x += 4) {
+                $tone = (($x * 3) + ($y * 5) + $seed) % 200;
+                $color = imagecolorallocate($img, 30 + $tone, 50 + ($tone % 90), 70 + ($tone % 110));
+                imagefilledrectangle($img, $x, $y, $x + 3, $y + 3, $color);
+            }
+        }
         imagepng($img, $path);
         imagedestroy($img);
     };
 
-    $make($pathA, 40, 80, 160);
-    $make($pathB, 40, 80, 160);
-    $make($pathC, 220, 40, 40);
+    $make($pathA, 30);
+    $make($pathB, 30);
+    $make($pathC, 180);
 
     $hashA = $service->hashFromFile($pathA);
     $hashB = $service->hashFromFile($pathB);

@@ -35,7 +35,10 @@
         </p>
 
         <fieldset class="kkp-wizard-doc-type-fieldset" id="kkpDocTypeFieldset">
-            <legend class="kkp-wizard-doc-type-legend">Select document type (if uploading)</legend>
+            <legend class="kkp-wizard-doc-type-legend">Select document type to scan or upload</legend>
+            <p class="kkp-wizard-doc-type-help" id="kkpDocTypeHelp">
+                Choose an ID type first. Then scan with camera or upload front and back — the system will auto-scan to validate that the image is a real ID (random photos are rejected).
+            </p>
             <div class="kkp-wizard-doc-type-options" role="radiogroup" aria-label="Document type">
                 <label class="kkp-wizard-doc-type-option">
                     <input type="radio" name="document_type" value="school_id" id="kkpDocTypeSchoolId">
@@ -49,7 +52,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">School ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · optional upload</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
                         </span>
                     </span>
                 </label>
@@ -65,7 +68,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">PhilSys / National ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · optional upload</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
                         </span>
                     </span>
                 </label>
@@ -81,7 +84,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">Voter's ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · optional upload</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
                         </span>
                     </span>
                 </label>
@@ -97,7 +100,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">PhilHealth ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · optional upload</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
                         </span>
                     </span>
                 </label>
@@ -113,7 +116,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">Other valid proof of identity or residency</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · optional upload</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
                         </span>
                     </span>
                 </label>
@@ -128,7 +131,18 @@
             ['type' => 'other_id', 'panelId' => 'kkpOtherIdUpload', 'label' => 'Other valid proof of identity or residency'],
         ] as $doc)
         <div class="kkp-wizard-upload-panel" id="{{ $doc['panelId'] }}" hidden>
-            <p class="kkp-wizard-upload-panel-title">{{ $doc['label'] }} — upload front and back</p>
+            <p class="kkp-wizard-upload-panel-title">{{ $doc['label'] }} — scan or upload front and back</p>
+            <p class="kkp-wizard-upload-panel-hint">
+                Use your camera to scan each side, or upload an existing photo. Front and back are stored separately.
+            </p>
+            <div class="kkp-wizard-id-progress" data-doc-type="{{ $doc['type'] }}" aria-live="polite">
+                <span class="kkp-wizard-id-progress-item" data-progress-side="front">
+                    Front ID: <strong data-progress-label>Not captured</strong>
+                </span>
+                <span class="kkp-wizard-id-progress-item" data-progress-side="back">
+                    Back ID: <strong data-progress-label>Not captured</strong>
+                </span>
+            </div>
             <div class="kkp-wizard-upload-grid">
                 @foreach(['front' => 'Front', 'back' => 'Back'] as $side => $sideLabel)
                 @php
@@ -143,14 +157,36 @@
                     $inputName = $doc['type'].'_'.$side;
                     $inputId = $prefix.ucfirst($side);
                 @endphp
-                <div class="kkp-wizard-upload-shell" data-upload-shell="{{ $inputId }}">
-                    <p class="kkp-wizard-upload-side-label">{{ $sideLabel }}</p>
+                <div class="kkp-wizard-upload-shell" data-upload-shell="{{ $inputId }}" data-id-side="{{ $side }}" data-doc-type="{{ $doc['type'] }}">
+                    <div class="kkp-wizard-upload-side-head">
+                        <p class="kkp-wizard-upload-side-label">{{ $sideLabel }} of ID</p>
+                        <span class="kkp-id-capture-badge" id="{{ $inputId }}CapturedBadge" hidden>✓ Captured</span>
+                    </div>
+                    <div class="kkp-id-capture-actions">
+                        <button
+                            type="button"
+                            class="kkp-id-capture-btn kkp-id-capture-btn--camera"
+                            data-kkp-open-camera="{{ $inputId }}"
+                            data-side="{{ $side }}"
+                            aria-label="Scan {{ $sideLabel }} ID with Camera"
+                        >
+                            Scan ID with Camera
+                        </button>
+                        <button
+                            type="button"
+                            class="kkp-id-capture-btn kkp-id-capture-btn--upload"
+                            data-kkp-trigger-upload="{{ $inputId }}"
+                            aria-label="Upload {{ $sideLabel }} ID Photo"
+                        >
+                            Upload ID Photo
+                        </button>
+                    </div>
                     <label class="kkp-wizard-dropzone" id="{{ $inputId }}Dropzone" for="{{ $inputId }}">
                         <input type="file" id="{{ $inputId }}" name="{{ $inputName }}" accept=".jpg,.jpeg,.png,image/jpeg,image/png" class="kkp-wizard-file-input">
                         <span class="kkp-wizard-dropzone-empty" id="{{ $inputId }}Empty">
                             <span class="kkp-wizard-dropzone-icon" aria-hidden="true">📷</span>
                             <span class="kkp-wizard-dropzone-title">{{ $sideLabel }} image</span>
-                            <span class="kkp-wizard-dropzone-sub">Drop or <span class="kkp-wizard-dropzone-link">browse</span></span>
+                            <span class="kkp-wizard-dropzone-sub">Drop, browse, or use the buttons above</span>
                             <span class="kkp-wizard-dropzone-hint">JPG or PNG · max 10MB</span>
                         </span>
                     </label>
@@ -158,7 +194,10 @@
                         <img id="{{ $inputId }}PreviewImg" alt="{{ $doc['label'] }} {{ strtolower($sideLabel) }} preview">
                         <div class="kkp-wizard-dropzone-filemeta">
                             <span class="kkp-wizard-dropzone-filename" id="{{ $inputId }}FileName"></span>
-                            <button type="button" class="kkp-wizard-dropzone-remove" data-clear-input="{{ $inputId }}" aria-label="Remove {{ $sideLabel }} image">Remove</button>
+                            <div class="kkp-wizard-dropzone-actions">
+                                <button type="button" class="kkp-wizard-dropzone-retake" data-kkp-open-camera="{{ $inputId }}" data-side="{{ $side }}" aria-label="Retake {{ $sideLabel }} ID">Retake {{ $sideLabel }}</button>
+                                <button type="button" class="kkp-wizard-dropzone-remove" data-clear-input="{{ $inputId }}" aria-label="Remove {{ $sideLabel }} image">Remove</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -170,12 +209,17 @@
         <div class="kkp-wizard-doc-error-panel" id="kkpWizardDocError" role="alert" hidden></div>
 
         <div class="kkp-wizard-ocr-panel" id="kkpWizardOcrPanel" hidden aria-live="polite">
-            <p class="kkp-wizard-ocr-title">ID scan results</p>
-            <p class="kkp-wizard-ocr-status" id="kkpWizardOcrStatus">Upload front and back to scan your ID.</p>
+            <p class="kkp-wizard-ocr-title">Detected information</p>
+            <p class="kkp-wizard-ocr-status" id="kkpWizardOcrStatus">Scan or upload front and back to extract ID text.</p>
             <dl class="kkp-wizard-ocr-fields" id="kkpWizardOcrFields" hidden></dl>
             <p class="kkp-wizard-ocr-note" id="kkpWizardOcrNote" hidden>
-                Detected values were applied to your profiling form where fields were empty. Review Step 1 and edit before you finish registration.
+                Information was detected from your ID. Please review for accuracy. Detected values were applied to empty profiling fields only — OCR does not prove the ID is authentic.
             </p>
+            <div class="kkp-wizard-ocr-retry" id="kkpWizardOcrRetry" hidden>
+                <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera" id="kkpOcrRetakeFront" data-side="front">Retake Front</button>
+                <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera" id="kkpOcrRetakeBack" data-side="back">Retake Back</button>
+                <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpOcrUploadAnother">Upload Another Photo</button>
+            </div>
         </div>
 
         <div class="kkp-wizard-upload-panel" id="kkpSelfieUploadPanel" hidden data-selfie-enabled="{{ config('documents.selfie_verification_enabled') ? '1' : '0' }}">
@@ -205,4 +249,67 @@
         </div>
 
     </div>
+
+    <dialog
+        class="kkp-id-camera-modal"
+        id="kkpIdCameraModal"
+        aria-labelledby="kkpIdCameraTitle"
+        data-auto-capture="{{ config('documents.camera.auto_capture_enabled', true) ? '1' : '0' }}"
+        data-stability-ms="{{ (int) config('documents.camera.auto_capture_stability_ms', 1000) }}"
+        data-sample-interval-ms="{{ (int) config('documents.camera.sample_interval_ms', 220) }}"
+        data-help-after-ms="{{ (int) config('documents.camera.help_after_ms', 12000) }}"
+        data-min-edge="{{ (float) config('documents.camera.min_edge_score', 12) }}"
+        data-min-contrast="{{ (float) config('documents.camera.min_contrast', 16) }}"
+        data-min-brightness="{{ (float) config('documents.camera.min_brightness', 40) }}"
+        data-max-brightness="{{ (float) config('documents.camera.max_brightness', 220) }}"
+        data-max-motion="{{ (float) config('documents.camera.max_motion', 14) }}"
+    >
+        <div class="kkp-id-camera-dialog">
+            <div class="kkp-id-camera-header">
+                <p class="kkp-id-camera-eyebrow">Verify your identity</p>
+                <div class="kkp-id-camera-header-row">
+                    <h3 id="kkpIdCameraTitle">Scan the Front of your ID</h3>
+                    <button type="button" class="kkp-id-camera-close" id="kkpIdCameraClose" aria-label="Close camera">×</button>
+                </div>
+            </div>
+            <p class="kkp-id-camera-instructions" id="kkpIdCameraHint">
+                Position your ID inside the frame. Hold steady for automatic capture, or capture manually.
+            </p>
+            <ul class="kkp-id-camera-tips">
+                <li>Place the entire ID inside the guide</li>
+                <li>Keep the ID flat and avoid glare</li>
+                <li>Auto-capture only runs after the ID looks stable — OCR starts after capture</li>
+            </ul>
+            <div class="kkp-id-camera-stage" id="kkpIdCameraStage">
+                <video id="kkpIdCameraVideo" playsinline muted autoplay aria-label="Live camera preview"></video>
+                <div class="kkp-id-camera-guide" id="kkpIdCameraGuide" aria-hidden="true" data-state="idle">
+                    <div class="kkp-id-camera-guide-frame">
+                        <span id="kkpIdCameraGuideLabel">PLACE ID HERE</span>
+                    </div>
+                </div>
+            </div>
+            <canvas id="kkpIdCameraCanvas" hidden></canvas>
+            <p class="kkp-id-camera-detect" id="kkpIdCameraDetect" role="status" aria-live="polite">Position your ID inside the frame.</p>
+            <p class="kkp-id-camera-status" id="kkpIdCameraStatus" role="status" hidden></p>
+            <div class="kkp-id-camera-fallback" id="kkpIdCameraFallback" hidden>
+                <p data-fallback-message>Camera access is unavailable. You can upload an ID photo instead.</p>
+                <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpIdCameraUseUpload">Upload ID Photo</button>
+            </div>
+            <div class="kkp-id-camera-help" id="kkpIdCameraHelp" hidden>
+                <p>Having trouble detecting the ID?</p>
+                <div class="kkp-id-camera-help-actions">
+                    <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera" id="kkpIdCameraManualHint" aria-label="Capture manually">Capture Manually</button>
+                    <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpIdCameraHelpUpload">Upload Photo</button>
+                </div>
+            </div>
+            <div class="kkp-id-camera-footer">
+                <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera kkp-id-capture-btn--primary" id="kkpIdCameraCapture">
+                    Capture Manually
+                </button>
+                <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpIdCameraFooterUpload">
+                    Upload ID Photo
+                </button>
+            </div>
+        </div>
+    </dialog>
 </section>

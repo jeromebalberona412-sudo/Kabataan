@@ -139,10 +139,19 @@ body.kkpu-page-body {
     }
 
     .kkp-fs-scale-inner .kkp-sq-chk:checked::after {
-        content: '\2713';
-        top: -2px;
-        left: 0;
-        font-size: 11px;
+        content: '';
+        left: 50%;
+        top: 45%;
+        width: 3.5px;
+        height: 6.5px;
+        border: solid #111;
+        border-width: 0 1.5px 1.5px 0;
+        transform: translate(-50%, -50%) rotate(45deg);
+        font-size: 0;
+        font-weight: normal;
+        color: transparent;
+        line-height: 0;
+        box-sizing: border-box;
     }
 
     .kkp-fs-scale-inner .kkp-chk-lbl {
@@ -174,7 +183,73 @@ body.kkpu-page-body {
     }
 
     .kkp-fs-scale-inner .kkp-personal-row {
-        grid-template-columns: minmax(100px, auto) minmax(0, 1fr) minmax(210px, 250px);
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: center;
+    }
+
+    .kkp-fs-scale-inner .kkp-age-dob-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        width: auto;
+    }
+
+    .kkp-fs-scale-inner .kkp-inline-pair--age,
+    .kkp-fs-scale-inner .kkp-inline-pair--birthday {
+        padding-bottom: 0;
+        flex: 0 0 auto;
+    }
+
+    .kkp-fs-scale-inner .kkp-inline-pair--email {
+        flex-wrap: wrap;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .kkp-fs-scale-inner .kkp-inline-pair--email .kkp-email-input,
+    .kkp-fs-scale-inner .kkp-inline-pair--email .kkp-uline-med {
+        width: auto;
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .kkp-fs-scale-inner .kkp-demo-block-options.kkp-youth-class-layout {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        align-items: end;
+        column-gap: 4px;
+        gap: 0 4px;
+        flex-direction: unset;
+    }
+
+    .kkp-fs-scale-inner .kkp-youth-class-main {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .kkp-fs-scale-inner .kkp-youth-class-side {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: end;
+        justify-self: start;
+        display: flex;
+        flex-direction: row;
+    }
+
+    .kkp-fs-scale-inner .kkp-youth-specific-options {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .kkp-fs-scale-inner .kkp-youth-class-main .kkp-chk-lbl,
+    .kkp-fs-scale-inner .kkp-youth-specific-options .kkp-chk-lbl {
+        white-space: nowrap;
+    }
+
+    .kkp-fs-scale-inner .kkp-demo-block-label {
+        word-break: normal;
+        overflow-wrap: normal;
+        hyphens: none;
     }
 
     .kkp-fs-scale-inner .kkp-demo-grid,

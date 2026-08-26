@@ -13,7 +13,27 @@ class OCRService
     public function __construct(
         private readonly TesseractOcrService $tesseract,
         private readonly ImagePreprocessingService $preprocessing,
+        private readonly KabataanFullNameMatcher $nameMatcher,
+        private readonly PerceptualHashService $perceptualHash,
     ) {}
+
+    /**
+     * Public gate for ID-like OCR text (used by wizard detect-id / step-2).
+     */
+    public function looksLikeSupportingIdText(string $text): bool
+    {
+        return $this->textHasSupportingIdSignal($text);
+    }
+
+    /**
+     * Public gate: OCR text must support the user-selected document type.
+     *
+     * @param  array<string, float|int>  $scores
+     */
+    public function supportsSelectedIdType(string $text, string $documentType, array $scores = []): bool
+    {
+        return $this->textSupportsSelectedIdType($text, $documentType, $scores);
+    }
 
     /**
      * @return array<string, mixed>
@@ -77,7 +97,7 @@ class OCRService
             return [
                 'success' => false,
                 'ocr_status' => 'ocr_empty',
-                'message' => 'No useful text detected.',
+                'message' => 'We couldn\'t read any text from this ID. Please make sure the ID is clear, properly aligned, and well lit.',
                 'lines' => [],
                 'full_text' => '',
                 'text_length' => 0,
@@ -229,7 +249,19 @@ class OCRService
         $apiResult = $this->detectIdViaApi($imagePath, $documentType);
 
         if ($this->isUsableDetectionResult($apiResult)) {
-            return $apiResult;
+            $gated = $this->enforceDetectionAccuracy($apiResult, $documentType);
+
+            if (! ($gated['validation_error'] ?? false)) {
+                return $gated;
+            }
+
+            // API accepted weak/non-ID text — try local OCR before returning the reject.
+            $local = $this->detectIdViaLocalOcr($imagePath, null, $documentType);
+            if (! ($local['validation_error'] ?? false)) {
+                return $local;
+            }
+
+            return $gated;
         }
 
         Log::info('Philippine ID OCR API unavailable — using local OCR fallback', [
@@ -259,10 +291,36 @@ class OCRService
             ];
         }
 
+        if ($this->frontAndBackAreSameImage($frontPath, $backPath)) {
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'no',
+                'id_type' => 'Unknown',
+                'detected_id_type' => 'Unknown',
+                'confidence' => 0,
+                'ocr_status' => 'invalid_upload',
+                'message' => 'Front and back must be different photos. You uploaded the same image for both sides. Please upload the real front and the real back of your ID.',
+                'source' => 'upload_validation',
+            ];
+        }
+
         $apiResult = $this->detectIdPairViaApi($frontPath, $backPath, $documentType);
 
         if ($this->isUsableDetectionResult($apiResult)) {
-            return $apiResult;
+            $gated = $this->enforceDetectionAccuracy($apiResult, $documentType);
+
+            if (! ($gated['validation_error'] ?? false)) {
+                return $gated;
+            }
+
+            $local = $this->detectIdViaLocalOcr($frontPath, $backPath, $documentType);
+            if (! ($local['validation_error'] ?? false)) {
+                return $local;
+            }
+
+            return $gated;
         }
 
         Log::info('Philippine ID OCR pair API unavailable — using local OCR fallback', [
@@ -292,7 +350,7 @@ class OCRService
             ];
         }
 
-        if ($this->filesHaveIdenticalBytes($frontPath, $backPath)) {
+        if ($this->frontAndBackAreSameImage($frontPath, $backPath)) {
             return [
                 'success' => false,
                 'validation_error' => true,
@@ -318,7 +376,10 @@ class OCRService
         }
     }
 
-    private function filesHaveIdenticalBytes(string $pathA, string $pathB): bool
+    /**
+     * Exact bytes or near-duplicate (re-saved / resized) front+back photos.
+     */
+    public function frontAndBackAreSameImage(string $pathA, string $pathB): bool
     {
         if (! is_file($pathA) || ! is_file($pathB)) {
             return false;
@@ -327,14 +388,102 @@ class OCRService
         $sizeA = (int) filesize($pathA);
         $sizeB = (int) filesize($pathB);
 
-        if ($sizeA <= 0 || $sizeA !== $sizeB) {
+        if ($sizeA <= 0 || $sizeB <= 0) {
             return false;
         }
 
-        $hashA = @hash_file('sha256', $pathA);
-        $hashB = @hash_file('sha256', $pathB);
+        if ($sizeA === $sizeB) {
+            $hashA = @hash_file('sha256', $pathA);
+            $hashB = @hash_file('sha256', $pathB);
 
-        return is_string($hashA) && is_string($hashB) && $hashA !== '' && hash_equals($hashA, $hashB);
+            if (is_string($hashA) && is_string($hashB) && $hashA !== '' && hash_equals($hashA, $hashB)) {
+                return true;
+            }
+        }
+
+        $phashA = $this->perceptualHash->hashFromFile($pathA);
+        $phashB = $this->perceptualHash->hashFromFile($pathB);
+
+        if (! is_string($phashA) || ! is_string($phashB) || $phashA === '' || $phashB === '') {
+            // Last-resort without decoder: same dimensions + nearly same size + matching head/tail samples.
+            return $this->frontAndBackLookStructurallyIdentical($pathA, $pathB, $sizeA, $sizeB);
+        }
+
+        $distance = $this->perceptualHash->hammingDistance($phashA, $phashB);
+        if ($distance === null) {
+            return $this->frontAndBackLookStructurallyIdentical($pathA, $pathB, $sizeA, $sizeB);
+        }
+
+        $threshold = (int) config('documents.front_back.phash_hamming_threshold', 5);
+
+        return $distance <= max(0, $threshold);
+    }
+
+    private function frontAndBackLookStructurallyIdentical(string $pathA, string $pathB, int $sizeA, int $sizeB): bool
+    {
+        $infoA = @getimagesize($pathA);
+        $infoB = @getimagesize($pathB);
+
+        if (! is_array($infoA) || ! is_array($infoB)) {
+            return false;
+        }
+
+        if ((int) $infoA[0] !== (int) $infoB[0] || (int) $infoA[1] !== (int) $infoB[1]) {
+            return false;
+        }
+
+        $larger = max($sizeA, $sizeB);
+        $smaller = min($sizeA, $sizeB);
+        if ($larger <= 0 || ($smaller / $larger) < 0.92) {
+            return false;
+        }
+
+        $sample = static function (string $path, int $size): string {
+            $handle = @fopen($path, 'rb');
+            if ($handle === false) {
+                return '';
+            }
+            $head = (string) fread($handle, 2048);
+            $tail = '';
+            if ($size > 2048) {
+                fseek($handle, max(0, $size - 2048));
+                $tail = (string) fread($handle, 2048);
+            }
+            fclose($handle);
+
+            return hash('sha256', $head.'|'.$tail);
+        };
+
+        $sampleA = $sample($pathA, $sizeA);
+        $sampleB = $sample($pathB, $sizeB);
+
+        return $sampleA !== '' && $sampleB !== '' && hash_equals($sampleA, $sampleB);
+    }
+
+    /**
+     * True when front/back OCR text is nearly the same (same ID side uploaded twice).
+     */
+    public function frontAndBackOcrTextTooSimilar(string $frontText, string $backText): bool
+    {
+        $front = trim(preg_replace('/\s+/', ' ', $frontText) ?? '');
+        $back = trim(preg_replace('/\s+/', ' ', $backText) ?? '');
+
+        if ($front === '' || $back === '') {
+            return false;
+        }
+
+        if (mb_strlen($front) < 24 || mb_strlen($back) < 24) {
+            return false;
+        }
+
+        if (strcasecmp($front, $back) === 0) {
+            return true;
+        }
+
+        similar_text(mb_strtolower($front), mb_strtolower($back), $percent);
+        $threshold = (float) config('documents.front_back.ocr_text_similarity_percent', 90);
+
+        return $percent >= $threshold;
     }
 
     /**
@@ -360,7 +509,7 @@ class OCRService
 
         try {
             $request = Http::connectTimeout(1)
-                ->timeout((int) config('ocr.timeout', 120))
+                ->timeout(min(8, (int) config('ocr.timeout', 120)))
                 ->attach('image', file_get_contents($imagePath), basename($imagePath));
 
             $apiKey = config('ocr.api_key');
@@ -412,7 +561,7 @@ class OCRService
 
         try {
             $request = Http::connectTimeout(1)
-                ->timeout((int) config('ocr.timeout', 120))
+                ->timeout(min(8, (int) config('ocr.timeout', 120)))
                 ->attach('front', file_get_contents($frontPath), basename($frontPath))
                 ->attach('back', file_get_contents($backPath), basename($backPath));
 
@@ -477,41 +626,59 @@ class OCRService
         $textLength = mb_strlen($combined);
         $ocrStatus = $this->resolveCombinedOcrStatus($frontOcr, $backOcr, $textLength);
 
+        if (
+            is_string($backPath)
+            && $frontText !== ''
+            && $backText !== ''
+            && $this->frontAndBackOcrTextTooSimilar($frontText, $backText)
+        ) {
+            Log::info('ID detection rejected identical front/back OCR text', [
+                'document_type' => $documentType,
+                'front_length' => mb_strlen($frontText),
+                'back_length' => mb_strlen($backText),
+            ]);
+
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'no',
+                'id_type' => 'Unknown',
+                'detected_id_type' => 'Unknown',
+                'confidence' => 0.0,
+                'confidence_band' => 'low',
+                'ocr_status' => 'invalid_upload',
+                'message' => 'Front and back look like the same ID side. Please upload two different photos — the real front and the real back.',
+                'raw_text' => '',
+                'front' => $this->publicOcrSummary($frontOcr),
+                'back' => $this->publicOcrSummary($backOcr),
+                'source' => 'local_ocr_fallback',
+            ];
+        }
+
         if ($combined === '') {
-            $looksLikeId = $this->imageLooksLikeIdDocument($frontMeta, $backMeta);
             $message = match ($ocrStatus) {
                 'tesseract_unavailable' => 'Document processing is temporarily unavailable. Please try again.',
                 'ocr_failed' => 'Document processing is temporarily unavailable. Please try again.',
                 'invalid_image' => 'One of the uploaded files could not be read as an image. Please upload JPG or PNG photos.',
-                default => $looksLikeId
-                    ? 'Text could not be confidently read. Please upload a clearer image or submit for administrator review.'
-                    : 'We couldn\'t read useful text from the uploaded images. Please upload a clearer front and/or back photo of your ID.',
+                default => 'This does not appear to be a readable ID. Please scan or upload a clear front and back photo of your selected ID — not a random image.',
             };
 
             Log::info('ID detection local OCR empty', [
                 'ocr_status' => $ocrStatus,
-                'looks_like_id' => $looksLikeId,
                 'text_length' => 0,
             ]);
 
             return [
                 'success' => false,
-                'validation_error' => ! $looksLikeId,
-                'needs_review' => $looksLikeId,
-                'document_detected' => $looksLikeId ? 'possible' : 'no',
-                // Prefer the selected type over a vague "other" when the image looks like an ID.
-                'id_type' => $looksLikeId
-                    ? ((is_string($documentType) && $documentType !== '' && $documentType !== 'other_id')
-                        ? $documentType
-                        : 'national_id')
-                    : 'Unknown',
-                'detected_id_type' => $looksLikeId
-                    ? ((is_string($documentType) && $documentType !== '' && $documentType !== 'other_id')
-                        ? $documentType
-                        : 'national_id')
-                    : 'Unknown',
-                'confidence' => $looksLikeId ? 0.42 : 0.0,
-                'ocr_status' => $ocrStatus,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'no',
+                'id_type' => 'Unknown',
+                'detected_id_type' => 'Unknown',
+                'confidence' => 0.0,
+                'confidence_band' => 'low',
+                'ocr_status' => $ocrStatus === 'ocr_empty' ? 'ocr_empty' : $ocrStatus,
                 'message' => $message,
                 'raw_text' => '',
                 'front' => $this->publicOcrSummary($frontOcr),
@@ -520,47 +687,176 @@ class OCRService
             ];
         }
 
-        $classified = $this->classifyDocumentFromText($combined, $documentType);
-        $confidence = (float) ($classified['confidence'] ?? 0);
-        $minConfidence = (float) config('ocr.min_detect_confidence', 0.35);
-        $detectedType = (string) ($classified['id_type'] ?? 'Unknown');
+        if (! $this->textHasSupportingIdSignal($combined)) {
+            Log::info('ID detection rejected non-ID image text', [
+                'text_length' => $textLength,
+                'document_type' => $documentType,
+            ]);
 
-        if ($detectedType === 'Unknown' || $detectedType === '') {
-            $detectedType = (is_string($documentType) && $documentType !== '' && $documentType !== 'other_id')
-                ? $documentType
-                : 'national_id';
-            $confidence = max($confidence, 0.5);
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'no',
+                'id_type' => 'Unknown',
+                'detected_id_type' => 'Unknown',
+                'confidence' => 0.0,
+                'confidence_band' => 'low',
+                'ocr_status' => 'ocr_empty',
+                'message' => 'This does not appear to be a valid ID. Please scan or upload a clear photo of your selected ID card (front and back) — random photos are not accepted.',
+                'raw_text' => '',
+                'front' => $this->publicOcrSummary($frontOcr),
+                'back' => $this->publicOcrSummary($backOcr),
+                'source' => 'local_ocr_fallback',
+            ];
+        }
+
+        $classified = $this->classifyDocumentFromText($combined, $documentType);
+        $scores = is_array($classified['scores'] ?? null) ? $classified['scores'] : [];
+        $confidence = (float) ($classified['confidence'] ?? 0);
+        $minConfidence = (float) config('ocr.min_detect_confidence', 0.45);
+        $autoCorrectMin = (float) config('ocr.auto_correct_min_confidence', 0.55);
+        $detectedType = (string) ($classified['id_type'] ?? 'Unknown');
+        $selectedScore = (is_string($documentType) && isset($scores[$documentType]))
+            ? (float) $scores[$documentType]
+            : 0.0;
+
+        // Selected ID type must be supported by OCR evidence (stop accepting "whatever").
+        if (is_string($documentType) && $documentType !== '' && ! $this->textSupportsSelectedIdType($combined, $documentType, $scores)) {
+            $expectedLabel = $this->documentTypeLabel($documentType);
+
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'no',
+                'id_type' => $detectedType !== 'Unknown' ? $detectedType : 'Unknown',
+                'detected_id_type' => $detectedType !== 'Unknown' ? $detectedType : null,
+                'expected_id_type' => $documentType,
+                'confidence' => $confidence,
+                'confidence_band' => 'low',
+                'ocr_status' => 'ocr_low_confidence',
+                'message' => "The uploaded images do not look like a valid {$expectedLabel}. Please upload a clearer front and back of your selected ID — not a random photo.",
+                'raw_text' => '',
+                'front' => $this->publicOcrSummary($frontOcr),
+                'back' => $this->publicOcrSummary($backOcr),
+                'source' => 'local_ocr_fallback',
+                'scores' => $scores,
+            ];
         }
 
         $matchesSelected = $this->detectedTypeMatchesSelection($detectedType, $documentType);
-        $autoCorrectedType = ! $matchesSelected
-            && $confidence >= 0.45
-            && in_array($detectedType, ['national_id', 'philhealth_id', 'voters_id', 'school_id'], true);
 
-        // Auto-detect wins: do not hard-fail when OCR confidently found a different valid ID type.
+        // Do not auto-switch the user's selected type — mismatch must be a hard error.
+        // Keep selected type only when its own score is competitive with the top label.
+        if (
+            ! $matchesSelected
+            && is_string($documentType)
+            && $documentType !== ''
+            && $documentType !== 'other_id'
+            && $selectedScore >= 0.40
+            && ($selectedScore + 0.08) >= $confidence
+            && $confidence < $autoCorrectMin
+        ) {
+            $detectedType = $documentType;
+            $confidence = max($confidence, $selectedScore);
+            $matchesSelected = true;
+        }
+
+        // Reject weak classifications instead of marking them as reviewable "IDs".
+        $acceptFloor = max(0.40, $minConfidence - 0.05);
+        if ($confidence < $acceptFloor && $selectedScore < $acceptFloor) {
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'no',
+                'id_type' => 'Unknown',
+                'detected_id_type' => null,
+                'expected_id_type' => $documentType,
+                'confidence' => $confidence,
+                'confidence_band' => 'low',
+                'ocr_status' => 'ocr_low_confidence',
+                'message' => 'We could not confidently identify this as your selected ID. Please retake clearer front and back photos.',
+                'raw_text' => '',
+                'front' => $this->publicOcrSummary($frontOcr),
+                'back' => $this->publicOcrSummary($backOcr),
+                'source' => 'local_ocr_fallback',
+                'scores' => $scores,
+            ];
+        }
+
         $needsReview = $confidence < $minConfidence || $ocrStatus === 'ocr_low_confidence';
-        $success = $confidence >= $minConfidence;
+        $success = $confidence >= $minConfidence && ($matchesSelected || $documentType === 'other_id');
         $validationError = false;
+        $autoCorrectedType = false;
+
+        // Type mismatch → hard error (never soft-pass as needs_review).
+        if (
+            is_string($documentType)
+            && $documentType !== ''
+            && $documentType !== 'other_id'
+            && ! $matchesSelected
+            && in_array($detectedType, ['national_id', 'philhealth_id', 'voters_id', 'school_id'], true)
+        ) {
+            $expectedLabel = $this->documentTypeLabel($documentType);
+            $detectedLabel = $this->documentTypeLabel($detectedType);
+
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'yes',
+                'id_type' => $detectedType,
+                'detected_id_type' => $detectedType,
+                'expected_id_type' => $documentType,
+                'confidence' => $confidence,
+                'confidence_band' => $this->confidenceBand($confidence, $minConfidence),
+                'ocr_status' => $ocrStatus,
+                'message' => "You selected {$expectedLabel}, but the images look like {$detectedLabel}. Please upload the correct ID or change the document type.",
+                'raw_text' => $combined,
+                'front' => $this->publicOcrSummary($frontOcr),
+                'back' => $this->publicOcrSummary($backOcr),
+                'source' => 'local_ocr_fallback',
+                'scores' => $scores,
+            ];
+        }
+
+        // Unknown classification but text supports the selected type → bind to selection.
+        if (
+            ! $matchesSelected
+            && is_string($documentType)
+            && $documentType !== ''
+            && ($detectedType === '' || strcasecmp($detectedType, 'Unknown') === 0)
+        ) {
+            $detectedType = $documentType;
+            $matchesSelected = true;
+            $success = $confidence >= $minConfidence;
+            $needsReview = ! $success || $ocrStatus === 'ocr_low_confidence';
+        }
 
         $idLabel = $this->documentTypeLabel($detectedType);
+        $confidenceBand = $this->confidenceBand($confidence, $minConfidence);
 
         Log::info('ID detection local OCR classified', [
             'ocr_status' => $ocrStatus,
             'text_length' => $textLength,
             'id_type' => $detectedType,
             'confidence' => $confidence,
+            'selected_score' => $selectedScore,
+            'confidence_band' => $confidenceBand,
             'needs_review' => $needsReview,
             'success' => $success,
             'auto_corrected' => $autoCorrectedType,
         ]);
 
-        $message = $success
-            ? ($autoCorrectedType
-                ? "Detected as {$idLabel}. The document type was updated to match your upload."
-                : "Document appears to be a {$idLabel}. Administrator review may be required.")
-            : "Text could not be confidently verified as {$idLabel}. You may upload a clearer photo or submit for administrator review.";
+        $message = match ($confidenceBand) {
+            'high' => "ID text detected. Information was extracted from your {$idLabel}. Please review for accuracy.",
+            'medium' => "Text detected from your {$idLabel}, but please review the information carefully.",
+            default => "We could not confidently read the ID. Please retake the photo or upload a clearer image.",
+        };
 
-        return [
+        $result = [
             'success' => $success,
             'validation_error' => $validationError,
             'needs_review' => $needsReview || ! $success,
@@ -569,6 +865,7 @@ class OCRService
             'detected_id_type' => $detectedType,
             'expected_id_type' => $documentType,
             'confidence' => $confidence,
+            'confidence_band' => $confidenceBand,
             'full_name' => $classified['full_name'] ?? null,
             'birthdate' => $classified['birthdate'] ?? null,
             'sex' => $classified['sex'] ?? null,
@@ -583,7 +880,23 @@ class OCRService
             'text_length' => $textLength,
             'auto_detected' => true,
             'auto_corrected' => $autoCorrectedType,
+            'scores' => $scores,
         ];
+
+        return $this->enforceDetectionAccuracy($result, $documentType);
+    }
+
+    private function confidenceBand(float $confidence, float $minConfidence): string
+    {
+        if ($confidence >= max(0.7, $minConfidence + 0.15)) {
+            return 'high';
+        }
+
+        if ($confidence >= $minConfidence) {
+            return 'medium';
+        }
+
+        return 'low';
     }
 
     /**
@@ -611,11 +924,114 @@ class OCRService
     }
 
     /**
+     * True when OCR text contains supporting-ID signals (not a random photo/animal/meme).
+     */
+    private function textHasSupportingIdSignal(string $text): bool
+    {
+        $trimmed = trim($text);
+        if ($trimmed === '' || mb_strlen($trimmed) < 18) {
+            return false;
+        }
+
+        $alphaDigits = preg_replace('/[^A-Za-z0-9]+/', '', $trimmed) ?? '';
+        if (mb_strlen($alphaDigits) < 16) {
+            return false;
+        }
+
+        // Strong issuer / ID-type keywords (required for most accept paths).
+        $hasIssuerKeyword = preg_match(
+            '/\b(PHILSYS|PHIL\s*ID|PHILIPPINE\s+IDENTIFICATION|PAMBANSANG\s+IDENTIDAD|ePhilID|PCN|PHILHEALTH|PHIL\s*HEALTH|PHIC|COMELEC|COMMISSION\s+ON\s+ELECTIONS|VOTER\'?S?\s+ID|VOTER\s+CERTIFICATION|STUDENT\s+ID|SCHOOL\s+ID|DRIVER\'?S?\s+LICENSE|PASSPORT|PWD\s+ID|SENIOR\s+CITIZEN|BARANGAY\s+ID|POSTAL\s+ID|COMPANY\s+ID|REPUBLIC\s+OF\s+THE\s+PHILIPPINES|IDENTIFICATION\s+CARD|NATIONAL\s+ID)\b/i',
+            $trimmed
+        ) === 1;
+
+        $labelHits = 0;
+        foreach ([
+            '/\b(GIVEN\s+NAMES?|FIRST\s+NAME|MIDDLE\s+NAME|LAST\s+NAME|SURNAME|APELYIDO)\b/i',
+            '/\b(DATE\s+OF\s+BIRTH|BIRTHDAY|BIRTH\s*DATE|DOB|PETSA\s+NG\s+KAPANGANAKAN)\b/i',
+            '/\b(ADDRESS|TIRAHAN)\b/i',
+            '/\b(SEX|KASARIAN)\b/i',
+            '/\b(ID\s*NO\.?|ID\s+NUMBER|MEMBERSHIP|STUDENT\s+NO|STUDENT\s+NUMBER|LRN|VIN|PCN)\b/i',
+        ] as $pattern) {
+            if (preg_match($pattern, $trimmed)) {
+                $labelHits++;
+            }
+        }
+
+        // PhilHealth / National-style number formats.
+        $hasIdNumberFormat = preg_match('/\b\d{2}-\d{9}-\d\b/', $trimmed) === 1
+            || preg_match('/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/', $trimmed) === 1;
+
+        // Avoid weak words like bare "MEMBER"/"PIN" (too common in non-ID text).
+        $hasSecondaryEvidence = $labelHits >= 1
+            || $hasIdNumberFormat
+            || $this->textLooksLikePersonalIdCard($trimmed, 2)
+            || preg_match('/\b(PRECINCT|VIN|REGISTERED\s+VOTER|STUDENT\s+NO|STUDENT\s+NUMBER|GIVEN\s+NAMES?)\b/i', $trimmed) === 1
+            || (
+                preg_match('/\b(PHILHEALTH|PHIL\s*HEALTH|PHIC)\b/i', $trimmed) === 1
+                && preg_match('/\b(MEMBER|PIN)\b/i', $trimmed) === 1
+            );
+
+        if ($hasIssuerKeyword && $hasSecondaryEvidence) {
+            return true;
+        }
+
+        // No issuer keyword: require multiple real field labels (not random capitalized words).
+        if ($labelHits >= 3) {
+            return true;
+        }
+
+        if ($hasIdNumberFormat && $labelHits >= 2) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, float|int>  $scores
+     */
+    private function textSupportsSelectedIdType(string $text, string $documentType, array $scores): bool
+    {
+        $score = (float) ($scores[$documentType] ?? 0);
+        $hasPhilsys = preg_match('/\b(PHILSYS|PHIL\s*ID|PHILIPPINE\s+IDENTIFICATION|PAMBANSANG\s+IDENTIDAD|ePhilID|PCN|NATIONAL\s+ID)\b/i', $text) === 1;
+        $hasPhilhealth = preg_match('/\b(PHILHEALTH|PHIL\s*HEALTH|PHIC)\b/i', $text) === 1
+            || preg_match('/\b\d{2}-\d{9}-\d\b/', $text) === 1;
+        $hasVoters = preg_match('/\b(COMELEC|COMMISSION\s+ON\s+ELECTIONS|VOTER\'?S?\s+ID|VOTER\s+CERTIFICATION|PRECINCT|VIN)\b/i', $text) === 1;
+        $hasSchool = preg_match('/\b(STUDENT\s+ID|SCHOOL\s+ID|STUDENT\s+NO|STUDENT\s+NUMBER|LRN)\b/i', $text) === 1
+            || (
+                preg_match('/\b(UNIVERSITY|COLLEGE|ACADEMY|INSTITUTE|SCHOOL)\b/i', $text) === 1
+                && preg_match('/\b(STUDENT|GRADE|SECTION|COURSE|ID\s*NO)\b/i', $text) === 1
+            );
+        $hasPhilSysLayout = preg_match('/\b(GIVEN\s+NAMES?|LAST\s+NAME|DATE\s+OF\s+BIRTH)\b/i', $text) === 1
+            && preg_match('/\b(SEX|ADDRESS|MARITAL|BLOOD|PCN)\b/i', $text) === 1;
+
+        return match ($documentType) {
+            'national_id' => ($score >= 0.40 || $hasPhilsys || (
+                preg_match('/\bREPUBLIC\s+OF\s+THE\s+PHILIPPINES\b/i', $text) === 1
+                && $hasPhilSysLayout
+            ) || $hasPhilSysLayout)
+                && ! (($hasPhilhealth || $hasVoters || $hasSchool) && ! $hasPhilsys && $score < 0.50),
+            'philhealth_id' => ($score >= 0.40 || $hasPhilhealth)
+                && ! (($hasPhilsys || $hasVoters || $hasSchool) && ! $hasPhilhealth && $score < 0.50),
+            'voters_id' => ($score >= 0.40 || $hasVoters)
+                && ! (($hasPhilsys || $hasPhilhealth || $hasSchool) && ! $hasVoters && $score < 0.50),
+            'school_id' => ($score >= 0.40 || $hasSchool)
+                && ! (($hasPhilsys || $hasPhilhealth || $hasVoters) && ! $hasSchool && $score < 0.50),
+            'other_id' => $score >= 0.40
+                || preg_match('/\b(DRIVER\'?S?\s+LICENSE|PASSPORT|PWD\s+ID|SENIOR\s+CITIZEN|BARANGAY\s+ID|POSTAL\s+ID|COMPANY\s+ID|IDENTIFICATION\s+CARD)\b/i', $text) === 1
+                || $this->textLooksLikePersonalIdCard($text, 3),
+            default => $this->textHasSupportingIdSignal($text),
+        };
+    }
+
+    /**
      * @param  array<string, mixed>  $frontMeta
      * @param  array<string, mixed>|null  $backMeta
      */
     private function imageLooksLikeIdDocument(array $frontMeta, ?array $backMeta): bool
     {
+        // Dimension heuristics alone are not enough to accept random photos.
+        // Kept for diagnostics / optional soft checks only.
         $width = (int) ($frontMeta['width'] ?? 0);
         $height = (int) ($frontMeta['height'] ?? 0);
         $bytes = (int) ($frontMeta['bytes'] ?? 0);
@@ -627,7 +1043,6 @@ class OCRService
         if ($width > 0 && $height > 0) {
             $ratio = $width / max(1, $height);
 
-            // Card-like landscape, portrait phone screenshot, or roughly square scan.
             if (($ratio >= 1.2 && $ratio <= 2.2) || ($ratio >= 0.35 && $ratio <= 0.85) || ($ratio >= 0.85 && $ratio <= 1.2)) {
                 return true;
             }
@@ -657,14 +1072,159 @@ class OCRService
     }
 
     /**
+     * Final accuracy gate for API + local OCR payloads.
+     * Rejects non-ID text, wrong selected type, and weak classifications.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function enforceDetectionAccuracy(array $payload, ?string $documentType): array
+    {
+        if (($payload['validation_error'] ?? false) === true
+            && strtolower((string) ($payload['document_detected'] ?? '')) === 'no') {
+            $payload['success'] = false;
+            $payload['needs_review'] = false;
+
+            return $payload;
+        }
+
+        $rawText = trim((string) (
+            $payload['raw_text']
+            ?? $payload['full_text']
+            ?? data_get($payload, 'ocr.raw_text')
+            ?? data_get($payload, 'ocr.full_text')
+            ?? ''
+        ));
+
+        $minConfidence = (float) config('ocr.min_detect_confidence', 0.50);
+        $acceptFloor = max(0.40, $minConfidence - 0.05);
+        $confidence = (float) ($payload['confidence'] ?? 0);
+        $detectedType = trim((string) ($payload['id_type'] ?? $payload['detected_id_type'] ?? 'Unknown'));
+        $scores = is_array($payload['scores'] ?? null) ? $payload['scores'] : [];
+        $source = (string) ($payload['source'] ?? 'unknown');
+
+        $reject = function (string $message, array $extra = []) use ($payload, $documentType, $detectedType, $confidence, $source): array {
+            return array_merge($payload, [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'no',
+                'id_type' => $extra['id_type'] ?? (($detectedType !== '' && strcasecmp($detectedType, 'Unknown') !== 0) ? $detectedType : 'Unknown'),
+                'detected_id_type' => $extra['detected_id_type'] ?? ($detectedType !== '' ? $detectedType : null),
+                'expected_id_type' => $documentType,
+                'confidence' => $confidence,
+                'confidence_band' => 'low',
+                'ocr_status' => $extra['ocr_status'] ?? 'ocr_low_confidence',
+                'message' => $message,
+                'raw_text' => '',
+                'source' => $source,
+            ], $extra);
+        };
+
+        if ($rawText === '' || ! $this->textHasSupportingIdSignal($rawText)) {
+            return $reject(
+                'This does not appear to be a valid ID. Please scan or upload a clear photo of your selected ID card (front and back) — random photos are not accepted.',
+                ['ocr_status' => 'ocr_empty', 'id_type' => 'Unknown', 'detected_id_type' => null]
+            );
+        }
+
+        if (is_string($documentType) && $documentType !== ''
+            && ! $this->textSupportsSelectedIdType($rawText, $documentType, $scores)) {
+            $expectedLabel = $this->documentTypeLabel($documentType);
+
+            return $reject(
+                "The uploaded images do not look like a valid {$expectedLabel}. Please upload a clearer front and back of your selected ID — not a random photo."
+            );
+        }
+
+        $matchesSelected = $this->detectedTypeMatchesSelection($detectedType, $documentType);
+        $autoCorrected = false;
+
+        // Unknown detection but text supports selected type → bind to selection.
+        if (
+            ! $matchesSelected
+            && is_string($documentType)
+            && $documentType !== ''
+            && ($detectedType === '' || strcasecmp($detectedType, 'Unknown') === 0)
+        ) {
+            $detectedType = $documentType;
+            $payload['id_type'] = $documentType;
+            $payload['detected_id_type'] = $documentType;
+            $matchesSelected = true;
+        }
+
+        if (
+            is_string($documentType)
+            && $documentType !== ''
+            && $documentType !== 'other_id'
+            && ! $matchesSelected
+            && in_array($detectedType, ['national_id', 'philhealth_id', 'voters_id', 'school_id'], true)
+        ) {
+            $expectedLabel = $this->documentTypeLabel($documentType);
+            $detectedLabel = $this->documentTypeLabel($detectedType);
+
+            return array_merge($payload, [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'document_detected' => 'yes',
+                'id_type' => $detectedType,
+                'detected_id_type' => $detectedType,
+                'expected_id_type' => $documentType,
+                'confidence' => $confidence,
+                'confidence_band' => $this->confidenceBand($confidence, $minConfidence),
+                'message' => "You selected {$expectedLabel}, but the images look like {$detectedLabel}. Please upload the correct ID or change the document type.",
+                'raw_text' => $rawText,
+                'auto_corrected' => false,
+            ]);
+        }
+
+        $selectedScore = (is_string($documentType) && isset($scores[$documentType]))
+            ? (float) $scores[$documentType]
+            : 0.0;
+
+        if ($confidence < $acceptFloor && $selectedScore < $acceptFloor) {
+            return $reject(
+                'We could not confidently identify this as your selected ID. Please retake clearer front and back photos.'
+            );
+        }
+
+        // Passed gates — never leave document_detected empty/no on a soft pass.
+        $payload['raw_text'] = $rawText;
+        $payload['document_detected'] = 'yes';
+        $payload['validation_error'] = false;
+        $payload['auto_corrected'] = false;
+        $payload['confidence_band'] = $this->confidenceBand($confidence, $minConfidence);
+
+        if ($confidence < $minConfidence) {
+            $payload['success'] = false;
+            $payload['needs_review'] = true;
+            if (empty($payload['message'])) {
+                $payload['message'] = 'We could not confidently read the ID. Please retake the photo or upload a clearer image.';
+            }
+        } elseif (is_string($documentType) && $documentType !== '' && $documentType !== 'other_id'
+            && ! $matchesSelected && ! $autoCorrected) {
+            // Remaining mismatches (e.g. other_id detected vs selected) — hard reject.
+            $expectedLabel = $this->documentTypeLabel($documentType);
+
+            return $reject(
+                "The uploaded images do not look like a valid {$expectedLabel}. Please upload a clearer front and back of your selected ID — not a random photo."
+            );
+        } else {
+            $payload['success'] = (bool) ($payload['success'] ?? false) || ($confidence >= $minConfidence && $matchesSelected);
+            if ($payload['success']) {
+                $payload['needs_review'] = false;
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
      * @param  array<string, mixed>  $payload
      */
     private function isUsableDetectionResult(array $payload): bool
     {
-        if (($payload['success'] ?? false) === true) {
-            return true;
-        }
-
         $message = strtolower((string) ($payload['message'] ?? ''));
 
         if (
@@ -676,24 +1236,33 @@ class OCRService
             || str_contains($message, 'couldn\'t read any text')
             || str_contains($message, 'invalid ocr api')
             || str_contains($message, 'ocr service error')
+            || str_contains($message, 'invalid ocr api response')
         ) {
             return false;
         }
 
         $idType = trim((string) ($payload['id_type'] ?? $payload['detected_id_type'] ?? ''));
         $confidence = (float) ($payload['confidence'] ?? 0);
-        $rawText = trim((string) ($payload['raw_text'] ?? $payload['full_text'] ?? ''));
+        $rawText = trim((string) (
+            $payload['raw_text']
+            ?? $payload['full_text']
+            ?? data_get($payload, 'ocr.raw_text')
+            ?? data_get($payload, 'ocr.full_text')
+            ?? ''
+        ));
 
-        // Empty / unknown API failures should fall through to local OCR.
-        if (($idType === '' || strcasecmp($idType, 'Unknown') === 0) && $confidence <= 0 && $rawText === '') {
+        // Transport / empty failures should fall through to local OCR.
+        if (($idType === '' || strcasecmp($idType, 'Unknown') === 0) && $confidence <= 0 && $rawText === ''
+            && ! array_key_exists('validation_error', $payload)) {
             return false;
         }
 
-        if (array_key_exists('validation_error', $payload) || array_key_exists('id_type', $payload)) {
-            return true;
-        }
-
-        return false;
+        // Structured API payload (including hard rejects) can be evaluated by accuracy gates.
+        return array_key_exists('id_type', $payload)
+            || array_key_exists('validation_error', $payload)
+            || array_key_exists('document_detected', $payload)
+            || $rawText !== ''
+            || (($payload['success'] ?? false) === true);
     }
 
     /**
@@ -758,7 +1327,7 @@ class OCRService
             'philhealth_id' => 0.0,
             'voters_id' => 0.0,
             'school_id' => 0.0,
-            'other_id' => 0.05,
+            'other_id' => 0.0,
         ];
 
         // PhilSys / National ID signals (front + back layouts)
@@ -807,8 +1376,12 @@ class OCRService
             $scores['voters_id'] += 0.35;
         }
 
-        if (preg_match('/\b(SCHOOL|UNIVERSITY|COLLEGE|STUDENT\s+ID|ACADEMY|INSTITUTE|CAMPUS)\b/i', $text)) {
-            $scores['school_id'] += 0.6;
+        if (preg_match('/\b(STUDENT\s+ID|SCHOOL\s+ID)\b/i', $text)) {
+            $scores['school_id'] += 0.65;
+        }
+        if (preg_match('/\b(UNIVERSITY|COLLEGE|ACADEMY|INSTITUTE)\b/i', $text)
+            && preg_match('/\b(STUDENT|GRADE|SECTION|COURSE|CAMPUS)\b/i', $text)) {
+            $scores['school_id'] += 0.35;
         }
         if (preg_match('/\b(STUDENT\s+NO|STUDENT\s+NUMBER|LRN)\b/i', $text)) {
             $scores['school_id'] += 0.25;
@@ -818,7 +1391,7 @@ class OCRService
             $scores['other_id'] += 0.55;
         }
 
-        if (preg_match('/\b(NAME|BIRTH|ADDRESS|SEX)\b/i', $text)) {
+        if (preg_match('/\b(GIVEN\s+NAMES?|LAST\s+NAME|DATE\s+OF\s+BIRTH|ADDRESS|SEX)\b/i', $text)) {
             foreach (['national_id', 'philhealth_id', 'voters_id', 'school_id'] as $key) {
                 if ($scores[$key] > 0) {
                     $scores[$key] += 0.05;
@@ -827,10 +1400,19 @@ class OCRService
         }
 
         // Personal ID card layout without strong rival keywords → likely PhilSys/National ID.
-        if ($this->textLooksLikePersonalIdCard($text)) {
+        // Require PhilSys keyword (or Republic + strong field labels) so random OCR is not national_id.
+        if ($this->textLooksLikePersonalIdCard($text, 3)) {
             $rival = max($scores['philhealth_id'], $scores['voters_id'], $scores['school_id'], $scores['other_id']);
-            if ($rival < 0.45) {
-                $scores['national_id'] = max($scores['national_id'], 0.68);
+            $hasPhilsysKeyword = preg_match('/\b(PHILSYS|PHIL\s*ID|PHILIPPINE\s+IDENTIFICATION|PCN|ePhilID|NATIONAL\s+ID)\b/i', $text) === 1;
+            if ($rival < 0.45 && $hasPhilsysKeyword) {
+                $scores['national_id'] = max($scores['national_id'], 0.72);
+            } elseif (
+                $rival < 0.35
+                && $hasPhilsysKeyword === false
+                && preg_match('/\bREPUBLIC\s+OF\s+THE\s+PHILIPPINES\b/i', $text)
+                && $this->textLooksLikePersonalIdCard($text, 4)
+            ) {
+                $scores['national_id'] = max($scores['national_id'], 0.48);
             }
         }
 
@@ -840,39 +1422,38 @@ class OCRService
         $textLength = mb_strlen(trim($text));
         $alpha = preg_match_all('/[A-Za-z]/', $text) ?: 0;
 
-        // Never leave a blank/Unknown label when OCR clearly extracted document text.
+        // Low-confidence / other_id: prefer selected type only with real score evidence.
         if ($confidence < 0.35 || $idType === 'other_id') {
-            if ($this->textLooksLikePersonalIdCard($text) || preg_match('/\b(REPUBLIC|PHILIPPINES|GIVEN|BIRTH|ADDRESS|MALE|FEMALE)\b/i', $text)) {
+            if (is_string($expectedType) && isset($scores[$expectedType]) && $expectedType !== 'other_id') {
+                $expectedScore = (float) $scores[$expectedType];
+                $rival = 0.0;
+                foreach ($scores as $key => $score) {
+                    if ($key === $expectedType) {
+                        continue;
+                    }
+                    $rival = max($rival, (float) $score);
+                }
+
+                if ($expectedScore >= 0.35 && $expectedScore + 0.08 >= $rival) {
+                    $idType = $expectedType;
+                    $confidence = max($expectedScore, min(0.58, $confidence));
+                }
+            } elseif ($this->textLooksLikePersonalIdCard($text, 3)) {
                 $rival = max($scores['philhealth_id'], $scores['voters_id'], $scores['school_id']);
                 if ($rival >= 0.45) {
                     foreach (['voters_id', 'philhealth_id', 'school_id'] as $key) {
                         if ($scores[$key] >= $rival) {
                             $idType = $key;
-                            $confidence = max(0.6, (float) $scores[$key]);
+                            $confidence = max(0.55, (float) $scores[$key]);
                             break;
                         }
                     }
-                } else {
+                } elseif (preg_match('/\b(PHILSYS|PHIL\s*ID|PCN|ePhilID|NATIONAL\s+ID)\b/i', $text)) {
                     $idType = 'national_id';
-                    $confidence = max(0.62, (float) $scores['national_id'], $confidence);
-                }
-            } elseif ($scores['voters_id'] >= 0.3) {
-                $idType = 'voters_id';
-                $confidence = max(0.55, (float) $scores['voters_id']);
-            } elseif ($scores['philhealth_id'] >= 0.3) {
-                $idType = 'philhealth_id';
-                $confidence = max(0.55, (float) $scores['philhealth_id']);
-            } elseif ($scores['school_id'] >= 0.3) {
-                $idType = 'school_id';
-                $confidence = max(0.55, (float) $scores['school_id']);
-            } elseif ($textLength >= 40 && $alpha >= 20) {
-                // OCR worked but keywords were noisy — prefer selected type when available.
-                if (is_string($expectedType) && isset($scores[$expectedType]) && $expectedType !== 'other_id') {
-                    $idType = $expectedType;
-                    $confidence = max(0.5, (float) $scores[$expectedType], 0.45);
+                    $confidence = max(0.58, (float) $scores['national_id'], $confidence);
                 } else {
-                    $idType = 'national_id';
-                    $confidence = 0.5;
+                    $idType = 'Unknown';
+                    $confidence = max($confidence, 0.2);
                 }
             } elseif ($confidence < 0.35) {
                 $idType = 'Unknown';
@@ -885,12 +1466,14 @@ class OCRService
             $confidence = min(0.95, $confidence + 0.08);
         }
 
-        // Only keep the selected type when its own score is genuinely competitive.
+        // Keep selected type only when its own score is competitive with the top label
+        // (do not force selected type on weak OCR — that accepts wrong / random uploads).
         if (
             is_string($expectedType)
             && isset($scores[$expectedType])
-            && $scores[$expectedType] >= 0.45
-            && ($scores[$expectedType] + 0.08) >= $confidence
+            && $expectedType !== 'other_id'
+            && $scores[$expectedType] >= 0.40
+            && (($scores[$expectedType] + 0.12) >= $confidence)
         ) {
             $idType = $expectedType;
             $confidence = max($confidence, (float) $scores[$expectedType]);
@@ -909,30 +1492,36 @@ class OCRService
         ];
     }
 
-    private function textLooksLikePersonalIdCard(string $text): bool
+    private function textLooksLikePersonalIdCard(string $text, int $minSignals = 2): bool
     {
         $signals = 0;
 
-        if (preg_match('/\b(DATE\s+OF\s+BIRTH|BIRTHDAY|BIRTH\s*DATE|DOB)\b/i', $text)
-            || preg_match('/\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{1,2},?\s+\d{4}\b/i', $text)
-            || preg_match('/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/', $text)) {
+        if (preg_match('/\b(DATE\s+OF\s+BIRTH|BIRTHDAY|BIRTH\s*DATE|DOB)\b/i', $text)) {
+            $signals++;
+        } elseif (preg_match('/\b(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)\s+\d{1,2},?\s+\d{4}\b/i', $text)) {
             $signals++;
         }
 
-        if (preg_match('/\b(MALE|FEMALE|LALAKE|BABAE)\b/i', $text)) {
+        if (preg_match('/\b(SEX|KASARIAN)\b/i', $text)
+            || (preg_match('/\b(MALE|FEMALE|LALAKE|BABAE)\b/i', $text) && preg_match('/\b(NAME|BIRTH|ADDRESS|ID)\b/i', $text))) {
             $signals++;
         }
 
-        if (preg_match('/\b(ADDRESS|BRGY\.?|BARANGAY|SITIO|PUROK|CITY|PROVINCE)\b/i', $text)) {
+        if (preg_match('/\b(ADDRESS|TIRAHAN)\b/i', $text)
+            || preg_match('/\b(BRGY\.?|BARANGAY)\b/i', $text)) {
             $signals++;
         }
 
-        if (preg_match('/\b(GIVEN\s+NAMES?|MIDDLE\s+NAME|LAST\s+NAME|PANGALAN|SURNAME)\b/i', $text)
-            || preg_match('/\b[A-Z]{2,}(?:\s+[A-Z]{2,}){1,4}\b/', $text)) {
+        // Count only explicit name field labels — not random ALL-CAPS words.
+        if (preg_match('/\b(GIVEN\s+NAMES?|MIDDLE\s+NAME|LAST\s+NAME|FIRST\s+NAME|SURNAME|APELYIDO)\b/i', $text)) {
             $signals++;
         }
 
-        return $signals >= 2;
+        if (preg_match('/\b(PHILSYS|PHIL\s*ID|REPUBLIC\s+OF\s+THE\s+PHILIPPINES|PCN|NATIONAL\s+ID)\b/i', $text)) {
+            $signals++;
+        }
+
+        return $signals >= $minSignals;
     }
 
     private function detectedTypeMatchesSelection(string $detectedType, ?string $selectedType): bool
@@ -964,6 +1553,27 @@ class OCRService
     {
         $flat = preg_replace('/\s+/', ' ', $text) ?? $text;
 
+        // PhilSys / National ID often lists LAST NAME then GIVEN NAMES (+ MIDDLE NAME).
+        if (
+            preg_match('/\b(?:LAST\s+NAME|SURNAME|APELYIDO)\s*[:\-]?\s*([A-Z][A-Za-z.\-]+)/i', $flat, $last)
+            && preg_match(
+                '/\b(?:GIVEN\s+NAMES?|FIRST\s+NAME|MGA\s+PANGALAN)\s*[:\-]?\s*([A-Z][A-Za-z.\-]+(?:\s+[A-Z][A-Za-z.\-]+){0,3})(?=\s+(?:MIDDLE\s+NAME|DATE\s+OF\s+BIRTH|SEX|MALE|FEMALE|ADDRESS|BLOOD|$))/i',
+                $flat,
+                $given,
+            )
+        ) {
+            $middle = '';
+            if (preg_match(
+                '/\bMIDDLE\s+NAME\s*[:\-]?\s*([A-Z][A-Za-z.\-]+)(?=\s+(?:DATE\s+OF\s+BIRTH|SEX|MALE|FEMALE|ADDRESS|BLOOD|$))/i',
+                $flat,
+                $mid,
+            )) {
+                $middle = ' '.trim($mid[1]);
+            }
+
+            return trim($given[1].$middle.' '.$last[1]);
+        }
+
         if (
             preg_match(
                 '/\b(?:GIVEN\s+NAMES?|FIRST\s+NAME)\s*[:\-]?\s*([A-Z][A-Za-z.\-]+(?:\s+[A-Z][A-Za-z.\-]+){0,3})(?=\s+(?:MIDDLE\s+NAME|LAST\s+NAME|SURNAME|DATE\s+OF\s+BIRTH|SEX|MALE|FEMALE|$))/i',
@@ -986,9 +1596,15 @@ class OCRService
 
         if (preg_match('/\b(?:NAME|PANGALAN)\s*[:\-]?\s*([A-Z][A-Za-z.\-]+(?:\s+[A-Z][A-Za-z.\-]+){1,4})/i', $flat, $match)) {
             $candidate = trim($match[1]);
-            if (! preg_match('/\b(DATE|BIRTH|ADDRESS|SEX|MALE|FEMALE)\b/i', $candidate)) {
+            if (! preg_match('/\b(DATE|BIRTH|ADDRESS|SEX|MALE|FEMALE|REPUBLIC|PHILIPPINES)\b/i', $candidate)) {
                 return $candidate;
             }
+        }
+
+        // Structured OCR name parsing (handles noisy multi-line IDs better than a single regex).
+        $bestLine = $this->nameMatcher->extractBestNameLine($text);
+        if (is_string($bestLine) && trim($bestLine) !== '') {
+            return trim($bestLine);
         }
 
         return null;

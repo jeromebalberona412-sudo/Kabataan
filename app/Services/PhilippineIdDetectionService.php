@@ -9,6 +9,8 @@ class PhilippineIdDetectionService
 {
     public function __construct(
         private readonly OCRService $ocrService,
+        private readonly KabataanFullNameMatcher $nameMatcher,
+        private readonly FormAssistedIdOcrMatcher $formAssistedMatcher,
     ) {}
 
     /**
@@ -60,10 +62,15 @@ class PhilippineIdDetectionService
             }
         }
 
+        $fullName = trim((string) ($payload['full_name'] ?? ''));
+        $parsed = $fullName !== ''
+            ? $this->nameMatcher->parseOcrName($fullName)
+            : null;
+
         return array_filter([
-            'first_name' => $payload['given_name'] ?? null,
-            'middle_name' => $payload['middle_name'] ?? null,
-            'last_name' => $payload['surname'] ?? null,
+            'first_name' => $payload['given_name'] ?? ($parsed['first'] ?? null),
+            'middle_name' => $payload['middle_name'] ?? ($parsed['middle'] ?? null),
+            'last_name' => $payload['surname'] ?? ($parsed['last'] ?? null),
             'sex' => $payload['sex'] ?? null,
             'birthday' => $birthdate,
             'age' => $age,
@@ -87,25 +94,70 @@ class PhilippineIdDetectionService
         array $registrationFields = [],
     ): array {
         $formSuggestions = $this->mapToFormFields($payload);
-        $nameMatch = $this->fieldsMatch(
-            trim(implode(' ', array_filter([
-                $registrationFields['first_name'] ?? null,
-                $registrationFields['middle_name'] ?? null,
-                $registrationFields['last_name'] ?? null,
-            ]))),
-            (string) ($payload['full_name'] ?? ''),
-        );
+        $rawText = trim((string) ($payload['raw_text'] ?? ''));
+        $detectedName = trim((string) ($payload['full_name'] ?? ''));
+        $form = $this->nameMatcher->formComponentsFromFields($registrationFields);
+
+        $nameMatch = $this->resolveNameMatch($form, $detectedName, $rawText, $registrationFields);
         $birthdateMatch = $this->datesMatch(
             (string) ($registrationFields['birthday'] ?? ''),
             (string) ($payload['birthdate'] ?? ''),
         );
 
+        if (! $birthdateMatch && $rawText !== '' && $this->formAssistedMatcher->birthdateVisibleInOcr($rawText, $registrationFields)) {
+            $birthdateMatch = true;
+        }
+
+        $success = (bool) ($payload['success'] ?? false);
+        $needsReview = (bool) ($payload['needs_review'] ?? false);
+        $confidence = (float) ($payload['confidence'] ?? 0);
+        $minConfidence = (float) config('ocr.min_detect_confidence', 0.45);
+        $message = $payload['message'] ?? null;
+
+        $hasFormName = ($form['first'] ?? '') !== '' && ($form['last'] ?? '') !== '';
+        $requireNameSignal = (bool) config('ocr.require_name_signal_for_success', true);
+
+        $validationError = (bool) ($payload['validation_error'] ?? false);
+        $documentDetected = strtolower((string) ($payload['document_detected'] ?? ''));
+        if ($validationError || $documentDetected === 'no') {
+            $success = false;
+            $needsReview = false;
+            $validationError = true;
+        } elseif ($hasFormName && $requireNameSignal) {
+            $acceptFloor = max(0.40, $minConfidence - 0.05);
+            $hasIdText = $rawText !== '' && $this->ocrService->looksLikeSupportingIdText($rawText);
+
+            if ($nameMatch && $hasIdText && $confidence >= $acceptFloor) {
+                // Name evidence can support review/success only when OCR already looks like an ID.
+                if ($nameMatch && $birthdateMatch) {
+                    $confidence = max($confidence, 0.72);
+                    $success = true;
+                    $needsReview = $confidence < 0.8;
+                    $message = 'Document identity matched your profiling details.';
+                } elseif ($confidence >= $minConfidence) {
+                    $success = true;
+                    $needsReview = false;
+                    $message = $message ?: 'Document text was read and your name matched. Please review for accuracy.';
+                } else {
+                    $success = false;
+                    $needsReview = true;
+                    $message = 'Document text was read and your name matched, but image quality is low. Please review carefully or retake clearer photos.';
+                }
+            } elseif ($success && $confidence < 0.75) {
+                // Keyword-only "success" without name evidence is often inaccurate.
+                $success = false;
+                $needsReview = true;
+                $message = 'Document text was read, but your name could not be confidently matched. Please upload a clearer photo or submit for administrator review.';
+            }
+        }
+
         return [
-            'success' => (bool) ($payload['success'] ?? false),
+            'success' => $success,
             'source' => 'philippine_id_ocr_v1',
             'document_type' => $documentType,
             'id_type' => $payload['id_type'] ?? 'Unknown',
-            'confidence' => $payload['confidence'] ?? 0,
+            'confidence' => $confidence,
+            'confidence_band' => $payload['confidence_band'] ?? null,
             'detected_name' => $payload['full_name'] ?? null,
             'detected_address' => $payload['address'] ?? null,
             'detected_birthdate' => $payload['birthdate'] ?? null,
@@ -114,18 +166,59 @@ class PhilippineIdDetectionService
             'name_match' => $nameMatch,
             'birthdate_match' => $birthdateMatch,
             'form_suggestions' => $formSuggestions,
-            'needs_review' => (bool) ($payload['needs_review'] ?? false),
+            'needs_review' => $validationError ? false : ($needsReview || ! $success),
             'document_detected' => $payload['document_detected'] ?? null,
             'ocr_status' => $payload['ocr_status'] ?? null,
+            'raw_text' => $rawText !== '' ? $rawText : null,
             'ocr' => [
                 'front' => $this->sanitizeOcrSide($payload['front'] ?? null),
                 'back' => $this->sanitizeOcrSide($payload['back'] ?? null),
-                'text_length' => (int) ($payload['text_length'] ?? 0),
+                'text_length' => (int) ($payload['text_length'] ?? mb_strlen($rawText)),
             ],
-            'message' => $payload['message'] ?? null,
-            'validation_error' => (bool) ($payload['validation_error'] ?? false),
+            'message' => $message,
+            'validation_error' => $validationError,
             'processed_at' => now()->toIso8601String(),
         ];
+    }
+
+    /**
+     * @param  array{first: string, middle: string, last: string, suffix: string}  $form
+     * @param  array<string, mixed>  $registrationFields
+     */
+    private function resolveNameMatch(array $form, string $detectedName, string $rawText, array $registrationFields): bool
+    {
+        if (($form['first'] ?? '') === '' || ($form['last'] ?? '') === '') {
+            return false;
+        }
+
+        if ($rawText !== '') {
+            if ($this->nameMatcher->matchesFormToOcrText($form, $rawText, false)) {
+                return true;
+            }
+            if ($this->formAssistedMatcher->nameVisibleInOcr($rawText, $registrationFields)) {
+                return true;
+            }
+        }
+
+        if ($detectedName !== '') {
+            if ($this->nameMatcher->matchesFormToOcrText($form, $detectedName, false)) {
+                return true;
+            }
+
+            $parsed = $this->nameMatcher->parseOcrName($detectedName, $form);
+            if (is_array($parsed) && $this->nameMatcher->matches($form, $parsed, false)) {
+                return true;
+            }
+        }
+
+        return $this->fieldsMatchLegacy(
+            trim(implode(' ', array_filter([
+                $registrationFields['first_name'] ?? null,
+                $registrationFields['middle_name'] ?? null,
+                $registrationFields['last_name'] ?? null,
+            ]))),
+            $detectedName,
+        );
     }
 
     /**
@@ -153,7 +246,7 @@ class PhilippineIdDetectionService
         ];
     }
 
-    private function fieldsMatch(string $registered, string $detected): bool
+    private function fieldsMatchLegacy(string $registered, string $detected): bool
     {
         $registered = strtolower(preg_replace('/\s+/', ' ', trim($registered)) ?? '');
         $detected = strtolower(preg_replace('/\s+/', ' ', trim($detected)) ?? '');
@@ -164,7 +257,7 @@ class PhilippineIdDetectionService
 
         similar_text($registered, $detected, $percent);
 
-        return $percent >= 75.0 || str_contains($detected, $registered) || str_contains($registered, $detected);
+        return $percent >= 82.0 || str_contains($detected, $registered) || str_contains($registered, $detected);
     }
 
     private function datesMatch(string $registered, string $detected): bool
