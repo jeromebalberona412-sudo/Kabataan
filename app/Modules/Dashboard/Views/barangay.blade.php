@@ -12,6 +12,7 @@
     @vite([
         'app/Modules/Layout/assets/css/kabataan-header.css',
         'app/Modules/Layout/assets/js/kabataan-header.js',
+        'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
         'app/Modules/Layout/assets/css/kabataan-logout.css',
         'app/Modules/Layout/assets/js/kabataan-logout.js',
         'app/Modules/Profile/assets/css/profile.css',

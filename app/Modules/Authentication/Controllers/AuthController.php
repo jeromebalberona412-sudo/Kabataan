@@ -3,6 +3,7 @@
 namespace App\Modules\Authentication\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\SessionTimeout;
 use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Modules\Authentication\Services\TrustedDeviceService;
@@ -145,6 +146,10 @@ class AuthController extends Controller
 
         Auth::login($user, $remember);
         $request->session()->regenerate();
+        $request->session()->put(
+            SessionTimeout::SESSION_KEY,
+            now()->getTimestamp()
+        );
 
         $redirectUrl = redirect()->intended(route('dashboard'))->getTargetUrl();
 
@@ -178,6 +183,18 @@ class AuthController extends Controller
         }
 
         return redirect()->route('sign-in')->withHeaders($headers);
+    }
+
+    public function continueSession(Request $request): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            'last_activity_at' => (int) $request->session()->get(
+                SessionTimeout::SESSION_KEY,
+                now()->getTimestamp()
+            ),
+            'timeout_minutes' => max(1, (int) config('session.timeout', 120)),
+        ]);
     }
 
     public function showForgotPassword()

@@ -17,6 +17,7 @@
         'app/Modules/Layout/assets/css/programs-drawer.css',
         'app/Modules/Layout/assets/css/kabataan-logout.css',
         'app/Modules/Layout/assets/js/kabataan-header.js',
+        'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
         'app/Modules/Layout/assets/js/kabataan-logout.js',
         'app/Modules/Dashboard/assets/css/chatbot.css',
         'app/Modules/Dashboard/assets/js/chatbot.js',

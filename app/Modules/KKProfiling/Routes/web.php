@@ -45,7 +45,6 @@ Route::prefix('/api/kkprofiling/{barangay}/wizard')->group(function () {
     Route::get('/registration-complete', [KKProfilingWizardController::class, 'checkRegistrationComplete'])->name('kkprofiling.wizard.registration-complete');
     Route::post('/step-1', [KKProfilingWizardController::class, 'saveStep1'])->name('kkprofiling.wizard.step1');
     Route::post('/draft-step-1', [KKProfilingWizardController::class, 'saveStep1Draft'])->name('kkprofiling.wizard.draft-step1');
-    Route::post('/submit-without-email', [KKProfilingWizardController::class, 'submitWithoutEmail'])->name('kkprofiling.wizard.submit-without-email');
     Route::post('/step-2', [KKProfilingWizardController::class, 'saveStep2'])->name('kkprofiling.wizard.step2');
     Route::post('/set-step', [KKProfilingWizardController::class, 'setStep'])->name('kkprofiling.wizard.set-step');
     Route::post('/send-verification', [KKProfilingWizardController::class, 'sendVerification'])->name('kkprofiling.wizard.send-verification');

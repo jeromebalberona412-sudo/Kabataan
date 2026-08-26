@@ -99,3 +99,4 @@
 @endif
 
 @include('layout::kabataan-logout-modal')
+@include('layout::kabataan-session-timeout')

@@ -11,6 +11,7 @@
         'app/Modules/Authentication/assets/css/turnstile-gate.css',
         'app/Modules/Authentication/assets/js/turnstile-gate.js',
         'app/Modules/KKProfiling/assets/css/kkprofiling.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-account.css',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
     ])
 </head>

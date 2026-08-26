@@ -1,0 +1,278 @@
+﻿/* KK Profiling — mobile scale + responsive */
+
+html:has(body.kkp-form-page),
+body.homepage-body.kkp-form-page,
+body.kkpu-page-body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+.kkp-fs-scale-shell,
+.kkp-fs-scale-inner {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.kkp-wizard-panel[hidden] {
+    display: none !important;
+}
+
+/*
+ * Mobile: same desktop form layout, zoomed to fit.
+ * No left/right side scroll; all content stays visible.
+ */
+@media (max-width: 768px) {
+    .kkp-assembly-flow-svg {
+        display: none;
+    }
+
+    .kkp-form-page.kkp-wizard-mode .kkp-main {
+        padding-top: 12px;
+        padding-bottom: 88px;
+        overflow-x: hidden;
+    }
+
+    .kkp-main,
+    .kkp-page-wrap,
+    .kkp-wizard-root,
+    .kkp-wizard-progress-header,
+    .kkp-paper,
+    .kkp-responsive-container,
+    .kkp-fs-scale-shell {
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
+    }
+
+    .kkp-page-wrap {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .kkp-wizard-progress-header {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+    }
+
+    .kkp-wizard-progress-title {
+        font-size: 1.15rem;
+        line-height: 1.25;
+    }
+
+    .kkp-wizard-progress-desc {
+        font-size: 0.8rem;
+        line-height: 1.35;
+    }
+
+    .kkp-wizard-steps {
+        flex-wrap: nowrap;
+        justify-content: center;
+        gap: 0.15rem;
+    }
+
+    .kkp-wizard-step-item {
+        min-width: 0;
+        font-size: 0.75rem;
+    }
+
+    .kkp-wizard-step-badge {
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: 0.72rem;
+    }
+
+    .kkp-paper {
+        padding: 10px 4px 16px;
+    }
+
+    .kkp-wizard-mode .kkp-paper {
+        padding-top: 8px;
+    }
+
+    .kkp-fs-scale-shell {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .kkp-fs-scale-inner {
+        width: 860px;
+        min-width: 860px;
+        max-width: none;
+        box-sizing: border-box;
+        transform: none;
+    }
+
+    .kkp-fs-scale-inner > form,
+    .kkp-fs-scale-inner #kkProfilingForm,
+    .kkp-fs-scale-inner #kkProfilingUpdateForm {
+        width: 860px !important;
+        min-width: 860px !important;
+        max-width: none !important;
+        box-sizing: border-box;
+    }
+
+    /* Clear All — top-right, same placement as desktop */
+    .kkp-fs-scale-inner .kkp-form-clear-bar {
+        justify-content: flex-end;
+        margin-bottom: 6px;
+    }
+
+    /*
+     * Checkboxes: keep desktop-like compact spacing (not stretched).
+     * zoom already enlarges the hit area relative to the finger.
+     */
+    .kkp-fs-scale-inner .kkp-demo-block-options {
+        gap: 1px;
+        padding: 3px 5px;
+    }
+
+    .kkp-fs-scale-inner .kkp-sq-chk {
+        width: 12px;
+        height: 12px;
+        border-width: 1.5px;
+    }
+
+    .kkp-fs-scale-inner .kkp-sq-chk:checked::after {
+        content: '\2713';
+        top: -2px;
+        left: 0;
+        font-size: 11px;
+    }
+
+    .kkp-fs-scale-inner .kkp-chk-lbl {
+        min-height: 0;
+        padding: 1px 0;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.35;
+        align-items: center;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(4, 80, 168, 0.12);
+    }
+
+    .kkp-fs-scale-inner .kkp-chk-lbl:not(.kkp-chk-lbl--readonly) {
+        cursor: pointer;
+    }
+
+    /* Same desktop grids while zoomed */
+    .kkp-fs-scale-inner .kkp-name-row {
+        grid-template-columns: 2.5fr 2.5fr 2.5fr 2fr 0fr;
+    }
+
+    .kkp-fs-scale-inner .kkp-name-col-sm {
+        grid-column: auto;
+    }
+
+    .kkp-fs-scale-inner .kkp-loc-row {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .kkp-fs-scale-inner .kkp-personal-row {
+        grid-template-columns: minmax(100px, auto) minmax(0, 1fr) minmax(210px, 250px);
+    }
+
+    .kkp-fs-scale-inner .kkp-demo-grid,
+    .kkp-fs-scale-inner .kkp-voter-questions-grid,
+    .kkp-fs-scale-inner .kkp-demo-two-col,
+    .kkp-fs-scale-inner .kkp-demo-options-2col {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .kkp-fs-scale-inner .kkp-footer-fb-field,
+    .kkp-fs-scale-inner .kkp-footer-fb .kkp-uline-fb {
+        width: 50ch;
+        min-width: 50ch;
+        max-width: 50ch;
+    }
+
+    .kkp-fs-scale-inner .kkp-form-header {
+        overflow: visible;
+        max-width: none;
+    }
+
+    .kkp-fs-scale-inner img {
+        max-width: none;
+    }
+
+    .kkp-fs-scale-inner .kkp-inline-pair > .kkp-field-error {
+        flex: 0 0 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        order: 99;
+        position: static !important;
+        text-align: left !important;
+        margin-top: 2px !important;
+    }
+
+    .kkp-fs-scale-inner .kkp-name-col > .kkp-field-error,
+    .kkp-fs-scale-inner .kkp-name-col > .kkp-name-max-hint {
+        text-align: center !important;
+    }
+
+    .kkp-fs-scale-inner .kkp-field-error,
+    .kkp-fs-scale-inner .kkp-name-max-hint,
+    .kkp-fs-scale-inner .kkp-demo-block-error,
+    .kkp-fs-scale-inner .kkp-section-error {
+        position: static !important;
+        display: block !important;
+        max-width: 100% !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        line-height: 1.35 !important;
+        z-index: 0 !important;
+        pointer-events: none !important;
+    }
+
+    .kkp-fs-scale-inner .kkp-demo-block-error {
+        flex: 0 0 100% !important;
+        width: 100% !important;
+        order: 99;
+    }
+
+    .kkp-fs-scale-inner .kkp-demo-block {
+        flex-wrap: wrap;
+        overflow: visible;
+    }
+
+    #kkpClearDraftModal.kkp-info-overlay {
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 1rem;
+    }
+
+    #kkpClearDraftModal .kkp-clear-draft-modal {
+        width: 100%;
+        max-width: min(360px, calc(100vw - 2rem));
+        margin: 0 auto;
+        border-radius: 12px;
+        max-height: min(80vh, 420px);
+    }
+}
+
+@media (max-width: 390px) {
+    .kkp-wizard-progress-inner {
+        padding: 0.75rem 0.65rem 0.7rem;
+    }
+
+    .kkp-wizard-progress-eyebrow {
+        font-size: 0.68rem;
+    }
+
+    .kkp-wizard-progress-title {
+        font-size: 1.05rem;
+    }
+
+    .kkp-wizard-step-connector {
+        width: 0.65rem;
+        margin: 0 0.2rem;
+    }
+}

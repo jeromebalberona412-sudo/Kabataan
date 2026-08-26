@@ -1,0 +1,596 @@
+/* KK Profiling - signature + submit */
+
+.kkp-sig-section {
+    margin-top: 16px;
+    padding-top: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+.kkp-sig-section-left {
+    margin-top: 8px;
+    padding-top: 6px;
+    display: flex;
+    justify-content: flex-start;
+    text-align: left;
+    width: 100%;
+    max-width: none;
+}
+
+.kkp-sig-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Thank-you line width + ~1 inch */
+    width: calc(15.75rem + 1in);
+    max-width: 100%;
+    margin: 0;
+}
+
+/* Signature image overlay — centered above printed name */
+.kkp-sig-overlay {
+    position: absolute;
+    top: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.kkp-sig-overlay-img {
+    display: block;
+    max-width: 320px;
+    max-height: 40px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    margin: 0 auto;
+}
+
+.kkp-sig-overlay--visible {
+    display: flex;
+}
+
+.kkp-hdr-input-readonly {
+    cursor: default;
+    background: transparent;
+}
+
+/* Printed name with underline */
+.kkp-sig-name-wrapper {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    min-height: 22px;
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+.kkp-sig-name-input {
+    width: 100%;
+    min-height: 22px;
+    line-height: 18px;
+    border: none;
+    border-bottom: 1.5px solid #1a1a1a;
+    outline: none;
+    font-size: 12px;
+    font-family: inherit;
+    color: #111;
+    background: transparent;
+    padding: 2px 4px 3px;
+    box-sizing: border-box;
+    text-align: center;
+    overflow: visible;
+    white-space: nowrap;
+}
+
+/* Label under printed name — single underline is on the name input only */
+.kkp-sig-label-bottom {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.kkp-sig-label-text {
+    font-size: 8.5px;
+    font-weight: 400;
+    color: #666;
+    text-align: center;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.kkp-sig-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 8px;
+}
+
+.kkp-sig-trigger-btn {
+    margin: 0;
+    padding: 4px 10px;
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    line-height: 1.2;
+    transition: background 0.15s, transform 0.15s;
+}
+
+.kkp-sig-trigger-btn svg {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+}
+
+.kkp-sig-trigger-btn:hover {
+    background: #003070;
+}
+
+.kkp-sig-trigger-btn:active {
+    transform: scale(0.98);
+}
+
+.kkp-sig-trigger-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    transform: none;
+    opacity: 0.85;
+}
+
+.kkp-sig-trigger-btn:disabled:hover {
+    background: #9ca3af;
+    transform: none;
+}
+
+.kkp-sig-clear-saved-btn {
+    margin: 0;
+    padding: 4px 10px;
+    background: transparent;
+    color: #b91c1c;
+    border: 1px solid rgba(185, 28, 28, 0.35);
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+}
+
+.kkp-sig-clear-saved-btn:not([hidden]) {
+    display: inline-flex;
+}
+
+.kkp-sig-clear-saved-btn:hover {
+    background: rgba(185, 28, 28, 0.06);
+    border-color: rgba(185, 28, 28, 0.55);
+}
+
+.kkp-sig-status {
+    margin: 6px 0 0;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: center;
+    width: 100%;
+}
+
+.kkp-sig-status.is-valid {
+    color: #15803d;
+}
+
+.kkp-sig-status.is-invalid {
+    color: #b91c1c;
+}
+
+/* â”€â”€ SUBMIT BUTTON â”€â”€ */
+.kkp-submit-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.kkp-submit-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    box-shadow: 0 3px 10px rgba(4, 80, 168, 0.25);
+    font-family: inherit;
+}
+
+.kkp-submit-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.kkp-submit-btn:hover {
+    background: #003070;
+    transform: translateY(-1px);
+}
+
+.kkp-submit-btn.is-submitting {
+    opacity: 0.7;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.kkp-submit-btn.is-submitting .kkp-submit-icon {
+    display: none;
+}
+
+.kkp-submit-btn .kkp-spinner {
+    display: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: kkp-spin 0.8s linear infinite;
+    margin-right: 8px;
+}
+
+.kkp-submit-btn.is-submitting .kkp-spinner {
+    display: block;
+}
+
+@keyframes kkp-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SIGNATURE PAD MODAL
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.kkp-sig-pad-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.kkp-sig-pad-modal {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.kkp-sig-pad-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.kkp-sig-pad-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0;
+}
+
+.kkp-sig-pad-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f1f3f5;
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    transition: background 0.15s;
+}
+
+.kkp-sig-pad-close:hover {
+    background: #e9ecef;
+    color: #111;
+}
+
+.kkp-sig-pad-body {
+    padding: 1.5rem;
+    flex: 1;
+}
+
+.kkp-sig-canvas-wrap {
+    position: relative;
+    width: 100%;
+    border: 3px solid var(--brand);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.kkp-sig-canvas {
+    display: block;
+    width: 100%;
+    height: 260px;
+    cursor: crosshair;
+    touch-action: none;
+    border-radius: 6px;
+}
+
+.kkp-sig-canvas-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #adb5bd;
+    font-size: 1rem;
+    pointer-events: none;
+    opacity: 0.7;
+    text-align: center;
+}
+
+.kkp-sig-pad-footer {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-top: 2px solid #e9ecef;
+    gap: 0.75rem;
+}
+
+.kkp-sig-pad-footer .kkp-sig-btn-clear {
+    justify-self: start;
+}
+
+.kkp-sig-pad-footer .kkp-sig-btn-upload {
+    justify-self: center;
+    grid-column: 2;
+}
+
+.kkp-sig-pad-footer .kkp-sig-btn-save {
+    justify-self: end;
+    grid-column: 3;
+    margin-left: 0;
+}
+
+.kkp-sig-btn-clear,
+.kkp-sig-btn-upload,
+.kkp-sig-btn-save {
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 2px solid;
+    font-family: inherit;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.kkp-sig-upload-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.kkp-sig-btn-clear {
+    background: #fff;
+    color: #dc3545;
+    border-color: #dc3545;
+}
+
+.kkp-sig-btn-clear:hover {
+    background: #dc3545;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.kkp-sig-btn-upload {
+    background: #fff;
+    color: #0f766e;
+    border-color: #0f766e;
+}
+
+.kkp-sig-btn-upload:hover {
+    background: #0f766e;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.kkp-sig-btn-save {
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    color: #fff;
+    border-color: var(--brand);
+}
+
+.kkp-sig-btn-save:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(25, 135, 84, 0.3);
+}
+
+.kkp-sig-pad-status {
+    margin: 0;
+    padding: 0 1.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+}
+
+.kkp-sig-pad-status.is-valid {
+    color: #15803d;
+}
+
+.kkp-sig-pad-status.is-invalid {
+    color: #b91c1c;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SIGNATURE SAVE CONFIRMATION MODAL
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.kkp-sig-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.kkp-sig-confirm-modal {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 380px;
+    padding: 32px 28px 28px;
+    text-align: center;
+    animation: kkpConfirmSlideIn 0.25s ease-out;
+}
+
+@keyframes kkpConfirmSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-16px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.kkp-sig-confirm-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(4, 80, 168, 0.3);
+}
+
+.kkp-sig-confirm-icon svg {
+    width: 30px;
+    height: 30px;
+    color: #fff;
+}
+
+.kkp-sig-confirm-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111;
+    margin: 0 0 10px;
+}
+
+.kkp-sig-confirm-message {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 24px;
+}
+
+.kkp-sig-confirm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.kkp-sig-confirm-cancel {
+    padding: 10px 22px;
+    background: #fff;
+    color: #374151;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.kkp-sig-confirm-cancel:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.kkp-sig-confirm-save {
+    padding: 10px 22px;
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 3px 10px rgba(4, 80, 168, 0.3);
+    font-family: inherit;
+}
+
+.kkp-sig-confirm-save svg {
+    width: 14px;
+    height: 14px;
+}
+
+.kkp-sig-confirm-save:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(22, 163, 74, 0.4);
+}
+

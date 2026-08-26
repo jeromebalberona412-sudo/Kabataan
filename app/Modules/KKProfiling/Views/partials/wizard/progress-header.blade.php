@@ -7,15 +7,6 @@
                 <h1 class="kkp-wizard-progress-title" id="kkpWizardStepTitle">Profiling Form</h1>
                 <p class="kkp-wizard-progress-desc" id="kkpWizardStepDesc">Complete your personal and demographic information.</p>
             </div>
-            <button
-                type="button"
-                class="kkp-wizard-clear-btn"
-                id="kkpWizardClearAllBtn"
-                hidden
-                aria-haspopup="dialog"
-            >
-                Clear All Data
-            </button>
         </div>
 
         <ol class="kkp-wizard-steps" id="kkpWizardSteps" aria-label="Registration steps">

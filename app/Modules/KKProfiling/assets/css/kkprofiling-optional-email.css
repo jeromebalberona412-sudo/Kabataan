@@ -170,6 +170,39 @@
     cursor: not-allowed;
 }
 
+.kkp-long-name-confirm-label {
+    display: block;
+    margin: 0.75rem 0 0.35rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.kkp-long-name-confirm-input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 40px;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    line-height: 1.3;
+    color: #0f172a;
+    background: #fff;
+}
+
+.kkp-long-name-confirm-input:focus {
+    outline: 3px solid rgba(4, 80, 168, 0.25);
+    border-color: #0450a8;
+}
+
+.kkp-long-name-confirm-hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: #b91c1c;
+}
+
 .kkp-info-btn {
     flex: 1 1 0;
     min-height: 40px;
@@ -225,11 +258,24 @@
         align-items: flex-end;
     }
 
+    /* Clear All Data stays centered on small phones */
+    #kkpClearDraftModal.kkp-info-overlay {
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
     .kkp-info-modal,
     .kkp-no-email-modal {
         max-width: 100%;
         max-height: min(92vh, 640px);
         border-radius: 14px 14px 10px 10px;
+    }
+
+    #kkpClearDraftModal .kkp-clear-draft-modal {
+        max-width: min(360px, calc(100vw - 2rem));
+        border-radius: 12px;
+        max-height: min(80vh, 420px);
     }
 
     .kkp-info-modal-close {

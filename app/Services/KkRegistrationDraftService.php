@@ -170,6 +170,13 @@ class KkRegistrationDraftService
         $existing = is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [];
         $merged = array_merge($existing, $partial);
 
+        // Cleared fields (null/empty) must drop from draft so refresh does not restore them
+        foreach ($partial as $key => $value) {
+            if ($value === null || $value === '') {
+                unset($merged[$key]);
+            }
+        }
+
         $wizard['respondent_number'] = $respondentNumber ?: ($wizard['respondent_number'] ?? null);
         $wizard['step1_data'] = $merged;
 

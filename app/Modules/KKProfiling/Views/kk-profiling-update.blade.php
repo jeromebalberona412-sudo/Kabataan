@@ -11,7 +11,12 @@
         'app/Modules/Layout/assets/css/kabataan-responsive.css',
         'app/Modules/Layout/assets/css/kabataan-logout.css',
         'app/Modules/Layout/assets/js/kabataan-logout.js',
+        'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
         'app/Modules/KKProfiling/assets/css/kkprofiling.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-form-body.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-signature.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-responsive.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
         'app/Modules/KKProfiling/assets/css/kk-profiling-update.css',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
         'app/Modules/KKProfiling/assets/js/kk-profiling-update.js',
@@ -54,27 +59,35 @@
         @endif
 
         <div class="kkp-paper kkpu-paper" id="kkpuFormSection">
-            <form method="POST" action="{{ route('kkprofiling.update') }}" id="kkProfilingUpdateForm" data-email-locked="1">
-                @csrf
-                @method('PUT')
+            <div class="kkp-responsive-container">
+                <div class="kkp-fs-scale-shell">
+                    <div class="kkp-fs-scale-inner">
+                        <form method="POST" action="{{ route('kkprofiling.update') }}" id="kkProfilingUpdateForm" data-email-locked="1">
+                            @csrf
+                            @method('PUT')
 
-                @include('kkprofiling::partials.kk-profiling-form-fields', [
-                    'barangay' => $kkUpdateBarangay ?? 'Santa Cruz',
-                    'respondentNumber' => $kkRespondentNumber ?? '',
-                    'respondentDisplay' => $kkRespondentDisplay ?? '01',
-                    'submitLabel' => 'Update KK Profiling',
-                    'barangayLogoUrl' => $kkBarangayLogoUrl ?? null,
-                    'barangayZones' => $kkBarangayZones ?? collect(),
-                    'selectedPurokZone' => $kkSelectedPurokZone ?? '',
-                    'selectedFacebookProfileUrl' => $kkSelectedFacebookProfileUrl ?? '',
-                    'emailReadonly' => true,
-                ])
-            </form>
+                            @include('kkprofiling::partials.kk-profiling-form-fields', [
+                                'barangay' => $kkUpdateBarangay ?? 'Santa Cruz',
+                                'respondentNumber' => $kkRespondentNumber ?? '',
+                                'respondentDisplay' => $kkRespondentDisplay ?? '01',
+                                'submitLabel' => 'Update KK Profiling',
+                                'barangayLogoUrl' => $kkBarangayLogoUrl ?? null,
+                                'barangayZones' => $kkBarangayZones ?? collect(),
+                                'selectedPurokZone' => $kkSelectedPurokZone ?? '',
+                                'selectedFacebookProfileUrl' => $kkSelectedFacebookProfileUrl ?? '',
+                                'emailReadonly' => true,
+                            ])
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
 
     @include('kkprofiling::partials.kk-profiling-signature-modals')
+    @include('kkprofiling::partials.kk-profiling-long-name-modal')
     @include('layout::kabataan-logout-modal')
+    @include('layout::kabataan-session-timeout')
 
     <script>
         window.__KK_PROFILING_UPDATE_REQUIRED = true;

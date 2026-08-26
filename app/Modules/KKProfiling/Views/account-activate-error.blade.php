@@ -8,6 +8,7 @@
     @vite([
         'app/Modules/Authentication/assets/css/sign-in.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-account.css',
     ])
 </head>
 <body class="youth-signin-page kkp-setpw-page">

@@ -9,13 +9,17 @@
     @vite([
         'app/Modules/Homepage/assets/css/homepage.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-form-body.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-signature.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-responsive.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-account.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-wizard.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
         'app/Modules/Authentication/assets/css/turnstile-gate.css',
         'app/Modules/Authentication/assets/js/turnstile-gate.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
-        'app/Modules/KKProfiling/assets/js/kkprofiling-optional-email.js',
     ])
     @inject('turnstileService', 'App\Services\TurnstileService')
 </head>
@@ -72,31 +76,34 @@
 
                 <div class="kkp-paper" id="kkpFormCard">
                     <div class="kkp-responsive-container">
-
-                        {{-- STEP 1: KK Profiling Form --}}
+                        {{-- STEP 1: desktop layout scaled to fit on mobile (shell wraps form only) --}}
                         <section class="kkp-wizard-panel" id="kkpWizardStep1" data-wizard-step="1" @if($kkpInitialStep !== 1) hidden @endif>
-                            <form
-                                method="POST"
-                                action="{{ route('kkprofiling.submit', ['barangay' => $slug]) }}"
-                                id="kkProfilingForm"
-                                data-barangay-slug="{{ $slug }}"
-                                data-wizard-mode="1"
-                                onsubmit="handleFormSubmit(event); return false;"
-                            >
-                                @csrf
+                            <div class="kkp-fs-scale-shell">
+                                <div class="kkp-fs-scale-inner">
+                                    <form
+                                        method="POST"
+                                        action="{{ route('kkprofiling.submit', ['barangay' => $slug]) }}"
+                                        id="kkProfilingForm"
+                                        data-barangay-slug="{{ $slug }}"
+                                        data-wizard-mode="1"
+                                        onsubmit="handleFormSubmit(event); return false;"
+                                    >
+                                        @csrf
 
-                                @include('kkprofiling::partials.kk-profiling-form-fields', [
-                                    'barangay' => $barangay,
-                                    'respondentNumber' => $respondentNumber ?? '',
-                                    'respondentDisplay' => $respondentDisplay ?? '01',
-                                    'submitLabel' => 'Submit KK Profiling',
-                                    'barangayLogoUrl' => $barangayLogoUrl ?? null,
-                                    'barangayZones' => $barangayZones ?? collect(),
-                                ])
-                            </form>
+                                        @include('kkprofiling::partials.kk-profiling-form-fields', [
+                                            'barangay' => $barangay,
+                                            'respondentNumber' => $respondentNumber ?? '',
+                                            'respondentDisplay' => $respondentDisplay ?? '01',
+                                            'submitLabel' => 'Submit KK Profiling',
+                                            'barangayLogoUrl' => $barangayLogoUrl ?? null,
+                                            'barangayZones' => $barangayZones ?? collect(),
+                                        ])
+                                    </form>
+                                </div>
+                            </div>
                         </section>
 
-                        {{-- STEP 2: Supporting Documents (optional) --}}
+                        {{-- STEP 2: Supporting Documents (optional) — normal responsive layout --}}
                         @include('kkprofiling::partials.wizard.step-documents', ['kkpInitialStep' => $kkpInitialStep])
 
                         {{-- STEP 3: Email Verification + Account Setup --}}
@@ -104,7 +111,6 @@
                             'kkpInitialStep' => $kkpInitialStep,
                             'wizardDraftEmail' => $wizardDraftEmail ?? null,
                         ])
-
                     </div>
                 </div>
 
@@ -126,8 +132,8 @@
     </main>
 
     @include('kkprofiling::partials.kk-profiling-signature-modals')
-    @include('kkprofiling::partials.kk-profiling-no-email-modal')
     @include('kkprofiling::partials.kk-profiling-clear-draft-modal')
+    @include('kkprofiling::partials.kk-profiling-long-name-modal')
 
     <div class="kkp-reg-success-overlay" id="kkpRegSuccessModal" @if(empty($registrationComplete ?? false)) hidden @endif aria-hidden="{{ ($registrationComplete ?? false) ? 'false' : 'true' }}">
         <div class="kkp-reg-success-modal" role="dialog" aria-labelledby="kkpRegSuccessTitle" aria-modal="true">

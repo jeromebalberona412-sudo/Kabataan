@@ -12,6 +12,7 @@
     @vite([
         'app/Modules/Layout/assets/css/kabataan-header.css',
         'app/Modules/Layout/assets/js/kabataan-header.js',
+        'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
         'app/Modules/Dashboard/assets/css/chatbot.css',
         'app/Modules/Dashboard/assets/js/chatbot.js',
         'app/Modules/Dashboard/assets/css/notif.css',

@@ -163,12 +163,21 @@
     position: relative;
     z-index: 3;
     width: 100%;
-    max-width: 420px; /* desktop-like width */
+    max-width: 420px;
+}
+
+#turnstile-container.is-size-flexible {
+    max-width: 100%;
+}
+
+#turnstile-container.is-size-compact {
+    max-width: 150px;
 }
 
 #turnstile-container iframe {
     pointer-events: auto !important;
     touch-action: manipulation !important;
+    max-width: 100%;
 }
 
 .turnstile-modal-error {
@@ -258,8 +267,13 @@
 
     #turnstile-container {
         width: 100%;
-        max-width: 420px;
+        max-width: 100%;
         min-height: 78px;
+    }
+
+    #turnstile-container.is-size-compact {
+        max-width: 150px;
+        min-height: 140px;
     }
 }
 

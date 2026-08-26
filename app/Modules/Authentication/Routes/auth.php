@@ -72,3 +72,8 @@ Route::get('/test-email-verification', [AuthController::class, 'showTestEmailVer
 Route::post('/logout', [AuthController::class, 'logout'])
     ->name('logout')
     ->middleware('web');
+
+Route::middleware(['web', 'auth'])->group(function () {
+    Route::post('/session/continue', [AuthController::class, 'continueSession'])
+        ->name('kabataan.session.continue');
+});

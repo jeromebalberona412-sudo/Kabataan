@@ -1,0 +1,854 @@
+/* KK Profiling - verify/account/success screens */
+
+.verify-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+    padding: 48px 40px 40px;
+    text-align: center;
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.verify-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 24px;
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(4, 80, 168, 0.25);
+}
+
+.verify-icon svg {
+    width: 38px;
+    height: 38px;
+    color: #fff;
+}
+
+.verify-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #111;
+    margin: 0 0 14px;
+}
+
+.verify-message {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 10px;
+}
+
+.verify-email {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--brand);
+    margin: 0 0 16px;
+    padding: 10px 20px;
+    background: #f0f7ff;
+    border-radius: 8px;
+    border: 1px solid #bfdbfe;
+    display: inline-block;
+    word-break: break-all;
+}
+
+.verify-instruction {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.6;
+    margin: 0 0 28px;
+}
+
+.verify-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 20px;
+    margin-bottom: 0;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.verify-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 0;
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: inherit;
+    color: var(--brand);
+}
+
+.verify-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.verify-btn-secondary {
+    background: none;
+    color: var(--brand);
+    border: none;
+    text-decoration: none;
+}
+
+.verify-btn-secondary:hover {
+    text-decoration: underline;
+    color: var(--brand);
+    transform: none;
+    box-shadow: none;
+}
+
+.verify-help {
+    padding-bottom: 0;
+    border-top: none;
+}
+
+.verify-help p {
+    font-size: 13px;
+    color: #666;
+    margin: 0 0 12px;
+}
+
+.verify-resend-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.verify-resend-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 22px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+    font-family: inherit;
+    box-shadow: 0 3px 10px rgba(4, 80, 168, 0.25);
+}
+
+.verify-resend-btn:hover:not(:disabled) {
+    background: #003070;
+    transform: translateY(-1px);
+}
+
+.verify-resend-btn:disabled {
+    background: #93c5fd;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.verify-link-btn {
+    background: none;
+    border: none;
+    color: var(--brand);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+    transition: color 0.2s;
+    font-family: inherit;
+}
+
+.verify-link-btn:hover:not(:disabled) {
+    color: #003070;
+}
+
+.verify-link-btn:disabled {
+    color: #9ca3af;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+.verify-resend-timer {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   SET PASSWORD CARD
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.setpw-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    padding: 40px 36px;
+    text-align: center;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.setpw-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 20px;
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px rgba(4, 80, 168, 0.25);
+}
+
+.setpw-icon svg {
+    width: 36px;
+    height: 36px;
+    color: #fff;
+}
+
+.setpw-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #111;
+    margin: 0 0 12px;
+}
+
+.setpw-message {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.6;
+    margin: 0 0 28px;
+}
+
+.setpw-form {
+    text-align: left;
+}
+
+.setpw-field {
+    margin-bottom: 20px;
+}
+
+.setpw-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 6px;
+}
+
+.setpw-input-wrapper {
+    position: relative;
+}
+
+.setpw-input {
+    width: 100%;
+    padding: 12px 44px 12px 14px;
+    font-size: 14px;
+    color: #111;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+    outline: none;
+    transition: all 0.2s;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.setpw-input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px rgba(4, 80, 168, 0.1);
+}
+
+.setpw-input::placeholder {
+    color: #9ca3af;
+}
+
+.setpw-toggle-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: color 0.2s;
+}
+
+.setpw-toggle-btn:hover {
+    color: var(--brand);
+}
+
+.setpw-toggle-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.setpw-hint {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+}
+
+.setpw-rules {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-size: 12px;
+    text-align: left;
+}
+
+.setpw-rule {
+    color: #64748b;
+    margin: 2px 0;
+    position: relative;
+    padding-left: 18px;
+}
+
+.setpw-rule::before {
+    content: 'â—‹';
+    position: absolute;
+    left: 0;
+    color: #94a3b8;
+}
+
+.setpw-rule.ok {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.setpw-rule.ok::before {
+    content: 'âœ“';
+    color: #16a34a;
+}
+
+.setpw-submit-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(4, 80, 168, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 24px;
+    font-family: inherit;
+}
+
+.setpw-submit-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.setpw-submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(4, 80, 168, 0.35);
+}
+
+.setpw-submit-btn:active {
+    transform: translateY(0);
+}
+
+.setpw-footer {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.setpw-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brand);
+    text-decoration: none;
+    transition: color 0.2s;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.setpw-back-link svg {
+    width: 16px;
+    height: 16px;
+}
+
+.setpw-back-link:hover {
+    color: #003070;
+}
+
+/* â”€â”€ Set Password spinner & error â”€â”€ */
+@keyframes kkpSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.setpw-btn-spinner {
+    animation: kkpSpin 0.8s linear infinite;
+    width: 18px;
+    height: 18px;
+}
+
+.setpw-error-msg {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   REGISTRATION SUCCESS CARD
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+.reg-success-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+    padding: 56px 40px 48px;
+    text-align: center;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.reg-success-icon {
+    width: 88px;
+    height: 88px;
+    margin: 0 auto 24px;
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 20px rgba(4, 80, 168, 0.3);
+}
+
+.reg-success-icon svg {
+    width: 44px;
+    height: 44px;
+    color: #fff;
+}
+
+.reg-success-title {
+    font-size: 26px;
+    font-weight: 700;
+    color: #111;
+    margin: 0 0 14px;
+}
+
+.reg-success-message {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.7;
+    margin: 0 0 32px;
+}
+
+.reg-success-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 13px 32px;
+    background: linear-gradient(135deg, var(--brand) 0%, #003070 100%);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.2s;
+    box-shadow: 0 4px 14px rgba(4, 80, 168, 0.3);
+    font-family: inherit;
+}
+
+.reg-success-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.reg-success-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(4, 80, 168, 0.4);
+}
+
+/* Registration success modal overlay */
+.kkp-reg-success-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+}
+
+.kkp-reg-success-overlay[hidden] {
+    display: none !important;
+}
+
+.kkp-reg-success-modal {
+    background: #fff;
+    border-radius: 16px;
+    padding: 2rem 1.75rem 1.75rem;
+    text-align: center;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    animation: kkpRegSuccessPopIn 0.25s ease-out;
+}
+
+@keyframes kkpRegSuccessPopIn {
+    from { transform: scale(0.95); opacity: 0.5; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.kkp-reg-success-modal-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 1.25rem;
+    background: linear-gradient(135deg, var(--brand) 0%, #0d5fc4 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 20px rgba(4, 80, 168, 0.3);
+}
+
+.kkp-reg-success-modal-icon svg {
+    width: 36px;
+    height: 36px;
+    color: #fff;
+}
+
+.kkp-reg-success-modal-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 0.75rem;
+    line-height: 1.35;
+}
+
+.kkp-reg-success-message,
+.kkp-reg-success-modal-message {
+    font-size: 0.95rem;
+    color: #64748b;
+    line-height: 1.65;
+    margin: 0 0 1.5rem;
+}
+
+.kkp-reg-success-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.25rem;
+}
+
+.kkp-reg-success-modal-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 260px;
+    min-height: 48px;
+    padding: 0.75rem 1.75rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--brand) 0%, #0d5fc4 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1rem;
+    text-decoration: none;
+    box-shadow: 0 8px 24px rgba(4, 80, 168, 0.25);
+    transition: box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.kkp-reg-success-modal-btn:hover {
+    color: #fff;
+    background: linear-gradient(135deg, #033d7a 0%, var(--brand) 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 12px 32px rgba(4, 80, 168, 0.35);
+}
+
+.kkp-wizard-success-modal-open {
+    overflow: hidden;
+}
+
+/* â”€â”€ Set Password standalone page (login-style) â”€â”€ */
+.kkp-setpw-page .logo-wrapper::before {
+    display: block;
+}
+
+.kkp-setpw-page .kkp-setpw-logo {
+    width: 220px;
+    height: 220px;
+    object-fit: cover;
+    border-radius: 50%;
+    border: 4px solid rgba(253, 192, 32, 0.6);
+    background: #fff;
+    filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.4));
+}
+
+.kkp-setpw-form .kkp-setpw-field {
+    margin-bottom: 0;
+}
+
+.kkp-setpw-form .kkp-setpw-field--confirm {
+    margin-top: 1.25rem;
+}
+
+.kkp-setpw-page .youth-main-title {
+    white-space: nowrap;
+}
+
+.kkp-setpw-page .youth-tagline {
+    white-space: nowrap;
+}
+
+.kkp-setpw-page .card-helper-text {
+    margin-top: 0.5rem;
+}
+
+.kkp-setpw-page a.kkp-setpw-signin-link {
+    color: #fff;
+    text-decoration: none;
+}
+
+.kkp-setpw-page a.kkp-setpw-signin-link:hover,
+.kkp-setpw-page a.kkp-setpw-signin-link:focus,
+.kkp-setpw-page a.kkp-setpw-signin-link:visited {
+    color: #fff;
+    text-decoration: none;
+}
+
+.kkp-setpw-page .youth-homepage-btn {
+    margin-top: 0.75rem;
+}
+
+.kkp-setpw-branding-sub {
+    margin-top: 0.75rem;
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
+}
+
+.kkp-setpw-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.kkp-setpw-card::before {
+    display: none;
+}
+
+.kkp-setpw-email-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0 0 1.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    background: #f0f7ff;
+    border: 1px solid #cfe0f5;
+    color: #334155;
+    font-size: 0.9rem;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.kkp-setpw-email-badge svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    color: #0450a8;
+}
+
+.kkp-setpw-alert {
+    margin-bottom: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.kkp-setpw-alert-success {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #86efac;
+}
+
+.kkp-setpw-alert-error {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.kkp-setpw-page .pw-rules {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.65rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    text-align: left;
+}
+
+.kkp-setpw-page .pw-rules[hidden] {
+    display: none !important;
+}
+
+.kkp-setpw-page .pw-rule {
+    color: #64748b;
+    margin: 0;
+    position: relative;
+    padding-left: 1.2rem;
+    font-weight: 500;
+}
+
+.kkp-setpw-page .pw-rule::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.28rem;
+    width: 0.7rem;
+    height: 0.7rem;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 50%;
+    background: #fff;
+    box-sizing: border-box;
+}
+
+.kkp-setpw-page .pw-rule.ok {
+    color: #0450a8;
+    font-weight: 600;
+}
+
+.kkp-setpw-page .pw-rule.ok::before {
+    content: '';
+    border-color: #0450a8;
+    background: #0450a8;
+    box-shadow: inset 0 0 0 1.5px #fff;
+}
+
+.kkp-setpw-field-error {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem;
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.kkp-setpw-field-error[hidden] {
+    display: none !important;
+}
+
+.kkp-setpw-page .youth-input.is-error {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12) !important;
+}
+
+.kkp-setpw-toggle {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    color: #64748b;
+}
+
+.kkp-setpw-toggle:hover {
+    color: #0450a8;
+}
+
+.kkp-setpw-toggle .pw-eye {
+    width: 20px;
+    height: 20px;
+}
+
+@media (max-width: 640px) {
+    .kkp-setpw-page .youth-tagline {
+        white-space: normal;
+    }
+}
+
+@media (max-width: 600px) {
+
+    .verify-card,
+    .setpw-card,
+    .reg-success-card {
+        padding: 32px 20px;
+    }
+
+    .verify-title,
+    .setpw-title,
+    .reg-success-title {
+        font-size: 22px;
+    }
+
+    .verify-icon,
+    .setpw-icon {
+        width: 64px;
+        height: 64px;
+    }
+
+    .verify-icon svg,
+    .setpw-icon svg {
+        width: 30px;
+        height: 30px;
+    }
+
+    .reg-success-icon {
+        width: 72px;
+        height: 72px;
+    }
+
+    .reg-success-icon svg {
+        width: 36px;
+        height: 36px;
+    }
+
+    .verify-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .verify-btn {
+        width: auto;
+    }
+}

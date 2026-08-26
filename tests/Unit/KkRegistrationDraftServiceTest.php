@@ -85,6 +85,36 @@ test('clear session draft removes unfinished profiling data only', function () {
         ->and(Storage::disk('local')->exists('kk_wizard_pending/'.$token.'.json'))->toBeFalse();
 });
 
+test('partial step 1 draft clears deleted fields so refresh cannot restore them', function () {
+    $service = app(KkRegistrationDraftService::class);
+    $barangay = makeDraftBarangay();
+
+    $service->saveStep1Partial($barangay, [
+        'first_name' => 'Juan',
+        'last_name' => 'Dela Cruz',
+        'middle_name' => 'Santos',
+        'contact_number' => '09123456789',
+    ]);
+
+    $wizard = $service->saveStep1Partial($barangay, [
+        'first_name' => 'Juan',
+        'last_name' => null,
+        'middle_name' => '',
+        'contact_number' => '09123456789',
+    ]);
+
+    expect($wizard['step1_data'])->toHaveKey('first_name')
+        ->and($wizard['step1_data']['first_name'])->toBe('Juan')
+        ->and($wizard['step1_data'])->not->toHaveKey('last_name')
+        ->and($wizard['step1_data'])->not->toHaveKey('middle_name')
+        ->and($wizard['step1_data']['contact_number'])->toBe('09123456789');
+
+    $resolved = $service->resolveWizard();
+
+    expect($resolved['step1_data'])->not->toHaveKey('last_name')
+        ->and($resolved['step1_data'])->not->toHaveKey('middle_name');
+});
+
 test('completed step 1 still advances current step while preserving fields', function () {
     $service = app(KkRegistrationDraftService::class);
     $barangay = makeDraftBarangay();

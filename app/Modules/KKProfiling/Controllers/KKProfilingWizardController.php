@@ -7,18 +7,19 @@ use App\Models\Barangay;
 use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Notifications\KabataanSetPasswordEmail;
-use App\Support\MailUrl;
-use App\Rules\FacebookProfileUrl;
+use App\Rules\PhilippineMobileNumber;
+use App\Rules\ParticipantSignatureImage;
 use App\Services\BarangayZoneService;
 use App\Services\DuplicateKabataanRegistrationService;
-use App\Services\KkProfilingDirectSubmitService;
 use App\Services\KkProfilingIdentityValidator;
 use App\Services\KkRegistrationDraftService;
-use App\Services\TurnstileService;
 use App\Services\PhilippineIdDetectionService;
 use App\Services\PhilippineIdPipelineService;
+use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
 use App\Services\SupportingDocumentVerificationRecorder;
+use App\Services\TurnstileService;
+use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -40,7 +41,6 @@ class KKProfilingWizardController extends Controller
         protected PhilippineIdDetectionService $philippineIdDetection,
         protected PhilippineIdPipelineService $philippineIdPipeline,
         protected TurnstileService $turnstileService,
-        protected KkProfilingDirectSubmitService $directSubmitService,
         protected SupportingDocumentVerificationRecorder $documentVerificationRecorder,
         protected KkProfilingIdentityValidator $identityValidator,
     ) {}
@@ -48,7 +48,7 @@ class KKProfilingWizardController extends Controller
     public function saveStep1(Request $request, string $barangay)
     {
         $barangayRecord = $this->resolveBarangay($barangay);
-        $validated = $this->validateStep1($request, (int) $barangayRecord->id, true);
+        $validated = $this->validateStep1($request, (int) $barangayRecord->id);
 
         if (trim((string) ($validated['email'] ?? '')) === '') {
             throw ValidationException::withMessages([
@@ -106,34 +106,6 @@ class KKProfilingWizardController extends Controller
             'saved' => true,
             'token' => $wizard['token'],
             'draft' => $this->draftService->wizardStatusPayload($wizard),
-        ]);
-    }
-
-    public function submitWithoutEmail(Request $request, string $barangay): JsonResponse
-    {
-        $this->assertTurnstilePassed($request);
-
-        $barangayRecord = $this->resolveBarangay($barangay);
-
-        $email = strtolower(trim((string) $request->input('email', '')));
-        if ($email !== '') {
-            throw ValidationException::withMessages([
-                'email' => ['Leave the email blank to submit without an account, or use Save & Continue if you entered an email.'],
-            ]);
-        }
-
-        $request->merge(['email' => null]);
-        $validated = $this->validateStep1($request, (int) $barangayRecord->id, false);
-        $payload = $this->normalizeStep1Payload($request, $validated);
-        $payload['email'] = null;
-
-        $this->directSubmitService->commit($barangayRecord, $payload);
-
-        return response()->json([
-            'success' => true,
-            'submitted_without_email' => true,
-            'message' => 'KK Profiling submitted successfully.',
-            'redirect' => route('kkprofiling.signup', ['clear' => 1]),
         ]);
     }
 
@@ -718,7 +690,14 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        if ($targetStep === 3 && empty($wizard['verification_sent_at'])) {
+        // Allow restoring Step 3 UI after mobile/desktop toggles even if the
+        // verification email has not been resent yet in this browser session.
+        if (
+            $targetStep === 3
+            && empty($wizard['verification_sent_at'])
+            && empty($wizard['step2_data'])
+            && empty($wizard['email'])
+        ) {
             throw ValidationException::withMessages([
                 'step' => ['Please complete Step 2 before opening email verification.'],
             ]);
@@ -1329,27 +1308,34 @@ class KKProfilingWizardController extends Controller
         }
     }
 
-    private function validateStep1(Request $request, int $barangayId, bool $emailRequired = true): array
+    private function validateStep1(Request $request, int $barangayId): array
     {
         $email = strtolower(trim((string) $request->input('email', '')));
-        $request->merge(['email' => $email === '' ? null : $email]);
+        $request->merge([
+            'email' => $email === '' ? null : $email,
+            'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
+            'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
+            'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+        ]);
 
-        $emailRules = $emailRequired
-            ? ['required', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i']
-            : ['nullable', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i'];
+        if ($request->input('middle_name') === '') {
+            $request->merge(['middle_name' => null]);
+        }
+
+        $namePattern = '/^[A-Za-z.\-\s]+$/';
 
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:3', 'max:50', 'regex:/^[A-Za-z.\-]{3,50}$/'],
-            'first_name' => ['required', 'string', 'min:3', 'max:50', 'regex:/^(?!\s)[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'max:50', 'regex:/^$|^[A-Za-z.\-]{3,50}$/'],
+            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:'.$namePattern],
+            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:'.$namePattern],
+            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:'.$namePattern],
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules($barangayId),
             'sex' => 'required|in:Male,Female',
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
-            'email' => $emailRules,
-            'contact_number' => ['required', 'string', 'regex:/^09\d{9}$/'],
+            'email' => ['required', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i'],
+            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -1361,22 +1347,26 @@ class KKProfilingWizardController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
-            'facebook_profile_url' => [
-                'nullable',
-                Rule::requiredIf(fn () => in_array((string) $request->input('group_chat'), ['Yes', 'No'], true)),
+            'signature_name' => [
+                'required',
                 'string',
-                'min:3',
-                'max:50',
-                new FacebookProfileUrl,
+                'min:'.(int) config('signature.name_min', 1),
+                'max:'.(int) config('signature.name_max', 255),
             ],
-            'group_chat' => [
-                'nullable',
-                Rule::requiredIf(fn () => trim((string) $request->input('facebook_profile_url', '')) !== ''),
-                'string',
-                Rule::in(['Yes', 'No']),
-            ],
-            'signature' => 'required|string',
-            'data_agreement' => 'accepted',
+            'signature' => ['required', 'string', new ParticipantSignatureImage],
+        ], [
+            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
+            'last_name.min' => 'Minimum 2 characters required.',
+            'first_name.min' => 'Minimum 2 characters required.',
+            'middle_name.min' => 'Minimum 2 characters required.',
+            'last_name.max' => '150 maximum characters only.',
+            'first_name.max' => '150 maximum characters only.',
+            'middle_name.max' => '150 maximum characters only.',
+            'email.required' => 'E-mail address is required.',
+            'signature_name.required' => config('signature.messages.name_required'),
+            'signature_name.min' => config('signature.messages.name_required'),
+            'signature_name.max' => config('signature.messages.name_max'),
+            'signature.required' => config('signature.messages.required'),
         ]);
 
         if (($validated['suffix'] ?? null) === 'Others') {
@@ -1421,6 +1411,14 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
+        $canonicalContact = app(PhoneNumberService::class)->normalize($validated['contact_number'] ?? null);
+        if ($canonicalContact === null) {
+            throw ValidationException::withMessages([
+                'contact_number' => [PhoneNumberService::MSG_INVALID],
+            ]);
+        }
+        $validated['contact_number'] = $canonicalContact;
+
         return $validated;
     }
 
@@ -1441,8 +1439,8 @@ class KKProfilingWizardController extends Controller
         $validated['kk_reason'] = $request->input('kk_assembly') === 'No'
             ? ($request->input('kk_reason') ?: $request->input('kk_reasonChk'))
             : null;
-        $validated['facebook_profile_url'] = trim((string) $request->input('facebook_profile_url', '')) ?: null;
-        $validated['group_chat'] = $request->input('group_chat');
+        $validated['facebook_profile_url'] = null;
+        $validated['group_chat'] = null;
         $validated['signature_name'] = $request->input('signature_name');
 
         return $validated;
@@ -1496,16 +1494,16 @@ class KKProfilingWizardController extends Controller
 
             if (is_string($value)) {
                 $value = trim($value);
-                if ($value === '') {
-                    continue;
-                }
             }
 
             if (is_array($value) && $value === []) {
+                $partial[$key] = null;
                 continue;
             }
 
-            if ($value === null) {
+            // Persist clears: empty string/null must overwrite prior draft values
+            if ($value === null || $value === '') {
+                $partial[$key] = null;
                 continue;
             }
 

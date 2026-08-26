@@ -21,6 +21,21 @@
                 </svg>
                 Clear
             </button>
+            <label class="kkp-sig-btn-upload" for="kkpSignatureUploadInput" title="Upload signature image">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Upload Image
+                <input
+                    type="file"
+                    id="kkpSignatureUploadInput"
+                    class="kkp-sig-upload-input"
+                    accept="image/png,image/jpeg,image/jpg,.png,.jpg,.jpeg"
+                    hidden
+                >
+            </label>
             <button type="button" class="kkp-sig-btn-save" id="kkpSignaturePadSave">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
@@ -28,6 +43,7 @@
                 Save Signature
             </button>
         </div>
+        <p class="kkp-sig-pad-status" id="kkpSignaturePadStatus" role="status" aria-live="polite" hidden></p>
     </div>
 </div>
 

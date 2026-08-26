@@ -47,7 +47,39 @@
     const navBar = document.getElementById('kkpWizardNav');
     const emailVerifyCard = document.getElementById('emailVerifyCard');
     const displayEmail = document.getElementById('displayEmail');
-    const clearAllBtn = document.getElementById('kkpWizardClearAllBtn');
+    const formClearAllBtn = document.getElementById('kkpFormClearAllBtn');
+    const formCard = document.getElementById('kkpFormCard');
+    const clearAllButtons = [formClearAllBtn].filter(Boolean);
+    const STEP_STORAGE_KEY = `kkp_wizard_step_${slug}`;
+
+    function readStoredWizardStep() {
+        try {
+            const stored = parseInt(sessionStorage.getItem(STEP_STORAGE_KEY) || '0', 10);
+            if (stored >= 1 && stored <= 3) {
+                return stored;
+            }
+        } catch (error) {
+            // Non-blocking
+        }
+
+        return null;
+    }
+
+    function persistWizardStepLocally(step) {
+        try {
+            sessionStorage.setItem(STEP_STORAGE_KEY, String(Math.max(1, Math.min(3, step))));
+        } catch (error) {
+            // Non-blocking
+        }
+    }
+
+    async function persistWizardStepRemotely(step) {
+        try {
+            await postJson(`${apiBase}/set-step`, { step });
+        } catch (error) {
+            // Non-blocking — local step UI still wins for mobile/desktop toggles
+        }
+    }
     const clearDraftModal = document.getElementById('kkpClearDraftModal');
     const clearDraftBackdrop = document.getElementById('kkpClearDraftBackdrop');
     const clearDraftCloseBtn = document.getElementById('kkpClearDraftCloseBtn');
@@ -132,7 +164,7 @@
     let step1DraftTimer = null;
     let step1DraftInFlight = false;
     let step1DraftQueued = false;
-    let suppressStep1Autosave = false;
+    let suppressStep1Autosave = true;
 
     if (barangayNameEl && barangayName) {
         barangayNameEl.textContent = barangayName;
@@ -889,6 +921,23 @@
         }
 
         updateNavButtons(currentStep);
+
+        if (selectedType) {
+            const activePanel = [
+                schoolIdUploadPanel,
+                nationalIdUploadPanel,
+                votersIdUploadPanel,
+                philhealthIdUploadPanel,
+                otherIdUploadPanel,
+            ].find((panel) => panel && !panel.hidden);
+
+            if (activePanel) {
+                window.requestAnimationFrame(() => {
+                    activePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+            }
+        }
+
         scanPhilippineIdIfReady();
     }
     syncDocumentUploadPanels.lastType = '';
@@ -1462,11 +1511,7 @@
 
         if (nextLabelEl) {
             if (step === 1) {
-                if (typeof window.kkpSyncStep1Button === 'function') {
-                    window.kkpSyncStep1Button();
-                } else {
-                    nextLabelEl.textContent = 'Submit KK Profiling';
-                }
+                nextLabelEl.textContent = 'Save & Continue';
             } else if (step === 2) {
                 nextLabelEl.textContent = hasSelectedFiles ? 'Upload & Continue' : 'Skip & Continue';
             } else {
@@ -1474,13 +1519,19 @@
             }
         }
 
-        if (clearAllBtn) {
-            clearAllBtn.hidden = registrationCompleted || step !== 1;
-        }
+        clearAllButtons.forEach((btn) => {
+            btn.hidden = registrationCompleted || step !== 1;
+        });
     }
 
     async function setStep(step, options = {}) {
         currentStep = step;
+        persistWizardStepLocally(step);
+
+        if (!options.skipRemotePersist) {
+            // Fire-and-forget so mobile "desktop site" reloads keep the same step.
+            persistWizardStepRemotely(step);
+        }
 
         Object.entries(panels).forEach(([key, panel]) => {
             if (!panel) {
@@ -1517,7 +1568,12 @@
             await prepareStep3(options);
         }
 
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (!options.skipScroll) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        scheduleMobileFormScale();
+        setTimeout(scheduleMobileFormScale, 80);
     }
 
     function applyServerErrors(errors) {
@@ -1599,7 +1655,7 @@
         }
 
         const valid = await window.validateKkProfilingForm({
-            skipEmailExistenceCheck: true,
+            skipEmailExistenceCheck: false,
         });
 
         if (!valid) {
@@ -1912,10 +1968,6 @@
 
     async function handleNext() {
         if (currentStep === 1) {
-            if (typeof window.kkpHandleStep1PrimaryAction === 'function') {
-                await window.kkpHandleStep1PrimaryAction({ saveStep1 });
-                return;
-            }
             await saveStep1();
             return;
         }
@@ -1938,7 +1990,7 @@
             // Non-blocking — still show the previous step locally
         }
 
-        await setStep(targetStep, { skipAutoSend: true });
+        await setStep(targetStep, { skipAutoSend: true, skipRemotePersist: true });
 
         if (targetStep === 2) {
             try {
@@ -2055,6 +2107,7 @@
         root.dataset.verificationSent = '0';
         restoredStep = 1;
         root.dataset.initialStep = '1';
+        persistWizardStepLocally(1);
         delete root.dataset.draftEmail;
 
         if (ocrPanel) {
@@ -2082,7 +2135,7 @@
         }
 
         clearDraftModal.hidden = true;
-        clearAllBtn?.focus();
+        formClearAllBtn?.focus();
     }
 
     async function confirmClearAllData() {
@@ -2188,10 +2241,158 @@
 
         form.addEventListener('input', () => scheduleStep1DraftSave());
         form.addEventListener('change', () => scheduleStep1DraftSave(350));
+
+        // Flush pending autosave before refresh/close so cleared fields are not restored
+        const flushDraft = () => {
+            if (step1DraftTimer) {
+                clearTimeout(step1DraftTimer);
+                step1DraftTimer = null;
+            }
+            if (!form || registrationCompleted || suppressStep1Autosave || currentStep !== 1) {
+                return;
+            }
+            if (step1DraftInFlight) {
+                return;
+            }
+
+            try {
+                syncHiddenCheckboxFields();
+                const formData = new FormData(form);
+                formData.append('respondent_number', root.dataset.respondentNumber || '');
+                formData.append('_token', csrfToken());
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(`${apiBase}/draft-step-1`, formData);
+                }
+            } catch (e) {
+                // ignore flush errors
+            }
+        };
+
+        window.addEventListener('pagehide', flushDraft);
+        window.addEventListener('beforeunload', flushDraft);
+    }
+
+    let mobileScaleRaf = null;
+    let mobileScaleApplying = false;
+
+    function isMobileFormViewport() {
+        return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function clearMobileFormScale() {
+        if (!formCard) {
+            return;
+        }
+
+        const shell = formCard.querySelector('.kkp-fs-scale-shell');
+        const inner = formCard.querySelector('.kkp-fs-scale-inner');
+        if (shell) {
+            shell.style.height = '';
+            shell.style.width = '';
+        }
+        if (inner) {
+            inner.style.width = '';
+            inner.style.minWidth = '';
+            inner.style.transform = '';
+            inner.style.zoom = '';
+        }
+    }
+
+    function applyMobileFormScale() {
+        if (mobileScaleApplying || !formCard) {
+            return;
+        }
+
+        const step1 = document.getElementById('kkpWizardStep1');
+        const shell = formCard.querySelector('.kkp-fs-scale-shell');
+        const inner = formCard.querySelector('.kkp-fs-scale-inner');
+        if (!shell || !inner) {
+            return;
+        }
+
+        // Only scale the profiling form (step 1). Steps 2–3 stay normal responsive.
+        if (!isMobileFormViewport() || currentStep !== 1 || (step1 && step1.hidden)) {
+            clearMobileFormScale();
+            return;
+        }
+
+        mobileScaleApplying = true;
+        try {
+            // Reset before measuring.
+            inner.style.zoom = '1';
+            inner.style.transform = 'none';
+            inner.style.width = '860px';
+            inner.style.minWidth = '860px';
+
+            const designWidth = Math.max(860, Math.ceil(inner.scrollWidth || 860));
+            inner.style.width = `${designWidth}px`;
+            inner.style.minWidth = `${designWidth}px`;
+
+            const available = Math.max(
+                1,
+                Math.floor(shell.clientWidth || formCard.clientWidth || window.innerWidth || 1),
+            );
+            const scale = Math.min(1, available / designWidth);
+
+            // CSS zoom keeps tap/click hit-testing aligned with the visual.
+            // transform:scale() looks right but mis-hits checkboxes on mobile.
+            if ('zoom' in inner.style) {
+                inner.style.transform = '';
+                inner.style.zoom = String(scale);
+                shell.style.width = '100%';
+                shell.style.height = '';
+            } else {
+                inner.style.zoom = '';
+                inner.style.transformOrigin = 'top left';
+                inner.style.transform = `scale(${scale})`;
+                shell.style.width = '100%';
+                shell.style.height = `${Math.ceil(inner.scrollHeight * scale)}px`;
+            }
+        } finally {
+            mobileScaleApplying = false;
+        }
+    }
+
+    function scheduleMobileFormScale() {
+        if (mobileScaleRaf) {
+            cancelAnimationFrame(mobileScaleRaf);
+        }
+        mobileScaleRaf = requestAnimationFrame(() => {
+            mobileScaleRaf = null;
+            applyMobileFormScale();
+        });
+    }
+
+    function bindMobileFormScale() {
+        const run = () => {
+            scheduleMobileFormScale();
+            setTimeout(scheduleMobileFormScale, 80);
+            setTimeout(scheduleMobileFormScale, 300);
+        };
+
+        run();
+        window.addEventListener('resize', scheduleMobileFormScale);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(scheduleMobileFormScale, 200);
+        });
+
+        // Re-scale when form fields change size — do NOT watch style (avoids feedback loop).
+        const observer = new MutationObserver(() => scheduleMobileFormScale());
+        if (form) {
+            observer.observe(form, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['hidden', 'class'],
+            });
+        }
+        window.addEventListener('load', scheduleMobileFormScale);
     }
 
     function bindClearAllDataControls() {
-        clearAllBtn?.addEventListener('click', openClearDraftModal);
+        clearAllButtons.forEach((btn) => {
+            btn.addEventListener('click', openClearDraftModal);
+        });
         clearDraftBackdrop?.addEventListener('click', closeClearDraftModal);
         clearDraftCloseBtn?.addEventListener('click', closeClearDraftModal);
         clearDraftCancelBtn?.addEventListener('click', closeClearDraftModal);
@@ -2208,11 +2409,11 @@
         bindDocumentTypeControls();
         bindStep1DraftAutosave();
         bindClearAllDataControls();
+        bindMobileFormScale();
 
-        try {
-            sessionStorage.removeItem(`kkp_wizard_step_${slug}`);
-        } catch (error) {
-            // Non-blocking
+        const storedStep = readStoredWizardStep();
+        if (storedStep) {
+            restoredStep = storedStep;
         }
 
         if (root.dataset.completedEmail && displayEmail) {
@@ -2220,7 +2421,7 @@
         }
 
         if (registrationCompleted) {
-            await setStep(3, { skipAutoSend: true });
+            await setStep(3, { skipAutoSend: true, skipRemotePersist: true });
             showRegistrationCompleteState(registrationAutoApproved);
             return;
         }
@@ -2230,6 +2431,7 @@
         }
 
         await restoreDraftState();
+        suppressStep1Autosave = false;
 
         const serverEmailError = root.dataset.emailError;
 
@@ -2239,18 +2441,23 @@
                 root.dataset.verificationSent = '1';
             }
 
-            await setStep(3, { skipAutoSend: verificationSent });
+            await setStep(3, { skipAutoSend: verificationSent, skipRemotePersist: true });
 
             showEmailStatus(serverEmailError, 'error');
             return;
         }
 
-        const targetStep = Math.max(1, Math.min(3, restoredStep || initialStep));
+        // Prefer the highest trusted step among local storage, draft, and blade initial step.
+        const draftStep = restoredStep || initialStep;
+        const localStep = storedStep || draftStep;
+        const targetStep = Math.max(1, Math.min(3, Math.max(draftStep, localStep)));
         const skipAutoSendOnStep3 = targetStep === 3 && (verificationSent || verificationSentOnLoad);
 
         await setStep(targetStep, {
             skipAutoSend: targetStep !== 3 || skipAutoSendOnStep3,
+            skipRemotePersist: true,
         });
+        persistWizardStepLocally(targetStep);
     }
 
     initWizard();

@@ -43,9 +43,26 @@
     }
 
     function widgetSize() {
-        // Keep the same "normal" layout even on small screens.
-        // The compact layout often collapses into a single-line appearance.
+        // Desktop keeps the standard checkbox widget.
+        // Small screens use flexible/compact so the checkbox stays tappable
+        // and does not overflow / auto-collapse visually.
+        if (window.matchMedia('(max-width: 430px)').matches) {
+            return 'compact';
+        }
+        if (window.matchMedia('(max-width: 768px)').matches) {
+            return 'flexible';
+        }
         return 'normal';
+    }
+
+    function applyContainerSizeAttrs(mount) {
+        if (!mount) {
+            return;
+        }
+        var size = widgetSize();
+        mount.setAttribute('data-size', size);
+        mount.classList.remove('is-size-normal', 'is-size-flexible', 'is-size-compact');
+        mount.classList.add('is-size-' + size);
     }
 
     function afterModalPaint(callback) {
@@ -171,10 +188,14 @@
             throw new Error('Verification config missing. Please refresh the page.');
         }
 
+        applyContainerSizeAttrs(mount);
+
         widgetId = window.turnstile.render(mount, {
             sitekey: key,
             theme: 'light',
             size: widgetSize(),
+            appearance: 'always',
+            execution: 'render',
             retry: 'never',
             'refresh-expired': 'manual',
             callback: onSuccess,
@@ -367,6 +388,21 @@
     }
 
     bindClose();
+
+    // Remount with the correct adaptive size when the viewport class changes
+    // (e.g. rotate, or "Request Desktop Site" without a full navigation).
+    var lastWidgetSize = widgetSize();
+    window.addEventListener('resize', function () {
+        var nextSize = widgetSize();
+        if (nextSize === lastWidgetSize) {
+            return;
+        }
+        lastWidgetSize = nextSize;
+        if (!isModalOpen()) {
+            return;
+        }
+        scheduleRemount(isSmallViewport() ? 350 : 150);
+    });
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', preloadTurnstileApi);

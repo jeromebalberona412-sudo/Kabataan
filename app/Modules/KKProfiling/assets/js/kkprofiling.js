@@ -11,48 +11,65 @@ function isValidSuffixText(value) {
     return VALID_ROMAN_SUFFIXES.includes(value.toUpperCase()) || /^[A-Za-z.]+$/.test(value);
 }
 
-function kkpHasAnySpace(value) {
-    return /\s/.test(value || '');
+function kkpNormalizeNameValue(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+const KKP_NAME_SOFT_MAX = 50;
+const KKP_NAME_MAX_CHARS = 150;
+const KKP_NAME_MAX_MSG = '150 maximum characters only.';
+
+/** Live typing: letters/.- , one space between words, no leading/pure multi-space. */
+function kkpSanitizeNameInput(value) {
+    return String(value || '')
+        .toUpperCase()
+        .replace(/[^A-Z.\-\s]/g, '')
+        .replace(/^\s+/, '')
+        .replace(/\s{2,}/g, ' ');
+}
+
+function kkpValidateNamePart(value, options = {}) {
+    const required = Boolean(options.required);
+    const label = options.label || 'Name';
+    const touched = Boolean(options.touched);
+    const raw = String(value || '');
+    const v = kkpNormalizeNameValue(raw);
+    const isPureSpaces = raw.length > 0 && v === '';
+
+    if (!v) {
+        if (isPureSpaces) {
+            return 'Minimum 2 characters required.';
+        }
+        return required && touched ? `${label} is required.` : null;
+    }
+
+    if (v.length < 2) {
+        return 'Minimum 2 characters required.';
+    }
+
+    if (v.length > KKP_NAME_MAX_CHARS || raw.length > KKP_NAME_MAX_CHARS) {
+        return KKP_NAME_MAX_MSG;
+    }
+
+    if (!/^[A-Za-z.\-\s]+$/.test(v)) {
+        return 'Letters, spaces, periods, and hyphens only.';
+    }
+
+    return null;
 }
 
 function kkpValidateLastName(value, touched) {
-    const v = (value || '').trim();
-    if (!v) {
-        return touched ? 'Last Name is required.' : null;
-    }
-    if (v.length < 3) {
-        return 'Minimum 3 characters required.';
-    }
-    if (v.length > 50) {
-        return '50 maximum characters only.';
-    }
-    if (kkpHasAnySpace(v) || !/^[A-Za-z.\-]+$/.test(v)) {
-        return 'Letters only, no spaces.';
-    }
-    return null;
+    return kkpValidateNamePart(value, { required: true, label: 'Last Name', touched });
 }
 
 function kkpValidateFirstName(value, touched) {
-    const v = (value || '').trim();
-    if (!v) {
-        return touched ? 'First Name is required.' : null;
-    }
-    if (v.length < 3) {
-        return 'Minimum 3 characters required.';
-    }
-    if (v.length > 50) {
-        return '50 maximum characters only.';
-    }
-    if (!/^[A-Za-z.\-\s]+$/.test(v)) {
-        return 'Letters only, no leading spaces.';
-    }
-    return null;
+    return kkpValidateNamePart(value, { required: true, label: 'First Name', touched });
 }
 
-const KKP_NAME_MAX_CHARS = 50;
-const KKP_NAME_MAX_MSG = '50 maximum characters only.';
-
 let kkpNameMeasureEl = null;
+let kkpNameMaxHintTimers = new WeakMap();
+let kkpLongNameAllowed = false;
+let kkpPendingLongName = null;
 
 function kkpGetNameMeasureEl() {
     if (!kkpNameMeasureEl) {
@@ -71,14 +88,30 @@ function kkpSyncNameMaxIndicator(el) {
         return;
     }
 
+    const prevTimer = kkpNameMaxHintTimers.get(el);
+    if (prevTimer) {
+        clearTimeout(prevTimer);
+        kkpNameMaxHintTimers.delete(el);
+    }
+
     col.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
 
-    if ((el.value || '').length >= KKP_NAME_MAX_CHARS) {
-        const hint = document.createElement('span');
-        hint.className = 'kkp-field-hint kkp-name-max-hint';
-        hint.textContent = KKP_NAME_MAX_MSG;
-        col.appendChild(hint);
+    const len = (el.value || '').length;
+    if (len < KKP_NAME_MAX_CHARS) {
+        return;
     }
+
+    // Avoid duplicating the same text if validation already shows it as a field error.
+    const existingErr = col.querySelector('.kkp-field-error');
+    if (existingErr && existingErr.textContent === KKP_NAME_MAX_MSG) {
+        return;
+    }
+
+    const hint = document.createElement('span');
+    hint.className = 'kkp-field-hint kkp-name-max-hint';
+    hint.setAttribute('role', 'status');
+    hint.textContent = KKP_NAME_MAX_MSG;
+    col.appendChild(hint);
 }
 
 function kkpFitInputTextToWidth(el, options = {}) {
@@ -163,20 +196,7 @@ function kkpFitSignatureNameFont(el) {
 }
 
 function kkpValidateMiddleName(value, touched) {
-    const v = (value || '').trim();
-    if (!v) {
-        return null;
-    }
-    if (v.length < 3) {
-        return touched ? 'Minimum 3 characters required.' : null;
-    }
-    if (v.length > 50) {
-        return '50 maximum characters only.';
-    }
-    if (kkpHasAnySpace(v) || !/^[A-Za-z.\-]+$/.test(v)) {
-        return 'Letters only, no spaces.';
-    }
-    return null;
+    return kkpValidateNamePart(value, { required: false, label: 'Middle Name', touched });
 }
 
 function kkpFitEmailInputFont(el) {
@@ -193,13 +213,17 @@ function kkpFitEmailInputFont(el) {
             [12, 10.5],
         ],
     });
-    el.style.textAlign = 'left';
+    el.style.textAlign = 'center';
+}
+
+function kkpHasAnySpace(value) {
+    return /\s/.test(value || '');
 }
 
 function kkpValidateEmail(value, touched) {
     const v = (value || '').trim().toLowerCase();
     if (!v) {
-        return null;
+        return touched ? 'E-mail address is required.' : null;
     }
     if (kkpHasAnySpace(v)) {
         return 'Email must not contain spaces.';
@@ -221,54 +245,10 @@ function kkpValidateEmail(value, touched) {
     return null;
 }
 
-function kkpValidateFacebook(value, touched) {
-    const raw = value || '';
-    const v = raw.trim();
-
-    if (raw.length > 50) {
-        return 'Maximum 50 characters allowed.';
-    }
-
-    if (!v) {
-        if (kkpIsGroupChatFilled() && touched) {
-            return 'FB Account is required when you answer the group chat question.';
-        }
-        return null;
-    }
-    if (v.length < 3) {
-        return touched ? 'Minimum 3 characters required.' : null;
-    }
-    if (v.length > 50) {
-        return 'Maximum 50 characters allowed.';
-    }
-    try {
-        const parsed = new URL(v);
-        if (!/^https?:$/i.test(parsed.protocol)) {
-            return 'Please enter a valid Facebook profile link.';
-        }
-    } catch {
-        return 'Please enter a valid Facebook profile link.';
-    }
-    if (!/^https?:\/\/(www\.|m\.)?(facebook\.com|fb\.com)\//i.test(v)) {
-        return 'Link must be a Facebook profile URL (e.g. https://www.facebook.com/yourprofile).';
-    }
-    return null;
-}
-
-function kkpIsFacebookFilled() {
-    const el = document.getElementById('kkpFacebook');
-    return Boolean((el?.value || '').trim());
-}
-
-function kkpIsGroupChatFilled() {
-    const hidden = document.getElementById('kkpGroupChat');
-    return Boolean((hidden?.value || '').trim());
-}
-
 function kkpValidatePurok(value, touched) {
     const v = (value || '').trim();
     if (!v) {
-        return touched ? 'Purok/Sitio/Zone is required.' : null;
+        return touched ? 'Purok/Zone is required.' : null;
     }
     return null;
 }
@@ -277,14 +257,137 @@ function kkpPurokField() {
     return document.querySelector('select[name="purok_zone"]') || document.querySelector('input[name="purok_zone"]');
 }
 
-function kkpValidateContact(value, touched) {
+function kkpIsObviouslyFakeContact(digits) {
+    const raw = String(digits || '').replace(/\D+/g, '');
+    if (!raw) {
+        return false;
+    }
+
+    const local = raw.length === 11 && raw.startsWith('09')
+        ? raw
+        : (raw.length === 10 && raw.startsWith('9') ? `0${raw}` : null);
+    const body = local ? local.slice(2) : raw;
+
+    const isSameDigit = (d) => (
+        /^09(\d)\1{8}$/.test(d)
+        || /^9(\d)\1{8}$/.test(d)
+        || (d.length >= 8 && /^(\d)\1+$/.test(d))
+    );
+
+    const isFullSequence = (s) => {
+        if (!s || s.length < 8) {
+            return false;
+        }
+        let asc = true;
+        let desc = true;
+        for (let i = 1; i < s.length; i += 1) {
+            const diff = Number(s[i]) - Number(s[i - 1]);
+            if (diff !== 1) {
+                asc = false;
+            }
+            if (diff !== -1) {
+                desc = false;
+            }
+        }
+        return asc || desc;
+    };
+
+    const coversRepeat = (s, blockLen) => {
+        if (!s || s.length < 8) {
+            return false;
+        }
+        const repeats = Math.floor(s.length / blockLen);
+        if (repeats < 3) {
+            return false;
+        }
+        const block = s.slice(0, blockLen);
+        if (!block || /^(.)\1+$/.test(block)) {
+            return false;
+        }
+        const built = block.repeat(repeats);
+        return built === s.slice(0, built.length) && built.length >= Math.floor(s.length * 0.85);
+    };
+
+    const isRepeatedPattern = (d) => {
+        for (let blockLen = 2; blockLen <= 4; blockLen += 1) {
+            if (coversRepeat(d, blockLen)) {
+                return true;
+            }
+            if (d.length >= 9 && coversRepeat(d.slice(1), blockLen)) {
+                return true;
+            }
+            if (d.length === 11 && d.startsWith('09') && coversRepeat(d.slice(2), blockLen)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (isSameDigit(raw) || (local && isSameDigit(local))) {
+        return true;
+    }
+    if (isFullSequence(raw) || (local && isFullSequence(local.slice(2)))) {
+        return true;
+    }
+    if (isRepeatedPattern(raw) || (local && isRepeatedPattern(local))) {
+        return true;
+    }
+
+    if (body.length >= 8) {
+        const unique = new Set(body.split('')).size;
+        if (unique <= 2) {
+            return true;
+        }
+        if (/(\d)\1{5,}/.test(body)) {
+            return true;
+        }
+        const counts = {};
+        for (const ch of body) {
+            counts[ch] = (counts[ch] || 0) + 1;
+            if (counts[ch] >= 6) {
+                return true;
+            }
+        }
+
+        let asc = 0;
+        let desc = 0;
+        const steps = body.length - 1;
+        for (let i = 1; i < body.length; i += 1) {
+            const diff = Number(body[i]) - Number(body[i - 1]);
+            if (diff === 1) {
+                asc += 1;
+            }
+            if (diff === -1) {
+                desc += 1;
+            }
+        }
+        if (asc >= steps - 1 || desc >= steps - 1) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param {string} value
+ * @param {boolean} requireEmpty - true only on form submit; do not show required while typing
+ */
+function kkpValidateContact(value, requireEmpty) {
     const v = (value || '').trim();
     if (!v || v === '09') {
-        return touched ? 'Contact # is required.' : null;
+        return requireEmpty === true ? 'Contact number is required.' : null;
     }
+
+    // UI accepts local PH mobile only: 09 + 9 digits (11 total).
     if (!/^09\d{9}$/.test(v)) {
-        return 'Use 11 digits only. Format: 09XXXXXXXXX.';
+        return 'Please enter a valid Philippine mobile number.';
     }
+
+    if (kkpIsObviouslyFakeContact(v)) {
+        return 'Please enter your actual mobile number.';
+    }
+
     return null;
 }
 
@@ -318,12 +421,14 @@ function kkpValidateContact(value, touched) {
         const host = getFieldErrorHost(el);
         if (!el || !host) return;
         host.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
-        host.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
         el.classList.add('kkp-input-err');
         const err = document.createElement('span');
         err.className = 'kkp-field-error';
         err.textContent = msg;
         host.appendChild(err);
+        if (el.closest('.kkp-name-col')) {
+            kkpSyncNameMaxIndicator(el);
+        }
     }
 
     window.showFieldError = showFieldError;
@@ -532,36 +637,183 @@ function kkpValidateContact(value, touched) {
         });
     }
 
-    // ── Name fields: auto-uppercase (capslock) ──
-    ['kkpFirstName', 'kkpMiddleName'].forEach((id) => {
-        const nameInput = document.getElementById(id);
-        if (!nameInput) return;
+    // ── Name fields: auto-uppercase + soft/hard length gates ──
+    function resetLongNameConfirmInput() {
+        const input = document.getElementById('kkpLongNameConfirmInput');
+        const hint = document.getElementById('kkpLongNameConfirmHint');
+        if (input) {
+            input.value = '';
+        }
+        if (hint) {
+            hint.hidden = true;
+        }
+    }
 
-        nameInput.addEventListener('input', function () {
+    function syncLongNameConfirmFromTypedYes() {
+        const input = document.getElementById('kkpLongNameConfirmInput');
+        const hint = document.getElementById('kkpLongNameConfirmHint');
+        const typed = (input?.value || '').trim().toLowerCase();
+        const ok = typed === 'yes';
+
+        if (hint) {
+            hint.hidden = typed === '' || ok;
+        }
+
+        return ok;
+    }
+
+    function openLongNameModal(el, nextValue, caret) {
+        const modal = document.getElementById('kkpLongNameModal');
+        if (!modal) {
+            kkpLongNameAllowed = true;
+            el.value = nextValue.slice(0, KKP_NAME_MAX_CHARS);
+            kkpSyncNameMaxIndicator(el);
+            return;
+        }
+
+        kkpPendingLongName = { el, value: nextValue.slice(0, KKP_NAME_MAX_CHARS), caret };
+        resetLongNameConfirmInput();
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        document.getElementById('kkpLongNameConfirmInput')?.focus();
+    }
+
+    function closeLongNameModal() {
+        const modal = document.getElementById('kkpLongNameModal');
+        if (modal) {
+            modal.hidden = true;
+            modal.setAttribute('aria-hidden', 'true');
+        }
+        resetLongNameConfirmInput();
+        kkpPendingLongName = null;
+    }
+
+    function confirmLongNameModal() {
+        if (!syncLongNameConfirmFromTypedYes()) {
+            const hint = document.getElementById('kkpLongNameConfirmHint');
+            if (hint) {
+                hint.hidden = false;
+            }
+            document.getElementById('kkpLongNameConfirmInput')?.focus();
+            return;
+        }
+
+        if (!kkpPendingLongName?.el) {
+            closeLongNameModal();
+            return;
+        }
+
+        kkpLongNameAllowed = true;
+        const { el, value, caret } = kkpPendingLongName;
+        el.value = value;
+        const pos = Math.min(caret ?? value.length, value.length);
+        try {
+            el.setSelectionRange(pos, pos);
+        } catch (e) {
+            // ignore
+        }
+        kkpSyncNameMaxIndicator(el);
+        kkpFitNameInputFont(el);
+        closeLongNameModal();
+        el.focus();
+    }
+
+    function cancelLongNameModal() {
+        if (kkpPendingLongName?.el) {
+            const el = kkpPendingLongName.el;
+            el.value = el.value.slice(0, KKP_NAME_SOFT_MAX);
+            try {
+                el.setSelectionRange(KKP_NAME_SOFT_MAX, KKP_NAME_SOFT_MAX);
+            } catch (e) {
+                // ignore
+            }
+            kkpFitNameInputFont(el);
+            el.focus();
+        }
+        closeLongNameModal();
+    }
+
+    document.getElementById('kkpLongNameConfirmInput')?.addEventListener('input', function () {
+        if (syncLongNameConfirmFromTypedYes()) {
+            confirmLongNameModal();
+        }
+    });
+
+    document.getElementById('kkpLongNameConfirmInput')?.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            if (syncLongNameConfirmFromTypedYes()) {
+                confirmLongNameModal();
+            } else {
+                const hint = document.getElementById('kkpLongNameConfirmHint');
+                if (hint) {
+                    hint.hidden = false;
+                }
+            }
+        }
+    });
+
+    document.getElementById('kkpLongNameCancelBtn')?.addEventListener('click', cancelLongNameModal);
+    document.getElementById('kkpLongNameCloseBtn')?.addEventListener('click', cancelLongNameModal);
+    document.getElementById('kkpLongNameBackdrop')?.addEventListener('click', cancelLongNameModal);
+
+    function bindNameFieldInput(el) {
+        if (!el) {
+            return;
+        }
+
+        el.addEventListener('input', function () {
             const start = this.selectionStart;
-            const end = this.selectionEnd;
-            this.value = this.value.toUpperCase();
-            this.setSelectionRange(start, end);
+            const before = this.value;
+            let next = kkpSanitizeNameInput(before);
+
+            // Keep caret stable when sanitize removes leading/extra spaces.
+            const removed = Math.max(0, before.length - next.length);
+            const caret = Math.max(0, (start ?? next.length) - removed);
+
+            if (next.length > KKP_NAME_MAX_CHARS) {
+                next = next.slice(0, KKP_NAME_MAX_CHARS);
+                this.value = next;
+                kkpSyncNameMaxIndicator(this);
+                try {
+                    this.setSelectionRange(KKP_NAME_MAX_CHARS, KKP_NAME_MAX_CHARS);
+                } catch (e) {
+                    // ignore
+                }
+                kkpFitNameInputFont(this);
+                return;
+            }
+
+            if (!kkpLongNameAllowed && next.length > KKP_NAME_SOFT_MAX) {
+                this.value = next.slice(0, KKP_NAME_SOFT_MAX);
+                openLongNameModal(this, next, caret);
+                kkpFitNameInputFont(this);
+                return;
+            }
+
+            this.value = next;
+            try {
+                this.setSelectionRange(caret, caret);
+            } catch (e) {
+                // ignore
+            }
+
+            kkpSyncNameMaxIndicator(this);
+            kkpFitNameInputFont(this);
         });
 
-        nameInput.addEventListener('blur', function () {
-            this.value = this.value.trim().replace(/\s{2,}/g, ' ').toUpperCase();
+        el.addEventListener('blur', function () {
+            this.value = kkpNormalizeNameValue(this.value).toUpperCase();
+            kkpSyncNameMaxIndicator(this);
+            kkpFitNameInputFont(this);
         });
+    }
+
+    ['kkpLastName', 'kkpFirstName', 'kkpMiddleName'].forEach((id) => {
+        bindNameFieldInput(document.getElementById(id));
     });
 
     const lastNameInput = document.getElementById('kkpLastName');
-    if (lastNameInput) {
-        lastNameInput.addEventListener('input', function () {
-            const start = this.selectionStart;
-            const end = this.selectionEnd;
-            this.value = this.value.toUpperCase().replace(/\s/g, '');
-            this.setSelectionRange(start, end);
-        });
-
-        lastNameInput.addEventListener('blur', function () {
-            this.value = this.value.trim().toUpperCase();
-        });
-    }
 
     // ── Email existence check (backend) — disabled in wizard mode (checked at Step 4 only) ──
     const emailInput = document.querySelector('input[name="email"]');
@@ -621,9 +873,7 @@ function kkpValidateContact(value, touched) {
         };
 
         el.addEventListener('input', () => {
-            if ((el.value || '').length > 0) {
-                touched = true;
-            }
+            touched = true;
             runValidation();
         });
 
@@ -635,37 +885,52 @@ function kkpValidateContact(value, touched) {
 
     bindRealtimeField(lastNameInput, kkpValidateLastName);
 
-    // ── Contact number formatter: 09 + 9 digits only (11 chars total) ──
+    // ── Contact number: 09XXXXXXXXX only (11 digits) ──
+    // Required message only on submit. Invalid/fake messages update in real time.
     const contactInput = document.getElementById('kkpContactNumber');
     if (contactInput) {
-        if (!contactInput.value) contactInput.value = '09';
+        if (!contactInput.value) {
+            contactInput.value = '09';
+        }
         contactInput.addEventListener('focus', function () {
-            if (!this.value) this.value = '09';
+            if (!this.value) {
+                this.value = '09';
+            }
         });
+        const runContactRealtimeValidation = () => {
+            const message = kkpValidateContact(contactInput.value, false);
+            if (message) {
+                showFieldError(contactInput, message);
+            } else {
+                clearFieldError(contactInput);
+            }
+        };
         contactInput.addEventListener('input', function () {
             let value = (this.value || '').replace(/\D/g, '');
             if (!value.startsWith('09')) {
                 value = value.startsWith('9') ? `0${value}` : `09${value.replace(/^0+/, '')}`;
             }
             this.value = value.slice(0, 11);
-            if (/^09\d{9}$/.test(this.value.trim())) {
-                clearFieldError(this);
-            }
+            runContactRealtimeValidation();
         });
+        contactInput.addEventListener('blur', runContactRealtimeValidation);
     }
 
     // ── Auto-fill signature name from name fields ──
     // When any name field changes, update the signature name input automatically
     function updateSignatureName() {
-        const last = (document.getElementById('kkpLastName') || {}).value || '';
-        const first = (document.getElementById('kkpFirstName') || {}).value || '';
-        const middle = (document.getElementById('kkpMiddleName') || {}).value || '';
+        const last = String((document.getElementById('kkpLastName') || {}).value || '').trim();
+        const first = String((document.getElementById('kkpFirstName') || {}).value || '').trim();
+        const middle = String((document.getElementById('kkpMiddleName') || {}).value || '').trim();
         const suffixSelect = document.getElementById('kkpSuffix');
         const customSuffix = document.getElementById('kkpCustomSuffix');
-        const rawSuffix = (suffixSelect || {}).value || '';
+        const rawSuffix = String((suffixSelect || {}).value || '').trim();
         const suffix = rawSuffix === 'Others'
-            ? ((customSuffix || {}).value || '')
+            ? String((customSuffix || {}).value || '').trim()
             : (rawSuffix === 'None' ? '' : rawSuffix);
+        const hasSuffix = rawSuffix === 'Others'
+            ? String((customSuffix || {}).value || '').trim().length > 0
+            : rawSuffix.length > 0;
         const sigNameInput = document.getElementById('kkpSignatureName');
         const triggerBtn = document.getElementById('kkpSignatureTrigger');
         const sigInput = document.getElementById('kkpSignatureData');
@@ -677,12 +942,17 @@ function kkpValidateContact(value, touched) {
         sigNameInput.value = fullName;
         kkpFitSignatureNameFont(sigNameInput);
 
-        // Enable Sign button only when name is filled and no signature yet
+        // Sign requires last name, first name, and suffix (None counts)
         if (triggerBtn) {
-            const hasSig = !!(sigInput && sigInput.value);
-            const canSign = fullName.trim().length > 0 && !hasSig;
+            const canSign = last.length > 0 && first.length > 0 && hasSuffix;
             triggerBtn.disabled = !canSign;
             triggerBtn.setAttribute('aria-disabled', canSign ? 'false' : 'true');
+        }
+
+        const clearSavedBtn = document.getElementById('kkpSignatureClearSaved');
+        if (clearSavedBtn) {
+            const hasSig = !!(sigInput && sigInput.value);
+            clearSavedBtn.hidden = !hasSig;
         }
     }
 
@@ -726,7 +996,7 @@ function kkpValidateContact(value, touched) {
         toggleCustomSuffix();
     }
 
-    // ── Name input restrictions ──
+    // Name fit on load/resize (input filtering lives in bindNameFieldInput — spaces + max 150).
     const firstNameEl = document.getElementById('kkpFirstName');
     const middleNameEl = document.getElementById('kkpMiddleName');
     const nameFitInputs = [lastNameInput, firstNameEl, middleNameEl].filter(Boolean);
@@ -735,37 +1005,6 @@ function kkpValidateContact(value, touched) {
         kkpFitNameInputFont(el);
         kkpSyncNameMaxIndicator(el);
     };
-
-    if (firstNameEl) {
-        firstNameEl.addEventListener('input', function () {
-            this.value = this.value
-                .replace(/^\s+/, '')
-                .replace(/[^A-Za-z.\-\s]/g, '')
-                .replace(/\s{2,}/g, ' ')
-                .slice(0, 50);
-            runNameFit(this);
-        });
-    }
-
-    if (lastNameInput) {
-        lastNameInput.addEventListener('input', function () {
-            this.value = this.value
-                .replace(/\s/g, '')
-                .replace(/[^A-Za-z.\-]/g, '')
-                .slice(0, 50);
-            runNameFit(this);
-        });
-    }
-
-    if (middleNameEl) {
-        middleNameEl.addEventListener('input', function () {
-            this.value = this.value
-                .replace(/\s/g, '')
-                .replace(/[^A-Za-z.\-]/g, '')
-                .slice(0, 50);
-            runNameFit(this);
-        });
-    }
 
     nameFitInputs.forEach((el) => {
         runNameFit(el);
@@ -783,119 +1022,9 @@ function kkpValidateContact(value, touched) {
         }
     });
 
-    const facebookInput = document.getElementById('kkpFacebook');
-    const KKP_FB_MAX_LEN = 50;
-
-    function validateGroupChat(touched) {
-        if (!kkpIsFacebookFilled()) {
-            return null;
-        }
-        const hidden = document.getElementById('kkpGroupChat');
-        if (!hidden || !(hidden.value || '').trim()) {
-            return touched ? 'Please select Yes or No.' : null;
-        }
-        return null;
-    }
-
-    function runGroupChatValidation(touched) {
-        const chat = document.getElementById('kkpFooterChat') || document.querySelector('.kkp-footer-chat');
-        if (!chat) {
-            return;
-        }
-
-        chat.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
-
-        const message = validateGroupChat(touched);
-        if (message) {
-            footerChatError(message);
-        }
-    }
-
-    function updateFooterFieldRequirements() {
-        const fbFilled = kkpIsFacebookFilled();
-        const chatFilled = kkpIsGroupChatFilled();
-        const groupChatRequired = document.getElementById('kkpGroupChatRequired');
-        const fbRequired = document.getElementById('kkpFacebookRequired');
-        const fbOptional = document.getElementById('kkpFacebookOptional');
-
-        if (groupChatRequired) {
-            groupChatRequired.hidden = !fbFilled;
-        }
-        if (fbRequired) {
-            fbRequired.hidden = !chatFilled;
-        }
-        if (fbOptional) {
-            fbOptional.hidden = chatFilled;
-        }
-
-        if (facebookInput) {
-            const fbTouched = chatFilled || fbFilled;
-            const fbMsg = kkpValidateFacebook(facebookInput.value, fbTouched);
-            if (fbMsg) {
-                showFieldError(facebookInput, fbMsg);
-            } else {
-                clearFieldError(facebookInput);
-            }
-        }
-
-        runGroupChatValidation(fbFilled);
-    }
-
-    if (facebookInput) {
-        facebookInput.addEventListener('input', function () {
-            const cleaned = this.value.replace(/\s/g, '');
-            const exceeded = cleaned.length > KKP_FB_MAX_LEN;
-            this.value = cleaned.slice(0, KKP_FB_MAX_LEN);
-
-            const message = exceeded
-                ? 'Maximum 50 characters allowed.'
-                : kkpValidateFacebook(this.value, true);
-
-            if (message) {
-                showFieldError(this, message);
-            } else {
-                clearFieldError(this);
-            }
-
-            updateFooterFieldRequirements();
-        });
-
-        facebookInput.addEventListener('blur', function () {
-            this.value = this.value.trim().slice(0, KKP_FB_MAX_LEN);
-            const message = kkpValidateFacebook(this.value, true);
-            if (message) {
-                showFieldError(this, message);
-            } else {
-                clearFieldError(this);
-            }
-            updateFooterFieldRequirements();
-        });
-    }
-
-    document.querySelectorAll('input[name="group_chatChk"]').forEach((checkbox) => {
-        checkbox.addEventListener('change', () => {
-            updateFooterFieldRequirements();
-        });
-    });
-
-    (function sanitizeGroupChatAnswer() {
-        const hidden = document.getElementById('kkpGroupChat');
-        const answer = hidden ? String(hidden.value || '').trim() : '';
-        const valid = answer === 'Yes' || answer === 'No';
-        if (hidden && !valid) {
-            hidden.value = '';
-        }
-        document.querySelectorAll('input[name="group_chatChk"]').forEach((checkbox) => {
-            checkbox.checked = valid && checkbox.value === answer;
-        });
-    }());
-
-    updateFooterFieldRequirements();
-
     bindRealtimeField(firstNameEl, kkpValidateFirstName);
     bindRealtimeField(middleNameEl, kkpValidateMiddleName);
     bindRealtimeField(kkpPurokField(), kkpValidatePurok);
-    bindRealtimeField(contactInput, kkpValidateContact);
 
     if (emailInput) {
         let emailTouched = false;
@@ -1010,14 +1139,6 @@ function kkpValidateContact(value, touched) {
                 votedChks.forEach(function (cb) {
                     cb.disabled = false;
                 });
-            }
-        }
-
-        if (hiddenId === 'kkpGroupChat') {
-            const chat = document.getElementById('kkpFooterChat') || document.querySelector('.kkp-footer-chat');
-            chat?.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
-            if (typeof updateFooterFieldRequirements === 'function') {
-                updateFooterFieldRequirements();
             }
         }
     };
@@ -1163,22 +1284,10 @@ window.validateKkProfilingForm = async function (options = {}) {
 
         const err = document.createElement('span');
         err.className = 'kkp-field-error kkp-demo-block-error';
+        err.setAttribute('role', 'alert');
         err.textContent = message;
+        // Always place below label + options so it never covers checkboxes.
         block.appendChild(err);
-    }
-
-    function footerChatError(message) {
-        const chat = document.querySelector('.kkp-footer-chat');
-        if (!chat) {
-            return;
-        }
-
-        chat.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
-
-        const err = document.createElement('span');
-        err.className = 'kkp-field-error kkp-footer-chat-error';
-        err.textContent = message;
-        chat.appendChild(err);
     }
 
     function personalLeftError(message) {
@@ -1205,11 +1314,13 @@ window.validateKkProfilingForm = async function (options = {}) {
             || el.parentNode;
         if (!host) return;
         host.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
-        host.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
         const err = document.createElement('span');
         err.className = 'kkp-field-error';
         err.textContent = msg;
         host.appendChild(err);
+        if (el.closest('.kkp-name-col')) {
+            kkpSyncNameMaxIndicator(el);
+        }
     }
 
     // Helper: get hidden input value (single-check groups)
@@ -1248,8 +1359,8 @@ window.validateKkProfilingForm = async function (options = {}) {
     // ── 3. Purok/Zone ──
     const purok = kkpPurokField();
     if (!purok || !purok.value.trim()) {
-        errors.push('Purok/Sitio/Zone is required.');
-        fieldError(purok, 'Purok/Sitio/Zone is required.');
+        errors.push('Purok/Zone is required.');
+        fieldError(purok, 'Purok/Zone is required.');
     }
 
     // ── 3b. Suffix ──
@@ -1340,12 +1451,10 @@ window.validateKkProfilingForm = async function (options = {}) {
 
     // ── 8. Contact # ──
     const contact = document.querySelector('input[name="contact_number"]');
-    if (!contact || !contact.value.trim()) {
-        errors.push('Contact # is required.');
-        fieldError(contact, 'Contact # is required.');
-    } else if (!/^09\d{9}$/.test(contact.value.trim())) {
-        errors.push('Contact # must be 11 digits and start with 09.');
-        fieldError(contact, 'Use 11 digits only. Format: 09XXXXXXXXX.');
+    const contactErr = kkpValidateContact(contact?.value || '', true);
+    if (contactErr) {
+        errors.push(contactErr);
+        fieldError(contact, contactErr);
     }
 
     // ── 9. Civil Status ──
@@ -1409,33 +1518,44 @@ window.validateKkProfilingForm = async function (options = {}) {
         demoBlockError('kkpKkReason', 'Please select a reason.');
     }
 
-    // ── 18. FB Account ──
-    const facebook = document.querySelector('input[name="facebook_profile_url"]');
-    const facebookMsg = kkpValidateFacebook(facebook?.value, true);
-    if (facebookMsg) {
-        errors.push(facebookMsg);
-        fieldError(facebook, facebookMsg);
-    }
-
-    // ── 19. Willing to join group chat (required only when FB profile link is provided) ──
-    if (kkpIsFacebookFilled() && !hiddenVal('kkpGroupChat')) {
-        errors.push('Willing to join the group chat is required when FB Account is provided.');
-        footerChatError('Please select Yes or No.');
-    }
-
-    // ── 20. Signature ──
-    const sigData = document.getElementById('kkpSignatureData');
-    if (!sigData || !sigData.value.trim()) {
-        errors.push('Signature is required.');
+    // ── 18. Name and Signature of Participant ──
+    const sigName = document.getElementById('kkpSignatureName');
+    const sigNameVal = (sigName?.value || '').trim();
+    if (!sigNameVal) {
+        errors.push('Name and Signature of Participant is required.');
         const sigSection = document.querySelector('.kkp-sig-section-left');
         if (sigSection) {
             let err = sigSection.querySelector('.kkp-field-error');
             if (!err) {
                 err = document.createElement('span');
                 err.className = 'kkp-field-error';
-                err.textContent = 'Please provide your signature before proceeding.';
+                err.textContent = 'Name and Signature of Participant is required.';
                 sigSection.appendChild(err);
             }
+        }
+    } else if (sigNameVal.length > 255) {
+        errors.push('Participant name must not exceed 255 characters.');
+    }
+
+    const sigData = document.getElementById('kkpSignatureData');
+    if (!sigData || !sigData.value.trim()) {
+        errors.push('Signature is required. Please upload your signature.');
+        const sigSection = document.querySelector('.kkp-sig-section-left');
+        if (sigSection) {
+            let err = sigSection.querySelector('.kkp-field-error');
+            if (!err) {
+                err = document.createElement('span');
+                err.className = 'kkp-field-error';
+                err.textContent = 'Signature is required. Please upload your signature.';
+                sigSection.appendChild(err);
+            }
+        }
+        const statusEl = document.getElementById('kkpSignatureStatus');
+        if (statusEl) {
+            statusEl.hidden = false;
+            statusEl.textContent = '✗ Signature is required. Please upload your signature.';
+            statusEl.classList.add('is-invalid');
+            statusEl.classList.remove('is-valid');
         }
     }
 
@@ -2188,6 +2308,9 @@ function showEmailVerification(email) {
     const sigPreview = document.getElementById('kkpSignaturePreview');
     const sigOverlay = document.getElementById('kkpSignatureOverlay');
     const clearSavedBtn = document.getElementById('kkpSignatureClearSaved');
+    const statusEl = document.getElementById('kkpSignatureStatus');
+    const padStatusEl = document.getElementById('kkpSignaturePadStatus');
+    const uploadInput = document.getElementById('kkpSignatureUploadInput');
 
     if (!canvas || !overlay) return;
 
@@ -2195,9 +2318,97 @@ function showEmailVerification(email) {
     let isDrawing = false;
     let hasSignature = false;
 
-    // Show Sign button only after name is auto-filled and no signature yet
-    // (name is auto-filled from name fields — handled in main IIFE above)
-    // triggerBtn visibility is managed by updateSignatureName()
+    const KKP_SIG_MAX_BYTES = 2 * 1024 * 1024;
+    const KKP_SIG_NEAR_WHITE = 250;
+    const KKP_SIG_BG_RATIO = 0.90;
+    const KKP_SIG_MIN_INK_RATIO = 0.0015;
+    const MSG_VALID = 'Valid image selected';
+    const MSG_INVALID = 'Please upload a valid image.';
+    const MSG_FORMAT = 'Only PNG, JPG, and JPEG images are allowed.';
+    const MSG_FORMAT_UX = 'Please upload a PNG, JPG, or JPEG image with a white background.';
+    const MSG_TOO_LARGE = 'Image size must not exceed 2 MB.';
+    const MSG_NON_WHITE = 'Please upload an image with a plain white background.';
+    const MSG_BLANK = 'Please upload an image containing visible text or a signature.';
+
+    function setSignatureStatus(message, isValid) {
+        if (!statusEl) return;
+        if (!message) {
+            statusEl.hidden = true;
+            statusEl.textContent = '';
+            statusEl.classList.remove('is-valid', 'is-invalid');
+            return;
+        }
+        statusEl.hidden = false;
+        statusEl.textContent = message;
+        statusEl.classList.toggle('is-valid', Boolean(isValid));
+        statusEl.classList.toggle('is-invalid', !isValid);
+    }
+
+    function setPadStatus(message, isValid) {
+        if (!padStatusEl) return;
+        if (!message) {
+            padStatusEl.hidden = true;
+            padStatusEl.textContent = '';
+            padStatusEl.classList.remove('is-valid', 'is-invalid');
+            return;
+        }
+        padStatusEl.hidden = false;
+        padStatusEl.textContent = message;
+        padStatusEl.classList.toggle('is-valid', Boolean(isValid));
+        padStatusEl.classList.toggle('is-invalid', !isValid);
+    }
+
+    function applySavedSignature(dataUrl) {
+        if (sigInput) sigInput.value = dataUrl;
+        if (typeof window.clearSignatureError === 'function') {
+            window.clearSignatureError();
+        }
+        // Success feedback only inside the Sign pad modal — not under Sign/Clear
+        setSignatureStatus('', false);
+
+        if (sigPreview && sigOverlay) {
+            sigPreview.src = dataUrl;
+            sigOverlay.style.display = 'flex';
+        }
+
+        // Keep Sign enabled so the user can reopen pad to redraw or upload again
+        if (triggerBtn) {
+            triggerBtn.disabled = false;
+            triggerBtn.setAttribute('aria-disabled', 'false');
+        }
+        if (clearSavedBtn) clearSavedBtn.hidden = false;
+        hasSignature = true;
+    }
+
+    function fillWhiteBackground() {
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width || 500;
+        const h = rect.height || 260;
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+        // Restore drawing transform for CSS pixels
+        const dpr = window.devicePixelRatio || 1;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+    }
+
+    function exportSignatureWithWhiteBackground() {
+        const out = document.createElement('canvas');
+        out.width = canvas.width;
+        out.height = canvas.height;
+        const octx = out.getContext('2d');
+        octx.fillStyle = '#ffffff';
+        octx.fillRect(0, 0, out.width, out.height);
+        octx.drawImage(canvas, 0, 0);
+        return out.toDataURL('image/png');
+    }
 
     function setupCanvas(preserveDrawing) {
         const rect = canvas.getBoundingClientRect();
@@ -2218,6 +2429,8 @@ function showEmailVerification(email) {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        fillWhiteBackground();
+
         if (snapshot && snapshot !== 'data:,') {
             const img = new Image();
             img.onload = function () {
@@ -2229,8 +2442,8 @@ function showEmailVerification(email) {
 
     function openPad() {
         overlay.style.display = 'flex';
+        setPadStatus('', false);
         setupCanvas(false);
-        // Restore existing signature if any
         if (sigInput && sigInput.value) {
             const img = new Image();
             img.onload = function () {
@@ -2247,13 +2460,16 @@ function showEmailVerification(email) {
 
     function closePad() {
         overlay.style.display = 'none';
+        setPadStatus('', false);
+        if (uploadInput) uploadInput.value = '';
     }
 
     function clearCanvas() {
-        const rect = canvas.getBoundingClientRect();
-        ctx.clearRect(0, 0, rect.width || 500, rect.height || 260);
+        fillWhiteBackground();
         hasSignature = false;
         showPlaceholder();
+        setPadStatus('', false);
+        if (uploadInput) uploadInput.value = '';
     }
 
     function hidePlaceholder() { if (placeholder) placeholder.style.display = 'none'; }
@@ -2272,6 +2488,7 @@ function showEmailVerification(email) {
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
         hidePlaceholder();
+        setPadStatus('', false);
     }
 
     function draw(e) {
@@ -2290,44 +2507,35 @@ function showEmailVerification(email) {
         const h = canvas.height;
         if (!w || !h) return false;
         const data = ctx.getImageData(0, 0, w, h).data;
-        for (let i = 3; i < data.length; i += 4) {
-            if (data[i] !== 0) return true;
+        // Non-near-white opaque pixels count as ink
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const a = data[i + 3];
+            if (a < 32) continue;
+            if (r < 250 || g < 250 || b < 250) return true;
         }
         return false;
     }
 
     function saveSig() {
         if (!hasSignature || !canvasHasInk()) {
-            alert('Please provide a signature before saving.');
+            setPadStatus(MSG_BLANK, false);
             return;
         }
-        // Show confirmation modal instead of saving immediately
         const confirmOverlay = document.getElementById('kkpSigConfirmOverlay');
         if (confirmOverlay) confirmOverlay.style.display = 'flex';
     }
 
     function doSaveSig() {
-        const data = canvas.toDataURL('image/png');
-
-        // Store in hidden input
-        if (sigInput) sigInput.value = data;
-
-        clearSignatureError();
-
-        // Show signature image overlaid on top of printed name
-        if (sigPreview && sigOverlay) {
-            sigPreview.src = data;
-            sigOverlay.style.display = 'flex';
+        if (!canvasHasInk()) {
+            setPadStatus(MSG_BLANK, false);
+            return;
         }
 
-        // Lock Sign button; show clear button for re-signing
-        if (triggerBtn) {
-            triggerBtn.disabled = true;
-            triggerBtn.setAttribute('aria-disabled', 'true');
-        }
-        if (clearSavedBtn) clearSavedBtn.style.display = 'inline-flex';
+        applySavedSignature(exportSignatureWithWhiteBackground());
 
-        // Close confirmation modal
         const confirmOverlay = document.getElementById('kkpSigConfirmOverlay');
         if (confirmOverlay) confirmOverlay.style.display = 'none';
 
@@ -2338,150 +2546,199 @@ function showEmailVerification(email) {
         if (sigInput) sigInput.value = '';
         if (sigOverlay) sigOverlay.style.display = 'none';
         if (sigPreview) sigPreview.removeAttribute('src');
-        if (clearSavedBtn) clearSavedBtn.style.display = 'none';
-        if (triggerBtn) {
-            triggerBtn.disabled = false;
-            triggerBtn.setAttribute('aria-disabled', 'false');
-        }
+        if (clearSavedBtn) clearSavedBtn.hidden = true;
+        if (uploadInput) uploadInput.value = '';
         hasSignature = false;
+        setSignatureStatus('', false);
+        setPadStatus('', false);
         showPlaceholder();
         clearCanvas();
+        if (typeof window.kkpRefreshSignatureName === 'function') {
+            window.kkpRefreshSignatureName();
+        }
+    }
+
+    function isNearWhitePixel(r, g, b, a) {
+        // Transparent is not a white background
+        if (a < 32) return false;
+        return r >= KKP_SIG_NEAR_WHITE && g >= KKP_SIG_NEAR_WHITE && b >= KKP_SIG_NEAR_WHITE;
+    }
+
+    function analyzeImageData(imageData, width, height) {
+        const data = imageData.data;
+        const step = width * height > 800000 ? 2 : 1;
+        let sampleTotal = 0;
+        let sampleWhite = 0;
+        let ink = 0;
+
+        for (let y = 0; y < height; y += step) {
+            for (let x = 0; x < width; x += step) {
+                const i = (y * width + x) * 4;
+                sampleTotal++;
+                if (isNearWhitePixel(data[i], data[i + 1], data[i + 2], data[i + 3])) {
+                    sampleWhite++;
+                } else {
+                    ink++;
+                }
+            }
+        }
+
+        return {
+            bgRatio: sampleTotal ? sampleWhite / sampleTotal : 0,
+            inkRatio: sampleTotal ? ink / sampleTotal : 0,
+        };
+    }
+
+    function drawValidatedImageOntoPad(dataUrl) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = function () {
+                const rect = canvas.getBoundingClientRect();
+                const cssW = rect.width || 500;
+                const cssH = rect.height || 260;
+                fillWhiteBackground();
+                // Fit image into pad while preserving aspect ratio
+                const scale = Math.min(cssW / img.naturalWidth, cssH / img.naturalHeight, 1);
+                const dw = img.naturalWidth * scale;
+                const dh = img.naturalHeight * scale;
+                const dx = (cssW - dw) / 2;
+                const dy = (cssH - dh) / 2;
+                ctx.drawImage(img, dx, dy, dw, dh);
+                hasSignature = true;
+                hidePlaceholder();
+                resolve();
+            };
+            img.onerror = function () {
+                reject(new Error(MSG_INVALID));
+            };
+            img.src = dataUrl;
+        });
+    }
+
+    function validateUploadedSignatureFile(file) {
+        return new Promise((resolve) => {
+            if (!file) {
+                resolve({ ok: false, error: MSG_INVALID });
+                return;
+            }
+
+            const name = String(file.name || '').toLowerCase();
+            const type = String(file.type || '').toLowerCase();
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+            const allowedExt = /\.(png|jpe?g)$/i.test(name);
+
+            if (type && !allowedTypes.includes(type)) {
+                resolve({ ok: false, error: MSG_FORMAT });
+                return;
+            }
+
+            if (!type && !allowedExt) {
+                resolve({ ok: false, error: MSG_FORMAT });
+                return;
+            }
+
+            if (file.size > KKP_SIG_MAX_BYTES) {
+                resolve({ ok: false, error: MSG_TOO_LARGE });
+                return;
+            }
+
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
+
+            img.onload = function () {
+                try {
+                    if (img.naturalWidth < 40 || img.naturalHeight < 20) {
+                        URL.revokeObjectURL(objectUrl);
+                        resolve({ ok: false, error: MSG_INVALID });
+                        return;
+                    }
+
+                    if (img.naturalWidth > 4000 || img.naturalHeight > 4000) {
+                        URL.revokeObjectURL(objectUrl);
+                        resolve({ ok: false, error: 'Signature image is too large to process.' });
+                        return;
+                    }
+
+                    const out = document.createElement('canvas');
+                    out.width = img.naturalWidth;
+                    out.height = img.naturalHeight;
+                    const octx = out.getContext('2d', { willReadFrequently: true });
+                    // Do NOT fill white first — transparency must fail white-bg check
+                    octx.drawImage(img, 0, 0);
+
+                    const imageData = octx.getImageData(0, 0, out.width, out.height);
+                    const analysis = analyzeImageData(imageData, out.width, out.height);
+                    URL.revokeObjectURL(objectUrl);
+
+                    if (analysis.bgRatio < KKP_SIG_BG_RATIO) {
+                        resolve({ ok: false, error: MSG_NON_WHITE });
+                        return;
+                    }
+
+                    if (analysis.inkRatio < KKP_SIG_MIN_INK_RATIO) {
+                        resolve({ ok: false, error: MSG_BLANK });
+                        return;
+                    }
+
+                    // Composite onto white for pad preview / save export
+                    const exportCanvas = document.createElement('canvas');
+                    exportCanvas.width = out.width;
+                    exportCanvas.height = out.height;
+                    const ectx = exportCanvas.getContext('2d');
+                    ectx.fillStyle = '#ffffff';
+                    ectx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                    ectx.drawImage(out, 0, 0);
+
+                    resolve({ ok: true, dataUrl: exportCanvas.toDataURL('image/png') });
+                } catch (e) {
+                    URL.revokeObjectURL(objectUrl);
+                    resolve({ ok: false, error: MSG_INVALID });
+                }
+            };
+
+            img.onerror = function () {
+                URL.revokeObjectURL(objectUrl);
+                resolve({ ok: false, error: MSG_INVALID });
+            };
+
+            img.src = objectUrl;
+        });
+    }
+
+    async function handleSignatureUpload(event) {
+        const file = event.target?.files?.[0];
+        if (!file) return;
+
+        setPadStatus('Validating image…', true);
+        const result = await validateUploadedSignatureFile(file);
+
+        if (!result.ok) {
+            setPadStatus('✗ ' + (result.error || MSG_FORMAT_UX), false);
+            if (uploadInput) uploadInput.value = '';
+            return;
+        }
+
+        try {
+            await drawValidatedImageOntoPad(result.dataUrl);
+            setPadStatus('✓ ' + MSG_VALID, true);
+        } catch (e) {
+            setPadStatus('✗ ' + MSG_INVALID, false);
+        }
+
+        if (uploadInput) uploadInput.value = '';
     }
 
     // Button events
     if (triggerBtn) {
         triggerBtn.addEventListener('click', function () {
-            if (triggerBtn.disabled) return;
             openPad();
         });
     }
 
-    // Validation function for required fields before signature
-    function validateRequiredFields() {
-        const errors = [];
-
-        // Check required name fields
-        const lastName = document.querySelector('input[name="last_name"]');
-        const firstName = document.querySelector('input[name="first_name"]');
-        const suffix = document.getElementById('kkpSuffix');
-        const customSuffix = document.getElementById('kkpCustomSuffix');
-
-        if (!lastName || !lastName.value.trim()) {
-            errors.push('- Last Name is required');
-        }
-        if (!firstName || !firstName.value.trim()) {
-            errors.push('- First Name is required');
-        }
-        if (!suffix || !suffix.value) {
-            errors.push('- Suffix is required');
-        } else if (suffix.value === 'Others') {
-            const raw = (customSuffix && customSuffix.value ? customSuffix.value : '').trim();
-            if (!raw) {
-                errors.push('- Custom suffix is required');
-            }
-        }
-
-        // Check other required fields
-        const purok = document.querySelector('select[name="purok_zone"]') || document.querySelector('input[name="purok_zone"]');
-        if (!purok || !purok.value.trim()) {
-            errors.push('- Purok/Zone is required');
-        }
-
-        const sex = document.getElementById('kkpSex');
-        if (!sex || !sex.value.trim()) {
-            errors.push('- Sex Assigned by Birth is required');
-        }
-
-        const age = document.querySelector('[name="age"]');
-        if (!age || !age.value.trim()) {
-            errors.push('- Age is required');
-        }
-
-        const birthday = document.querySelector('input[name="birthday"]');
-        if (!birthday || !birthday.value.trim()) {
-            errors.push('- Birthday is required');
-        }
-
-        const email = document.querySelector('input[name="email"]');
-        const emailLocked = document.getElementById('kkProfilingUpdateForm')?.dataset?.emailLocked === '1';
-        if (emailLocked && (!email || !email.value.trim())) {
-            errors.push('- Email is required');
-        }
-
-        const contact = document.querySelector('input[name="contact_number"]');
-        if (!contact || !contact.value.trim()) {
-            errors.push('- Contact # is required');
-        }
-
-        const civilStatus = document.getElementById('kkpCivilStatus');
-        if (!civilStatus || !civilStatus.value.trim()) {
-            errors.push('- Civil Status is required');
-        }
-
-        const youthAgeGroup = document.getElementById('kkpYouthAgeGroup');
-        if (!youthAgeGroup || !youthAgeGroup.value.trim()) {
-            errors.push('- Youth Age Group is required');
-        }
-
-        const education = document.getElementById('kkpEducation');
-        if (!education || !education.value.trim()) {
-            errors.push('- Educational Background is required');
-        }
-
-        const youthClass = document.getElementById('kkpYouthClass');
-        if (!youthClass || !youthClass.value.trim()) {
-            errors.push('- Youth Classification is required');
-        }
-
-        const workStatus = document.getElementById('kkpWorkStatus');
-        if (!workStatus || !workStatus.value.trim()) {
-            errors.push('- Work Status is required');
-        }
-
-        const skVoter = document.getElementById('kkpSkVoter');
-        if (!skVoter || !skVoter.value.trim()) {
-            errors.push('- Registered SK Voter is required');
-        }
-
-        const skVoted = document.getElementById('kkpSkVoted');
-        if (!skVoted || !skVoted.value.trim()) {
-            errors.push('- Did you vote last SK is required');
-        }
-
-        const nationalVoter = document.getElementById('kkpNationalVoter');
-        if (!nationalVoter || !nationalVoter.value.trim()) {
-            errors.push('- Registered National Voter is required');
-        }
-
-        const kkAssembly = document.getElementById('kkpKkAssembly');
-        const kkAssemblyVal = kkAssembly ? kkAssembly.value.trim() : '';
-        if (!kkAssemblyVal) {
-            errors.push('- KK Assembly attendance is required');
-        } else if (kkAssemblyVal === 'Yes') {
-            const kkTimes = document.getElementById('kkpKkTimes');
-            if (!kkTimes || !kkTimes.value.trim()) {
-                errors.push('- KK Assembly attendance count is required');
-            }
-        } else if (kkAssemblyVal === 'No') {
-            const kkReason = document.getElementById('kkpKkReason');
-            if (!kkReason || !kkReason.value.trim()) {
-                errors.push('- KK Assembly reason is required');
-            }
-        }
-
-        const facebook = document.querySelector('input[name="facebook_profile_url"]');
-        const facebookMsg = kkpValidateFacebook(facebook?.value, true);
-        if (facebookMsg) {
-            errors.push(`- ${facebookMsg}`);
-        }
-
-        const groupChat = document.getElementById('kkpGroupChat');
-        if (kkpIsFacebookFilled() && (!groupChat || !groupChat.value.trim())) {
-            errors.push('- Willing to join group chat is required when FB Account is provided');
-        }
-
-        return errors;
+    if (uploadInput) {
+        uploadInput.addEventListener('change', handleSignatureUpload);
     }
+
     if (closeBtn) closeBtn.addEventListener('click', closePad);
     if (clearBtn) clearBtn.addEventListener('click', clearCanvas);
     if (saveBtn) saveBtn.addEventListener('click', saveSig);
@@ -2491,36 +2748,12 @@ function showEmailVerification(email) {
         if (!dataUrl || !sigInput) {
             return;
         }
-
-        sigInput.value = dataUrl;
-
-        clearSignatureError();
-
-        if (sigPreview && sigOverlay) {
-            sigPreview.src = dataUrl;
-            sigOverlay.style.display = 'flex';
-        }
-
-        if (triggerBtn) {
-            triggerBtn.disabled = true;
-            triggerBtn.setAttribute('aria-disabled', 'true');
-        }
-
-        if (clearSavedBtn) {
-            clearSavedBtn.style.display = 'inline-flex';
-        }
+        applySavedSignature(dataUrl);
     };
 
     // Initial state (in case of server-side repopulation)
     if (sigInput && sigInput.value && sigPreview && sigOverlay) {
-        sigPreview.src = sigInput.value;
-        sigOverlay.style.display = 'flex';
-        clearSignatureError();
-        if (triggerBtn) {
-            triggerBtn.disabled = true;
-            triggerBtn.setAttribute('aria-disabled', 'true');
-        }
-        if (clearSavedBtn) clearSavedBtn.style.display = 'inline-flex';
+        applySavedSignature(sigInput.value);
     }
 
     // Confirmation modal buttons
@@ -2565,4 +2798,97 @@ function showEmailVerification(email) {
     window.addEventListener('resize', function () {
         if (overlay.style.display !== 'none') setupCanvas(true);
     });
+})();
+
+/* Mobile: desktop layout scaled to fit (update form only; wizard has its own scaler) */
+(function () {
+    'use strict';
+
+    let applying = false;
+    let rafId = null;
+
+    function isMobile() {
+        return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function applyScale(root) {
+        const shell = root.querySelector('.kkp-fs-scale-shell');
+        const inner = root.querySelector('.kkp-fs-scale-inner');
+        if (!shell || !inner || applying) {
+            return;
+        }
+
+        if (!isMobile()) {
+            shell.style.height = '';
+            shell.style.width = '';
+            inner.style.width = '';
+            inner.style.minWidth = '';
+            inner.style.transform = '';
+            inner.style.zoom = '';
+            return;
+        }
+
+        applying = true;
+        try {
+            inner.style.zoom = '1';
+            inner.style.transform = 'none';
+            inner.style.width = '860px';
+            inner.style.minWidth = '860px';
+
+            const designWidth = Math.max(860, Math.ceil(inner.scrollWidth || 860));
+            inner.style.width = `${designWidth}px`;
+            inner.style.minWidth = `${designWidth}px`;
+
+            const available = Math.max(
+                1,
+                Math.floor(shell.clientWidth || root.clientWidth || window.innerWidth || 1),
+            );
+            const scale = Math.min(1, available / designWidth);
+
+            if ('zoom' in inner.style) {
+                inner.style.transform = '';
+                inner.style.zoom = String(scale);
+                shell.style.width = '100%';
+                shell.style.height = '';
+            } else {
+                inner.style.zoom = '';
+                inner.style.transformOrigin = 'top left';
+                inner.style.transform = `scale(${scale})`;
+                shell.style.width = '100%';
+                shell.style.height = `${Math.ceil(inner.scrollHeight * scale)}px`;
+            }
+        } finally {
+            applying = false;
+        }
+    }
+
+    function run() {
+        // Wizard registration page is handled by kkprofiling-wizard.js
+        if (document.getElementById('kkpRegistrationWizard')) {
+            return;
+        }
+        document.querySelectorAll('#kkpuFormSection').forEach((root) => applyScale(root));
+    }
+
+    function scheduleRun() {
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+        }
+        rafId = requestAnimationFrame(() => {
+            rafId = null;
+            run();
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', scheduleRun);
+    } else {
+        scheduleRun();
+    }
+
+    window.addEventListener('resize', scheduleRun);
+    window.addEventListener('orientationchange', () => setTimeout(scheduleRun, 200));
+    window.addEventListener('load', scheduleRun);
+    setTimeout(scheduleRun, 80);
+    setTimeout(scheduleRun, 300);
 })();

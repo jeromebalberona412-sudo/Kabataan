@@ -9,7 +9,8 @@ use App\Models\User;
 use App\Notifications\KabataanProfilingEmailChangeVerify;
 use App\Notifications\KabataanProfilingUpdatedEmail;
 use App\Notifications\KabataanVerifyEmail;
-use App\Rules\FacebookProfileUrl;
+use App\Rules\PhilippineMobileNumber;
+use App\Rules\ParticipantSignatureImage;
 use App\Services\BarangayLogoUrlService;
 use App\Services\BarangayZoneService;
 use App\Services\KabataanNotificationService;
@@ -18,6 +19,7 @@ use App\Services\KabataanProfilingHistoryService;
 use App\Services\KkProfilingScheduleService;
 use App\Services\KkRegistrationDraftService;
 use App\Services\KkSurveyResponseService;
+use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
@@ -28,7 +30,6 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Validation\Rule;
 
 class KKProfilingController extends Controller
 {
@@ -297,10 +298,20 @@ class KKProfilingController extends Controller
                 ->withErrors(['kk_profiling' => 'No KK Profiling record found for your account.']);
         }
 
+        $request->merge([
+            'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
+            'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
+            'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+        ]);
+
+        if ($request->input('middle_name') === '') {
+            $request->merge(['middle_name' => null]);
+        }
+
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:3', 'max:50', 'regex:/^[A-Za-z.\-]{3,50}$/'],
-            'first_name' => ['required', 'string', 'min:3', 'max:50', 'regex:/^(?!\s)[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'max:50', 'regex:/^$|^[A-Za-z.\-]{3,50}$/'],
+            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $registration->barangay_id),
@@ -308,7 +319,7 @@ class KKProfilingController extends Controller
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
             'email' => ['required', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i'],
-            'contact_number' => ['required', 'string', 'regex:/^09\d{9}$/'],
+            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber((int) $registration->id)],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -320,22 +331,28 @@ class KKProfilingController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
-            'facebook_profile_url' => [
-                'nullable',
-                Rule::requiredIf(fn () => in_array((string) $request->input('group_chat'), ['Yes', 'No'], true)),
+            'signature_name' => [
+                'required',
                 'string',
-                'min:3',
-                'max:50',
-                new FacebookProfileUrl,
+                'min:'.(int) config('signature.name_min', 1),
+                'max:'.(int) config('signature.name_max', 255),
             ],
-            'group_chat' => [
-                'nullable',
-                Rule::requiredIf(fn () => trim((string) $request->input('facebook_profile_url', '')) !== ''),
-                'string',
-                Rule::in(['Yes', 'No']),
-            ],
-            'signature' => 'required|string',
+            'signature' => ['required', 'string', new ParticipantSignatureImage],
+        ], [
+            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
+            'signature_name.required' => config('signature.messages.name_required'),
+            'signature_name.min' => config('signature.messages.name_required'),
+            'signature_name.max' => config('signature.messages.name_max'),
+            'signature.required' => config('signature.messages.required'),
         ]);
+
+        $canonicalContact = app(PhoneNumberService::class)->normalize($validated['contact_number'] ?? null);
+        if ($canonicalContact === null) {
+            return $this->updateErrorResponse($request, [
+                'contact_number' => PhoneNumberService::MSG_INVALID,
+            ]);
+        }
+        $validated['contact_number'] = $canonicalContact;
 
         $this->normalizeProfilingSuffix($validated);
 
@@ -600,8 +617,8 @@ class KKProfilingController extends Controller
         $validated['kk_reason'] = $request->input('kk_assembly') === 'No'
             ? ($request->input('kk_reason') ?: $request->input('kk_reasonChk'))
             : null;
-        $validated['facebook_profile_url'] = trim((string) $request->input('facebook_profile_url', '')) ?: null;
-        $validated['group_chat'] = $request->input('group_chat');
+        $validated['facebook_profile_url'] = null;
+        $validated['group_chat'] = null;
         $validated['signature_name'] = $request->input('signature_name');
 
         return $validated;
@@ -753,10 +770,20 @@ class KKProfilingController extends Controller
             return $this->submitErrorResponse($request, ['schedule' => $message]);
         }
 
+        $request->merge([
+            'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
+            'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
+            'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+        ]);
+
+        if ($request->input('middle_name') === '') {
+            $request->merge(['middle_name' => null]);
+        }
+
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:3', 'max:50', 'regex:/^[A-Za-z.\-]{3,50}$/'],
-            'first_name' => ['required', 'string', 'min:3', 'max:50', 'regex:/^(?!\s)[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'max:50', 'regex:/^$|^[A-Za-z.\-]{3,50}$/'],
+            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $barangayRecord->id),
@@ -764,7 +791,7 @@ class KKProfilingController extends Controller
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
             'email' => ['required', 'email', 'max:254', 'regex:/^[A-Za-z0-9._%+-]{6,30}@gmail\.com$/i'],
-            'contact_number' => ['required', 'string', 'regex:/^09\d{9}$/'],
+            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -776,22 +803,28 @@ class KKProfilingController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
-            'facebook_profile_url' => [
-                'nullable',
-                Rule::requiredIf(fn () => in_array((string) $request->input('group_chat'), ['Yes', 'No'], true)),
+            'signature_name' => [
+                'required',
                 'string',
-                'min:3',
-                'max:50',
-                new FacebookProfileUrl,
+                'min:'.(int) config('signature.name_min', 1),
+                'max:'.(int) config('signature.name_max', 255),
             ],
-            'group_chat' => [
-                'nullable',
-                Rule::requiredIf(fn () => trim((string) $request->input('facebook_profile_url', '')) !== ''),
-                'string',
-                Rule::in(['Yes', 'No']),
-            ],
-            'signature' => 'required|string',
+            'signature' => ['required', 'string', new ParticipantSignatureImage],
+        ], [
+            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
+            'signature_name.required' => config('signature.messages.name_required'),
+            'signature_name.min' => config('signature.messages.name_required'),
+            'signature_name.max' => config('signature.messages.name_max'),
+            'signature.required' => config('signature.messages.required'),
         ]);
+
+        $canonicalContact = app(PhoneNumberService::class)->normalize($validated['contact_number'] ?? null);
+        if ($canonicalContact === null) {
+            return $this->submitErrorResponse($request, [
+                'contact_number' => PhoneNumberService::MSG_INVALID,
+            ]);
+        }
+        $validated['contact_number'] = $canonicalContact;
 
         if (($validated['suffix'] ?? null) === 'Others') {
             $customSuffix = trim((string) ($validated['custom_suffix'] ?? ''));
@@ -857,8 +890,8 @@ class KKProfilingController extends Controller
         $validated['kk_reason'] = $request->input('kk_assembly') === 'No'
             ? ($request->input('kk_reason') ?: $request->input('kk_reasonChk'))
             : null;
-        $validated['facebook_profile_url'] = trim((string) $request->input('facebook_profile_url', '')) ?: null;
-        $validated['group_chat'] = $request->input('group_chat');
+        $validated['facebook_profile_url'] = null;
+        $validated['group_chat'] = null;
 
         \Log::info('Validation passed');
 

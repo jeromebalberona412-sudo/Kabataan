@@ -1,10 +1,25 @@
+                    {{-- Clear All — same top position on desktop and mobile --}}
+                    <div class="kkp-form-clear-bar" id="kkpFormHeaderToolbar">
+                        <button
+                            type="button"
+                            class="kkp-form-clear-btn"
+                            id="kkpFormClearAllBtn"
+                            hidden
+                            aria-haspopup="dialog"
+                        >
+                            Clear All Data
+                        </button>
+                    </div>
+
                     {{-- -- FORM HEADER -- --}}
 
                     <div class="kkp-form-header">
 
-                        <div class="kkp-form-title-col">
+                        <div class="kkp-form-main-title">KK Survey Questionnaire</div>
 
-                            <div class="kkp-form-main-title">KK Survey Questionnaire</div>
+                        <div class="kkp-form-header-right">
+
+                            <div class="kkp-form-annex">ANNEX 3</div>
 
                             <div class="kkp-form-header-fields">
 
@@ -33,16 +48,6 @@
                                 </div>
 
                             </div>
-
-                        </div>
-
-                        <div class="kkp-form-logo">
-
-                            <img
-                                src="{{ $barangayLogoUrl ?? '/images/skoneportal_logo.webp' }}"
-                                alt="{{ ($barangay ?? 'Barangay') }} SK Logo"
-                                onerror="this.onerror=null;this.src='/images/skoneportal_logo.webp';"
-                            >
 
                         </div>
 
@@ -79,7 +84,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="50" autocomplete="off">
+                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="150" autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Last Name <span class="kkp-required">*</span></label>
@@ -89,7 +94,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="50" autocomplete="off">
+                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="150" autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">First Name <span class="kkp-required">*</span></label>
@@ -99,7 +104,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" " maxlength="50" autocomplete="off">
+                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" " maxlength="150" autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Middle Name</label>
@@ -154,7 +159,7 @@
 
                         <div class="kkp-loc-col">
 
-                            <input type="text" class="kkp-uline kkp-readonly" value="Region IV-A (CALABARZON)" readonly>
+                            <input type="text" class="kkp-uline kkp-readonly" value="Region IV-A (CALABARZON)" readonly tabindex="-1" aria-readonly="true">
 
                             <label class="kkp-col-label">Region</label>
 
@@ -162,7 +167,7 @@
 
                         <div class="kkp-loc-col">
 
-                            <input type="text" class="kkp-uline kkp-readonly" value="Laguna" readonly>
+                            <input type="text" class="kkp-uline kkp-readonly" value="Laguna" readonly tabindex="-1" aria-readonly="true">
 
                             <label class="kkp-col-label">Province</label>
 
@@ -170,7 +175,7 @@
 
                         <div class="kkp-loc-col">
 
-                            <input type="text" class="kkp-uline kkp-readonly" value="Santa Cruz" readonly>
+                            <input type="text" class="kkp-uline kkp-readonly" value="Santa Cruz" readonly tabindex="-1" aria-readonly="true">
 
                             <label class="kkp-col-label">City/Municipality</label>
 
@@ -178,7 +183,7 @@
 
                         <div class="kkp-loc-col">
 
-                            <input type="text" class="kkp-uline kkp-readonly" value="{{ $barangay }}" readonly>
+                            <input type="text" class="kkp-uline kkp-readonly" value="{{ $barangay }}" readonly tabindex="-1" aria-readonly="true">
 
                             <label class="kkp-col-label">Barangay</label>
 
@@ -202,7 +207,7 @@
                                 @endforelse
                             </select>
 
-                            <label class="kkp-col-label" for="kkpPurokZone">Purok/Sitio/Zone <span class="kkp-required">*</span></label>
+                            <label class="kkp-col-label" for="kkpPurokZone">Purok/Zone <span class="kkp-required">*</span></label>
 
                         </div>
 
@@ -272,9 +277,9 @@
 
                             <div class="kkp-inline-pair kkp-inline-pair--email">
 
-                                <label class="kkp-inline-label" for="kkpEmail">E-mail address: <span class="kkp-optional-label">(Optional)</span></label>
+                                <label class="kkp-inline-label" for="kkpEmail">E-mail address: <span class="kkp-required">*</span></label>
 
-                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " maxlength="254" autocomplete="email" autocapitalize="none" spellcheck="false" @if(!empty($emailReadonly)) readonly tabindex="-1" required @endif>
+                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " maxlength="254" autocomplete="email" autocapitalize="none" spellcheck="false" required @if(!empty($emailReadonly)) readonly tabindex="-1" @endif>
 
                             </div>
 
@@ -282,7 +287,7 @@
 
                                 <label class="kkp-inline-label">Contact #: <span class="kkp-required">*</span></label>
 
-                                <input type="tel" name="contact_number" id="kkpContactNumber" class="kkp-uline kkp-uline-med" placeholder="09XXXXXXXXX" inputmode="numeric" pattern="09[0-9]{9}" maxlength="11" required>
+                                <input type="tel" name="contact_number" id="kkpContactNumber" class="kkp-uline kkp-uline-med" placeholder="09XXXXXXXXX" inputmode="numeric" pattern="09[0-9]{9}" maxlength="11" autocomplete="tel" required>
 
                             </div>
 
@@ -589,58 +594,13 @@
 
 
 
-                    {{-- -- FOOTER: FB + Group Chat -- --}}
-
-                    <div class="kkp-footer-row">
-
-                        <div class="kkp-footer-fb">
-
-                            <div class="kkp-footer-fb-label-col">
-                                <label class="kkp-inline-label" for="kkpFacebook">FB Account:</label>
-                                <span class="kkp-optional-label" id="kkpFacebookOptional">(Optional)</span>
-                                <span class="kkp-required" id="kkpFacebookRequired" hidden>*</span>
-                            </div>
-
-                            <div class="kkp-footer-fb-field">
-                                <input
-                                    type="text"
-                                    name="facebook_profile_url"
-                                    id="kkpFacebook"
-                                    class="kkp-uline kkp-uline-fb"
-                                    placeholder="Paste your Facebook profile link here"
-                                    minlength="3"
-                                    maxlength="50"
-                                    value="{{ old('facebook_profile_url', $selectedFacebookProfileUrl ?? '') }}"
-                                    autocomplete="url"
-                                    spellcheck="false"
-                                >
-                            </div>
-
-                        </div>
-
-                        <div class="kkp-footer-chat" id="kkpFooterChat">
-
-                            <span class="kkp-inline-label">Willing to join the group chat? <span class="kkp-required" id="kkpGroupChatRequired" hidden>*</span></span>
-
-                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="group_chatChk" value="Yes" onchange="kkpSingleCheck(this,'kkpGroupChat')"> Yes</label>
-
-                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="group_chatChk" value="No" onchange="kkpSingleCheck(this,'kkpGroupChat')"> No</label>
-
-                            <input type="hidden" id="kkpGroupChat" name="group_chat">
-
-                        </div>
-
-                    </div>
-
-
-
                     {{-- -- THANK YOU -- --}}
 
                     <div class="kkp-thankyou">Thank you for your participation!</div>
 
 
 
-                    {{-- -- SIGNATURE (LEFT SIDE BELOW FB) -- --}}
+                    {{-- -- SIGNATURE -- --}}
 
                     <div class="kkp-sig-section-left">
 
@@ -660,31 +620,23 @@
 
                             </div>
 
-                            <div class="kkp-sig-label-bottom">Name and Signature of Participant <span class="kkp-required">*</span></div>
+                            <div class="kkp-sig-label-bottom">
+                                <span class="kkp-sig-label-text">Name and Signature of Participant <span class="kkp-required">*</span></span>
+                            </div>
 
-                            <button type="button" class="kkp-sig-trigger-btn" id="kkpSignatureTrigger"
+                            <div class="kkp-sig-actions" id="kkpSignatureActions">
+                                <button type="button" class="kkp-sig-trigger-btn" id="kkpSignatureTrigger" title="Sign here">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+                                    </svg>
+                                    Sign
+                                </button>
+                                <button type="button" class="kkp-sig-clear-saved-btn" id="kkpSignatureClearSaved" title="Clear signature" hidden>
+                                    Clear
+                                </button>
+                            </div>
 
-                                    title="Sign here">
-
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
-
-                                     viewBox="0 0 24 24" fill="none" stroke="currentColor"
-
-                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                                    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
-
-                                </svg>
-
-                                Sign
-
-                            </button>
-
-                            <button type="button" class="kkp-sig-clear-saved-btn" id="kkpSignatureClearSaved" style="display:none;">
-
-                                Clear Signature
-
-                            </button>
+                            <p class="kkp-sig-status" id="kkpSignatureStatus" role="status" aria-live="polite" hidden></p>
 
                             <input type="hidden" id="kkpSignatureData" name="signature">
 
@@ -693,22 +645,6 @@
                     </div>
 
 
-
-
-
-                    {{-- -- DATA PROCESSING AGREEMENT -- --}}
-
-                    <div class="kkp-agreement-section">
-
-                        <label class="kkp-agreement-label">
-
-                            <input type="checkbox" id="kkpDataAgreement" name="data_agreement" required>
-
-                            <span class="kkp-agreement-text">I agree to the collection and processing of my personal information for KK Profiling purposes.</span>
-
-                        </label>
-
-                    </div>
 
 
 

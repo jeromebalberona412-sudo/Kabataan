@@ -31,6 +31,7 @@ export default defineConfig({
                 'app/Modules/Layout/assets/css/kabataan-logout.css',
                 'app/Modules/Layout/assets/js/kabataan-header.js',
                 'app/Modules/Layout/assets/js/kabataan-logout.js',
+                'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
                 'app/Modules/Homepage/assets/css/kabataan-footer.css',
 
                 // Dashboard
@@ -109,17 +110,21 @@ export default defineConfig({
                 'app/Modules/Baranggay_ABYIP/assets/css/baranggay_abyip.css',
                 'app/Modules/Baranggay_ABYIP/assets/js/baranggay_abyip.js',
 
-                // KK Profiling
+                // KK Profiling (CSS split to stay under ~1k lines each)
                 'app/Modules/KKProfiling/assets/css/kkprofiling.css',
+                'app/Modules/KKProfiling/assets/css/kkprofiling-form-body.css',
+                'app/Modules/KKProfiling/assets/css/kkprofiling-signature.css',
+                'app/Modules/KKProfiling/assets/css/kkprofiling-responsive.css',
+                'app/Modules/KKProfiling/assets/css/kkprofiling-account.css',
                 'app/Modules/KKProfiling/assets/js/kkprofiling.js',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-signup.css',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-signup.js',
                 'app/Modules/KKProfiling/assets/css/kk-profiling-update.css',
                 'app/Modules/KKProfiling/assets/js/kk-profiling-update.js',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-wizard.css',
+                'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
-                'app/Modules/KKProfiling/assets/js/kkprofiling-optional-email.js',
             ],
             refresh: true,
         }),

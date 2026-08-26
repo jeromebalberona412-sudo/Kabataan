@@ -1,6 +1,4 @@
-/* ═══════════════════════════════════════════════
-   KK Profiling Wizard — 3-step registration UX
-   ═══════════════════════════════════════════════ */
+/* KK Profiling Wizard - progress header + panels */
 
 .kkp-wizard-root {
     --kkp-brand: #0450a8;
@@ -15,7 +13,7 @@
 
 .kkp-wizard-progress-header {
     position: relative;
-    z-index: 1;
+    z-index: 5;
     width: 100%;
     margin-bottom: 1.25rem;
     background: linear-gradient(135deg, #022a54 0%, var(--kkp-brand) 55%, #1d6fd1 100%);
@@ -49,13 +47,27 @@
 
 .kkp-wizard-progress-meta {
     text-align: center;
-    padding-inline: 0 7.5rem;
+    padding-inline: 0;
 }
 
-.kkp-wizard-clear-btn {
+.kkp-wizard-progress-actions {
     position: absolute;
     top: 0;
     right: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+    max-width: min(11.5rem, 46vw);
+}
+
+.kkp-wizard-clear-btn,
+.kkp-wizard-fullscreen-btn,
+.kkp-wizard-fullscreen-close-btn {
+    position: static;
+    top: auto;
+    right: auto;
     z-index: 2;
     padding: 0.45rem 0.85rem;
     border-radius: 8px;
@@ -68,21 +80,117 @@
     white-space: nowrap;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 36px;
+}
+
+.kkp-wizard-fullscreen-group {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 0.35rem;
+    max-width: 100%;
+}
+
+.kkp-wizard-fullscreen-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.kkp-wizard-fullscreen-close-btn {
+    flex: 0 0 auto;
+    width: 36px;
+    min-width: 36px;
+    padding: 0.45rem;
+}
+
+.kkp-wizard-fullscreen-btn svg,
+.kkp-wizard-fullscreen-close-btn svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
 }
 
 .kkp-wizard-clear-btn:hover,
-.kkp-wizard-clear-btn:focus-visible {
+.kkp-wizard-clear-btn:focus-visible,
+.kkp-wizard-fullscreen-btn:hover,
+.kkp-wizard-fullscreen-btn:focus-visible,
+.kkp-wizard-fullscreen-close-btn:hover,
+.kkp-wizard-fullscreen-close-btn:focus-visible {
     background: rgba(255, 255, 255, 0.22);
     border-color: rgba(255, 255, 255, 0.7);
     outline: none;
 }
 
-.kkp-wizard-clear-btn:focus-visible {
+.kkp-wizard-clear-btn:focus-visible,
+.kkp-wizard-fullscreen-btn:focus-visible,
+.kkp-wizard-fullscreen-close-btn:focus-visible {
     box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
 }
 
-.kkp-wizard-clear-btn:active {
+.kkp-wizard-clear-btn:active,
+.kkp-wizard-fullscreen-btn:active,
+.kkp-wizard-fullscreen-close-btn:active {
     transform: scale(0.98);
+}
+
+#kkpFormCard {
+    position: relative;
+}
+
+/* Compact Clear All Data confirmation modal */
+.kkp-clear-draft-modal.kkp-info-modal {
+    max-width: 360px;
+    max-height: none;
+    border-radius: 12px;
+}
+
+.kkp-clear-draft-modal .kkp-info-modal-close {
+    width: 28px;
+    height: 28px;
+    top: 0.35rem;
+    right: 0.35rem;
+    font-size: 1.25rem;
+}
+
+.kkp-clear-draft-modal .kkp-info-modal-scroll {
+    max-height: none;
+    padding: 1.15rem 1.1rem 0.65rem;
+}
+
+.kkp-clear-draft-modal .kkp-info-title {
+    margin: 0 0 0.45rem;
+    font-size: 1.05rem;
+    padding-right: 1.5rem;
+}
+
+.kkp-clear-draft-modal .kkp-info-lang p {
+    margin: 0 0 0.45rem;
+    font-size: 0.84rem;
+    line-height: 1.4;
+    color: #475569;
+}
+
+.kkp-clear-draft-modal .kkp-info-lang p:last-child {
+    margin-bottom: 0;
+}
+
+.kkp-clear-draft-modal .kkp-info-modal-footer {
+    padding: 0.65rem 1.1rem 0.9rem;
+}
+
+.kkp-clear-draft-modal .kkp-info-btn {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+    min-height: 34px;
+}
+
+@media (max-width: 768px) {
+    .kkp-clear-draft-modal.kkp-info-modal {
+        max-width: min(360px, calc(100vw - 2rem));
+    }
 }
 
 .kkp-info-btn-danger {
@@ -446,590 +554,4 @@
     border: none;
     margin: 0 0 1.15rem;
     padding: 0;
-}
-
-.kkp-wizard-doc-type-legend {
-    display: block;
-    font-weight: 600;
-    color: #0f172a;
-    margin-bottom: 0.75rem;
-    font-size: 0.92rem;
-}
-
-.kkp-wizard-doc-type-options {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0.85rem;
-}
-
-.kkp-wizard-doc-type-option {
-    display: block;
-    cursor: pointer;
-}
-
-.kkp-wizard-doc-type-option input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.kkp-wizard-doc-type-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.95rem 1rem;
-    border: 2px solid var(--kkp-border);
-    border-radius: 12px;
-    background: #f8fafc;
-    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
-    min-height: 100%;
-}
-
-.kkp-wizard-doc-type-option:hover .kkp-wizard-doc-type-card {
-    border-color: #94a3b8;
-    background: #fff;
-}
-
-.kkp-wizard-doc-type-option input:checked + .kkp-wizard-doc-type-card {
-    border-color: var(--kkp-brand);
-    background: var(--kkp-brand-soft);
-    box-shadow: 0 0 0 3px rgba(4, 80, 168, 0.12);
-}
-
-.kkp-wizard-doc-type-option input:focus-visible + .kkp-wizard-doc-type-card {
-    outline: 2px solid var(--kkp-brand);
-    outline-offset: 2px;
-}
-
-.kkp-wizard-doc-type-icon {
-    flex-shrink: 0;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    color: var(--kkp-brand);
-    border: 1px solid #dbeafe;
-}
-
-.kkp-wizard-doc-type-icon svg {
-    width: 1.15rem;
-    height: 1.15rem;
-}
-
-.kkp-wizard-doc-type-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-}
-
-.kkp-wizard-doc-type-name {
-    font-weight: 700;
-    color: #0f172a;
-    font-size: 0.95rem;
-}
-
-.kkp-wizard-doc-type-desc {
-    font-size: 0.82rem;
-    color: var(--kkp-muted);
-    line-height: 1.4;
-}
-
-.kkp-wizard-upload-panel-title {
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: #334155;
-    margin: 0 0 0.75rem;
-}
-
-.kkp-wizard-upload-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
-}
-
-.kkp-wizard-upload-side-label {
-    font-weight: 600;
-    font-size: 0.85rem;
-    color: #334155;
-    margin: 0 0 0.5rem;
-}
-
-@media (max-width: 640px) {
-    .kkp-wizard-upload-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-.kkp-wizard-upload-panel {
-    margin-top: 0.15rem;
-}
-
-.kkp-wizard-upload-shell {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-
-.kkp-wizard-dropzone {
-    display: block;
-    cursor: pointer;
-}
-
-.kkp-wizard-dropzone[hidden],
-.kkp-wizard-dropzone-preview[hidden] {
-    display: none !important;
-}
-
-.kkp-wizard-file-input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
-.kkp-wizard-dropzone.is-dragover .kkp-wizard-dropzone-empty {
-    border-color: var(--kkp-brand);
-    background: var(--kkp-brand-soft);
-    box-shadow: 0 0 0 3px rgba(4, 80, 168, 0.12);
-}
-
-.kkp-wizard-dropzone-empty,
-.kkp-wizard-dropzone-preview {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.35rem;
-    min-height: 9.5rem;
-    padding: 1.25rem 1rem;
-    border: 2px dashed var(--kkp-border);
-    border-radius: 12px;
-    background: #f8fafc;
-    text-align: center;
-    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-}
-
-.kkp-wizard-dropzone-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 999px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    color: var(--kkp-brand);
-    margin-bottom: 0.25rem;
-    border: 1px solid #dbeafe;
-}
-
-.kkp-wizard-dropzone-icon svg {
-    width: 1.2rem;
-    height: 1.2rem;
-}
-
-.kkp-wizard-dropzone-title {
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-.kkp-wizard-dropzone-sub {
-    font-size: 0.88rem;
-    color: #475569;
-}
-
-.kkp-wizard-dropzone-link {
-    color: var(--kkp-brand);
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-}
-
-.kkp-wizard-dropzone-hint {
-    font-size: 0.8rem;
-    color: var(--kkp-muted);
-    margin-top: 0.15rem;
-}
-
-.kkp-wizard-dropzone-preview {
-    align-items: stretch;
-    gap: 0.75rem;
-    min-height: auto;
-    border-style: solid;
-    background: #fff;
-}
-
-.kkp-wizard-dropzone-preview img {
-    width: 100%;
-    max-height: 220px;
-    object-fit: contain;
-    border-radius: 8px;
-    background: #f1f5f9;
-}
-
-.kkp-wizard-dropzone-filemeta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    width: 100%;
-}
-
-.kkp-wizard-dropzone-filename {
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: #0f172a;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.kkp-wizard-dropzone-remove {
-    flex-shrink: 0;
-    border: none;
-    background: #fee2e2;
-    color: #b91c1c;
-    font-size: 0.82rem;
-    font-weight: 600;
-    padding: 0.35rem 0.65rem;
-    border-radius: 8px;
-    cursor: pointer;
-}
-
-.kkp-wizard-dropzone-remove:hover {
-    background: #fecaca;
-}
-
-.kkp-wizard-doc-error {
-    display: none !important;
-}
-
-.kkp-wizard-doc-error-panel {
-    margin-top: 1rem;
-    padding: 0.85rem 1rem;
-    border-radius: 10px;
-    border: 1px solid #fecaca;
-    background: #fef2f2;
-    color: #991b1b;
-    font-size: 0.92rem;
-    font-weight: 600;
-    line-height: 1.45;
-}
-
-.kkp-wizard-doc-error-panel[hidden] {
-    display: none !important;
-}
-
-.kkp-wizard-ocr-panel {
-    margin-top: 1.25rem;
-    padding: 1rem 1.1rem;
-    border-radius: 12px;
-    border: 1px solid #dbeafe;
-    background: #f8fbff;
-}
-
-.kkp-wizard-ocr-title {
-    margin: 0 0 0.35rem;
-    font-weight: 700;
-    color: #0f172a;
-}
-
-.kkp-wizard-ocr-status {
-    margin: 0;
-    color: #334155;
-    font-size: 0.92rem;
-}
-
-.kkp-wizard-ocr-fields {
-    margin: 0.75rem 0 0;
-    display: grid;
-    gap: 0.35rem 1rem;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-}
-
-.kkp-wizard-ocr-fields div {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-}
-
-.kkp-wizard-ocr-fields dt {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: #64748b;
-}
-
-.kkp-wizard-ocr-fields dd {
-    margin: 0;
-    font-weight: 600;
-    color: #0f172a;
-    word-break: break-word;
-}
-
-.kkp-wizard-ocr-note {
-    margin: 0.75rem 0 0;
-    font-size: 0.85rem;
-    color: #1d4ed8;
-}
-
-.kkp-wizard-ocr-panel.is-error {
-    border-color: #fecaca;
-    background: #fff7f7;
-}
-
-.kkp-wizard-ocr-panel.is-loading {
-    opacity: 0.85;
-}
-
-/* Set-password-only view (from email link) — hide wizard chrome */
-.kkp-wizard-set-password-only #kkpWizardProgressHeader,
-.kkp-wizard-set-password-only #kkpTopBackLink,
-.kkp-wizard-set-password-only .kkp-alert {
-    display: none !important;
-}
-
-.kkp-wizard-set-password-only .kkp-paper {
-    background: transparent;
-    box-shadow: none;
-    border: none;
-    padding: 0;
-}
-
-.kkp-wizard-set-password-only .kkp-responsive-container {
-    padding: 0;
-}
-
-.kkp-wizard-set-password-only .kkp-main {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.kkp-wizard-set-password-only .kkp-page-wrap {
-    max-width: 520px;
-    margin: 0 auto;
-}
-
-.kkp-wizard-registration-complete .kkp-wizard-nav,
-.kkp-wizard-registration-complete #kkpTopBackLink {
-    display: none !important;
-}
-
-.kkp-wizard-registration-complete .kkp-wizard-progress,
-.kkp-wizard-registration-complete #kkpWizardStep3 .verify-help,
-.kkp-wizard-registration-complete #kkpWizardStep3 .verify-card,
-.kkp-wizard-registration-complete #kkpWizardStep3 .setpw-card,
-.kkp-wizard-registration-complete #kkpWizardStep3 .kkp-wizard-email-error {
-    display: none !important;
-}
-
-.reg-success-btn-secondary {
-    background: #e2e8f0 !important;
-    color: #0f172a !important;
-    box-shadow: none !important;
-}
-
-.reg-success-btn-secondary:hover {
-    background: #cbd5e1 !important;
-    color: #0f172a !important;
-}
-
-.kkp-wizard-field-label {
-    display: block;
-    font-weight: 600;
-    color: #0f172a;
-    margin-bottom: 0.45rem;
-}
-
-.kkp-wizard-field-hint {
-    margin: 0.35rem 0 0;
-    font-size: 0.82rem;
-    color: var(--kkp-muted);
-}
-
-.kkp-wizard-email-error {
-    margin: 0 0 1rem;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    background: #fef2f2;
-    color: #991b1b;
-    font-size: 0.9rem;
-    font-weight: 600;
-    text-align: center;
-}
-
-.kkp-wizard-email-error.is-success {
-    background: #ecfdf5;
-    color: #166534;
-}
-
-.kkp-wizard-step3-legacy {
-    padding: 0.5rem 0 1rem;
-}
-
-.kkp-wizard-step3-legacy .verify-card,
-.kkp-wizard-step3-legacy .setpw-card {
-    margin-top: 0;
-}
-
-.kkp-wizard-complete-icon {
-    background: linear-gradient(135deg, var(--kkp-brand) 0%, #003070 100%) !important;
-}
-
-.kkp-wizard-complete-card .kkp-wizard-go-login-btn {
-    background: linear-gradient(135deg, var(--kkp-brand) 0%, #0d5fc4 100%);
-    color: #fff;
-    border: none;
-    box-shadow: 0 8px 24px rgba(4, 80, 168, 0.25);
-}
-
-.kkp-wizard-complete-card .kkp-wizard-go-login-btn:hover {
-    color: #fff;
-    background: linear-gradient(135deg, #033d7a 0%, var(--kkp-brand) 100%);
-    box-shadow: 0 12px 32px rgba(4, 80, 168, 0.35);
-}
-
-.kkp-email-verified-icon {
-    background: linear-gradient(135deg, var(--kkp-brand) 0%, #003070 100%) !important;
-}
-
-.kkp-verify-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin: 1rem auto 0;
-    padding: 0.6rem 1rem;
-    border-radius: 999px;
-    background: #f1f5f9;
-    color: #475569;
-    font-size: 0.88rem;
-    font-weight: 600;
-}
-
-.kkp-verify-status--success {
-    background: #ecfdf5;
-    color: #166534;
-    border: 1px solid #bbf7d0;
-}
-
-.kkp-verify-status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #94a3b8;
-    animation: kkpVerifyPulse 1.4s ease-in-out infinite;
-}
-
-.kkp-verify-status--success .kkp-verify-status-dot {
-    background: var(--kkp-brand);
-    animation: none;
-}
-
-@keyframes kkpVerifyPulse {
-    0%, 100% { opacity: 0.4; transform: scale(0.9); }
-    50% { opacity: 1; transform: scale(1.1); }
-}
-
-.kkp-email-verified-card {
-    text-align: center;
-}
-
-.kkp-wizard-mode.kkp-wizard-step3-active .kkp-paper {
-    background: transparent;
-    box-shadow: none;
-    border-color: transparent;
-    padding-top: 24px;
-}
-
-.kkp-wizard-mode.kkp-wizard-step3-active .kkp-responsive-container {
-    padding: 0;
-}
-
-.kkp-wizard-mode .kkp-submit-wrapper {
-    display: none !important;
-}
-
-/* Sticky nav on mobile */
-@media (max-width: 768px) {
-    .kkp-wizard-step-label-full {
-        display: none;
-    }
-
-    .kkp-wizard-step-label-short {
-        display: inline;
-    }
-
-    .kkp-wizard-step-connector {
-        width: 1rem;
-    }
-
-    .kkp-wizard-progress-inner {
-        padding: 0.95rem 0.85rem 0.85rem;
-    }
-
-    .kkp-wizard-progress-top {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.65rem;
-        margin-bottom: 0.85rem;
-    }
-
-    .kkp-wizard-progress-meta {
-        padding-inline: 0;
-        margin-bottom: 0;
-        order: 1;
-    }
-
-    .kkp-wizard-clear-btn {
-        position: static;
-        align-self: flex-end;
-        order: 0;
-        font-size: 0.75rem;
-        padding: 0.4rem 0.7rem;
-    }
-
-    .kkp-wizard-panel-head {
-        flex-direction: column;
-        gap: 0.65rem;
-    }
-
-    .kkp-wizard-nav {
-        position: sticky;
-        bottom: 0;
-        z-index: 20;
-        margin: 0 -16px;
-        padding: 0.85rem 16px calc(0.85rem + env(safe-area-inset-bottom, 0px));
-        background: rgba(255, 255, 255, 0.96);
-        border-top: 1px solid #e2e8f0;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
-    }
-
-    .kkp-wizard-nav-actions {
-        flex: 1;
-        justify-content: flex-end;
-    }
-
-    .kkp-wizard-btn-primary {
-        flex: 1;
-        max-width: 14rem;
-    }
-}
-
-@media (min-width: 769px) {
-    .kkp-wizard-step-item.is-active .kkp-wizard-step-label,
-    .kkp-wizard-step-item.is-complete .kkp-wizard-step-label {
-        display: inline;
-    }
 }
