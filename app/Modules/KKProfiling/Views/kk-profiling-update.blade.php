@@ -69,7 +69,7 @@
                             @include('kkprofiling::partials.kk-profiling-form-fields', [
                                 'barangay' => $kkUpdateBarangay ?? 'Santa Cruz',
                                 'respondentNumber' => $kkRespondentNumber ?? '',
-                                'respondentDisplay' => $kkRespondentDisplay ?? '01',
+                                'respondentDisplay' => $kkRespondentDisplay ?? '',
                                 'submitLabel' => 'Update KK Profiling',
                                 'barangayLogoUrl' => $kkBarangayLogoUrl ?? null,
                                 'barangayZones' => $kkBarangayZones ?? collect(),

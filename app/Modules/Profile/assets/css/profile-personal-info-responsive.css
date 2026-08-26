@@ -1,0 +1,399 @@
+﻿/* Profile personal info preview — responsive (Profile-owned) */
+
+.prof-kk-preview-modal .prof-kk-paper {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 24px;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 12px;
+    color: #111;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.prof-kk-preview-modal .prof-kk-responsive-container {
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: visible;
+}
+
+.prof-kk-preview-modal .prof-kk-preview-scale-shell,
+.prof-kk-fs-scale-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    position: relative;
+}
+
+.prof-kk-preview-modal .prof-kk-preview-scale-inner,
+.prof-kk-fs-scale-inner {
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+}
+/* KK Profiling — mobile scale + responsive */
+
+html:has(body.prof-kk-form-page),
+body.homepage-body.prof-kk-form-page,
+.prof-kk-preview-modal {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+.prof-kk-fs-scale-shell,
+.prof-kk-fs-scale-inner {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.prof-kk-wizard-panel[hidden] {
+    display: none !important;
+}
+
+/*
+ * Mobile: same desktop form layout, zoomed to fit.
+ * No left/right side scroll; all content stays visible.
+ */
+@media (max-width: 768px) {
+    .prof-kk-assembly-flow-svg {
+        display: none;
+    }
+
+    .prof-kk-form-page.prof-kk-wizard-mode .prof-kk-main {
+        padding-top: 12px;
+        padding-bottom: 88px;
+        overflow-x: hidden;
+    }
+
+    .prof-kk-main,
+    .prof-kk-page-wrap,
+    .prof-kk-wizard-root,
+    .prof-kk-wizard-progress-header,
+    .prof-kk-paper,
+    .prof-kk-responsive-container,
+    .prof-kk-fs-scale-shell {
+        max-width: 100%;
+        width: 100%;
+        box-sizing: border-box;
+        overflow-x: hidden;
+    }
+
+    .prof-kk-page-wrap {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .prof-kk-wizard-progress-header {
+        position: sticky;
+        top: 0;
+        z-index: 40;
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+    }
+
+    .prof-kk-wizard-progress-title {
+        font-size: 1.15rem;
+        line-height: 1.25;
+    }
+
+    .prof-kk-wizard-progress-desc {
+        font-size: 0.8rem;
+        line-height: 1.35;
+    }
+
+    .prof-kk-wizard-steps {
+        flex-wrap: nowrap;
+        justify-content: center;
+        gap: 0.15rem;
+    }
+
+    .prof-kk-wizard-step-item {
+        min-width: 0;
+        font-size: 0.75rem;
+    }
+
+    .prof-kk-wizard-step-badge {
+        width: 1.75rem;
+        height: 1.75rem;
+        font-size: 0.72rem;
+    }
+
+    .prof-kk-paper {
+        padding: 10px 4px 16px;
+    }
+
+    .prof-kk-wizard-mode .prof-kk-paper {
+        padding-top: 8px;
+    }
+
+    .prof-kk-fs-scale-shell {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .prof-kk-fs-scale-inner {
+        width: 860px;
+        min-width: 860px;
+        max-width: none;
+        box-sizing: border-box;
+        transform: none;
+    }
+
+    .prof-kk-fs-scale-inner > form,
+    .prof-kk-fs-scale-inner #kkProfilingForm,
+    .prof-kk-fs-scale-inner #kkProfilingUpdateForm {
+        width: 860px !important;
+        min-width: 860px !important;
+        max-width: none !important;
+        box-sizing: border-box;
+    }
+
+    /* Clear All — top-right, same placement as desktop */
+    .prof-kk-fs-scale-inner .prof-kk-form-clear-bar {
+        justify-content: flex-end;
+        margin-bottom: 6px;
+    }
+
+    /*
+     * Checkboxes: keep desktop-like compact spacing (not stretched).
+     * zoom already enlarges the hit area relative to the finger.
+     */
+    .prof-kk-fs-scale-inner .prof-kk-demo-block-options {
+        gap: 1px;
+        padding: 3px 5px;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-sq-chk {
+        width: 12px;
+        height: 12px;
+        border-width: 1.5px;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-sq-chk:checked::after {
+        content: '';
+        left: 50%;
+        top: 45%;
+        width: 3.5px;
+        height: 6.5px;
+        border: solid #111;
+        border-width: 0 1.5px 1.5px 0;
+        transform: translate(-50%, -50%) rotate(45deg);
+        font-size: 0;
+        font-weight: normal;
+        color: transparent;
+        line-height: 0;
+        box-sizing: border-box;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-chk-lbl {
+        min-height: 0;
+        padding: 1px 0;
+        gap: 4px;
+        font-size: 11px;
+        line-height: 1.35;
+        align-items: center;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(4, 80, 168, 0.12);
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-chk-lbl:not(.prof-kk-chk-lbl--readonly) {
+        cursor: pointer;
+    }
+
+    /* Same desktop grids while zoomed */
+    .prof-kk-fs-scale-inner .prof-kk-name-row {
+        grid-template-columns: 2.5fr 2.5fr 2.5fr 2fr 0fr;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-name-col-sm {
+        grid-column: auto;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-loc-row {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-personal-row {
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: center;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-age-dob-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        width: auto;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-inline-pair--age,
+    .prof-kk-fs-scale-inner .prof-kk-inline-pair--birthday {
+        padding-bottom: 0;
+        flex: 0 0 auto;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-age-select-box {
+        min-width: 78px;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-uline-age {
+        width: 78px;
+        min-width: 78px;
+        min-height: 28px;
+        height: 28px;
+        font-size: 12px;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-inline-pair--email {
+        flex-wrap: wrap;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-inline-pair--email .prof-kk-email-input,
+    .prof-kk-fs-scale-inner .prof-kk-inline-pair--email .prof-kk-uline-med {
+        width: auto;
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-demo-block-options.prof-kk-youth-class-layout {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        align-items: end;
+        column-gap: 4px;
+        gap: 0 4px;
+        flex-direction: unset;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-youth-class-main {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-youth-class-side {
+        grid-column: 2;
+        grid-row: 1;
+        align-self: end;
+        justify-self: start;
+        display: flex;
+        flex-direction: row;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-youth-specific-options {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-youth-class-main .prof-kk-chk-lbl,
+    .prof-kk-fs-scale-inner .prof-kk-youth-specific-options .prof-kk-chk-lbl {
+        white-space: nowrap;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-demo-block-label {
+        word-break: normal;
+        overflow-wrap: normal;
+        hyphens: none;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-demo-grid,
+    .prof-kk-fs-scale-inner .prof-kk-voter-questions-grid,
+    .prof-kk-fs-scale-inner .prof-kk-demo-two-col,
+    .prof-kk-fs-scale-inner .prof-kk-demo-options-2col {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-footer-fb-field,
+    .prof-kk-fs-scale-inner .prof-kk-footer-fb .prof-kk-uline-fb {
+        width: 50ch;
+        min-width: 50ch;
+        max-width: 50ch;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-form-header {
+        overflow: visible;
+        max-width: none;
+    }
+
+    .prof-kk-fs-scale-inner img {
+        max-width: none;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-inline-pair > .prof-kk-field-error {
+        flex: 0 0 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        order: 99;
+        position: static !important;
+        text-align: left !important;
+        margin-top: 2px !important;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-name-col > .prof-kk-field-error,
+    .prof-kk-fs-scale-inner .prof-kk-name-col > .prof-kk-name-max-hint {
+        text-align: center !important;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-field-error,
+    .prof-kk-fs-scale-inner .prof-kk-name-max-hint,
+    .prof-kk-fs-scale-inner .prof-kk-demo-block-error,
+    .prof-kk-fs-scale-inner .prof-kk-section-error {
+        position: static !important;
+        display: block !important;
+        max-width: 100% !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
+        line-height: 1.35 !important;
+        z-index: 0 !important;
+        pointer-events: none !important;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-demo-block-error {
+        flex: 0 0 100% !important;
+        width: 100% !important;
+        order: 99;
+    }
+
+    .prof-kk-fs-scale-inner .prof-kk-demo-block {
+        flex-wrap: wrap;
+        overflow: visible;
+    }
+
+    #prof-kkClearDraftModal.prof-kk-info-overlay {
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 1rem;
+    }
+
+    #prof-kkClearDraftModal .prof-kk-clear-draft-modal {
+        width: 100%;
+        max-width: min(360px, calc(100vw - 2rem));
+        margin: 0 auto;
+        border-radius: 12px;
+        max-height: min(80vh, 420px);
+    }
+}
+
+@media (max-width: 390px) {
+    .prof-kk-wizard-progress-inner {
+        padding: 0.75rem 0.65rem 0.7rem;
+    }
+
+    .prof-kk-wizard-progress-eyebrow {
+        font-size: 0.68rem;
+    }
+
+    .prof-kk-wizard-progress-title {
+        font-size: 1.05rem;
+    }
+
+    .prof-kk-wizard-step-connector {
+        width: 0.65rem;
+        margin: 0 0.2rem;
+    }
+}
+

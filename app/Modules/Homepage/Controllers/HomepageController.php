@@ -30,7 +30,7 @@ class HomepageController extends Controller
                 ? ['label' => 'Go to Dashboard', 'href' => $dashboardUrl]
                 : ['label' => 'Get Started', 'href' => $registerUrl],
             'secondaryCta' => $isAuthenticated
-                ? ['label' => 'View Transparency', 'href' => $homepageProgramsAnchor]
+                ? ['label' => 'View Public Records', 'href' => $homepageProgramsAnchor]
                 : ['label' => 'Explore Programs', 'href' => $homepageProgramsAnchor],
             'finalPrimaryCta' => $isAuthenticated
                 ? ['label' => 'Go to Dashboard', 'href' => $dashboardUrl]
@@ -49,7 +49,7 @@ class HomepageController extends Controller
 
     private function getFaqs(): array
     {
-        return cache()->remember('kabataan_faqs_v7', 3600, function () {
+        return cache()->remember('kabataan_faqs_v9', 3600, function () {
             return [
                 [
                     'id' => 1,

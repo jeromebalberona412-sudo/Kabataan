@@ -21,8 +21,8 @@
             'title' => 'Programs and Activities',
             'description' => 'Discover available SK programs, activities, seminars, sports events, trainings, and other opportunities for Kabataan.',
             'tagalog' => 'Makita at malaman ang mga available na programa at aktibidad na maaaring salihan.',
-            'cta' => 'Explore Transparency',
-            'href' => $transparencyUrl,
+            'cta' => 'Tingnan ang mga Programa',
+            'href' => route('homepage').'#activities',
             'icon' => $icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/>'),
         ],
         [

@@ -151,8 +151,16 @@
     outline-offset: 2px;
 }
 
-.homepage-body .kabataan-nav-link:not(.active),
-.homepage-body .kabataan-drawer-link:not(.active) {
+.homepage-body .kabataan-nav-link:hover,
+.homepage-body .kabataan-nav-link.active,
+.homepage-body .kabataan-drawer-link:hover,
+.homepage-body .kabataan-drawer-link.active {
+    color: #0450a8;
+    background: rgba(4, 80, 168, 0.1);
+}
+
+.homepage-body .kabataan-nav-link:not(.active):not(:hover),
+.homepage-body .kabataan-drawer-link:not(.active):not(:hover) {
     background-color: transparent;
 }
 

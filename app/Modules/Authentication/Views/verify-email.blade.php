@@ -36,7 +36,7 @@
     <div id="fp-verify-data"
          data-email="{{ $email }}"
          data-resend-url="{{ route('password.verify-email.resend', [], false) }}"
-         data-signin-url="{{ route('password.request', [], false) }}"
+         data-signin-url="{{ route('sign-in', [], false) }}"
          data-resend-available-at="{{ $resendAvailableAt }}"
          data-cooldown-secs="{{ $resendCooldownSecs }}"
          data-turnstile-required="{{ (!empty($turnstileRequired) || session('turnstile_required')) ? '1' : '0' }}"
@@ -105,7 +105,6 @@
 
                     {{-- Resend button --}}
                     <button type="button" id="fpve-resend-btn" class="fpve-resend-btn" disabled>
-                        <span id="fpve-resend-spinner" class="fpve-spinner" hidden aria-hidden="true"></span>
                         <span id="fpve-resend-label">Resend Reset Link</span>
                     </button>
 
@@ -119,10 +118,6 @@
                 {{-- Back to signin --}}
                 <div class="youth-register-section">
                     <a href="{{ route('sign-in') }}" class="fpve-back-link">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2">
-                            <path d="M19 12H5M12 19l-7-7 7-7"/>
-                        </svg>
                         Back to Sign In
                     </a>
                 </div>

@@ -296,15 +296,16 @@ class AuthController extends Controller
         $state = $request->session()->get('kabataan_fp_verify');
 
         if (! is_array($state) || empty($state['email'])) {
-            return redirect()->route('password.request');
+            return redirect()->route('sign-in')
+                ->with('sign_in_error', 'CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.');
         }
 
         $expiresAt = Carbon::parse((string) ($state['expires_at'] ?? now()->toIso8601String()));
         if ($expiresAt->isPast()) {
             $request->session()->forget('kabataan_fp_verify');
 
-            return redirect()->route('password.request')
-                ->withErrors(['email' => 'Your password reset session has expired. Please start again.']);
+            return redirect()->route('sign-in')
+                ->with('sign_in_error', 'CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.');
         }
 
         $resendAvailableAt = Carbon::parse((string) ($state['resend_available_at'] ?? now()->toIso8601String()));
@@ -335,8 +336,10 @@ class AuthController extends Controller
         if (! is_array($state) || empty($state['email'])) {
             return response()->json([
                 'ok' => false,
-                'message' => 'No active password reset session. Please start again.',
-            ], 404);
+                'message' => 'CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.',
+                'expired' => true,
+                'already_reset' => true,
+            ], 410);
         }
 
         $expiresAt = Carbon::parse((string) ($state['expires_at'] ?? now()->toIso8601String()));
@@ -345,8 +348,9 @@ class AuthController extends Controller
 
             return response()->json([
                 'ok' => false,
-                'message' => 'Your password reset session has expired. Please start again.',
+                'message' => 'CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.',
                 'expired' => true,
+                'already_reset' => true,
             ], 410);
         }
 

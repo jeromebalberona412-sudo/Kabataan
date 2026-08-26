@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         {
             question: 'What services can I access through SK OnePortal?',
-            answer: 'Registered users can complete the KK Profiling Form, apply for scholarship programs, join events and activities, receive announcements, answer surveys, submit required documents, track application status, and access other youth-related services offered by the Municipality of Santa Cruz.',
+            answer: 'Registered users can complete KK Profiling, discover available SK programs and activities, register for supported programs, submit supported requirements online when a program allows it, receive announcements, answer surveys, and access other youth-related services offered through SK OnePortal. Online registration and document submission depend on the specific program. Anyone can also view public Barangay ABYIP documents and program accomplishments without signing in.',
         },
         {
             question: 'Who can use SK OnePortal?',
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!filteredFaqs.length) {
             const empty = document.createElement('p');
             empty.className = 'faq-empty text-center text-muted py-4 mb-0';
-            empty.textContent = 'No matching questions. Try keywords like registration, sign in, or services.';
+            empty.textContent = 'No matching questions. Try keywords like registration, sign in, or KK Profiling.';
             faqList.appendChild(empty);
             return;
         }

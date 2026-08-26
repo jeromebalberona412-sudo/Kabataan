@@ -132,9 +132,8 @@
 
             resendInFlight     = true;
             resendBtn.disabled = true;
-            // Only show spinner here — during the active network request
-            if (resendSpinner) resendSpinner.hidden = false;
-            setLabel('Sending…');
+            if (resendSpinner) resendSpinner.hidden = true;
+            setLabel('Sending...');
             clearStatus();
 
             try {
@@ -195,12 +194,22 @@
                     dataEl.dataset.turnstileRequired = data.turnstile_required ? '1' : '0';
                 }
 
+                if (response.status === 419 || data.csrf_mismatch || (data.message && (data.message.toLowerCase().includes('csrf') || data.message.toLowerCase().includes('token mismatch')))) {
+                    if (resendSpinner) resendSpinner.hidden = true;
+                    showStatus('CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.', 'error');
+                    setTimeout(() => {
+                        window.location.href = dataEl.dataset.signinUrl || '/sign-in';
+                    }, 2500);
+                    return;
+                }
+
                 if (response.status === 410 || data.expired) {
                     if (resendSpinner) resendSpinner.hidden = true;
-                    showStatus('Your session has expired. Redirecting…', 'error');
+                    const expiredMsg = data.message || 'CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.';
+                    showStatus(expiredMsg, 'error');
                     setTimeout(() => {
-                        window.location.href = dataEl.dataset.signinUrl || '/forgot-password';
-                    }, 1500);
+                        window.location.href = dataEl.dataset.signinUrl || '/sign-in';
+                    }, 2500);
                     return;
                 }
 

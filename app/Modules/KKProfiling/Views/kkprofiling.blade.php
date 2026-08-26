@@ -95,7 +95,7 @@
                                         @include('kkprofiling::partials.kk-profiling-form-fields', [
                                             'barangay' => $barangay,
                                             'respondentNumber' => $respondentNumber ?? '',
-                                            'respondentDisplay' => $respondentDisplay ?? '01',
+                                            'respondentDisplay' => $respondentDisplay ?? '',
                                             'submitLabel' => 'Submit KK Profiling',
                                             'barangayLogoUrl' => $barangayLogoUrl ?? null,
                                             'barangayZones' => $barangayZones ?? collect(),

@@ -20,13 +20,8 @@
         'app/Modules/Programs/assets/js/kabataan-programs.js',
         'app/Modules/Layout/assets/js/kabataan-logout.js',
         'app/Modules/Profile/assets/css/profile.css',
-        'app/Modules/KKProfiling/assets/css/kkprofiling.css',
-        'app/Modules/KKProfiling/assets/css/kkprofiling-form-body.css',
-        'app/Modules/KKProfiling/assets/css/kkprofiling-signature.css',
-        'app/Modules/KKProfiling/assets/css/kkprofiling-responsive.css',
-        'app/Modules/KKProfiling/assets/css/kkprofiling-wizard.css',
-        'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
-        'app/Modules/KKProfiling/assets/css/kk-profiling-update.css',
+        'app/Modules/Profile/assets/css/profile-personal-info.css',
+        'app/Modules/Profile/assets/css/profile-personal-info-responsive.css',
         'app/Modules/Profile/assets/js/profile.js',
         'app/Modules/Profile/assets/js/profile-participation.js',
         'app/Modules/Dashboard/assets/css/chatbot.css',
@@ -42,9 +37,9 @@
         }
         .kk-preview-modal-container.kabataan-modal-box,
         .kkp-docs-modal-container.kabataan-modal-box {
-            width: min(880px, calc(100% - 48px));
-            max-width: 880px;
-            max-height: min(78vh, calc(100vh - 96px));
+            width: min(900px, calc(100% - 48px));
+            max-width: 900px;
+            max-height: min(82vh, calc(100vh - 96px));
             border-radius: 16px;
         }
         .profile-picture-upload-modal__box,
@@ -83,20 +78,6 @@
             max-width: none;
             max-height: none;
             border-radius: 0;
-        }
-        .kkp-profile-preview .kkp-personal-row {
-            overflow: visible;
-            grid-template-columns: auto minmax(0, 1fr) minmax(260px, 1.6fr);
-        }
-        .kkp-profile-preview .kkp-email-value {
-            display: block;
-            width: 100%;
-            text-align: left;
-            white-space: normal;
-            overflow: visible;
-            overflow-wrap: anywhere;
-            word-break: break-word;
-            line-height: 1.35;
         }
         @media (max-width: 768px) {
             .kabataan-modal-backdrop:not(.modal-maximized) {
@@ -662,17 +643,22 @@
                     <button type="button" class="modal-close" data-modal-close aria-label="Close">&times;</button>
                 </div>
             </div>
-            <div class="modal-body kabataan-modal-body">
+            <div class="modal-body kabataan-modal-body kk-preview-modal-body">
                 @if($kabataanRegistration)
-                    <div class="kkp-responsive-container">
-                        <div class="kkp-paper">
-                            @include('profile::partials.kk-profiling-preview', [
-                                'kabataanRegistration' => $kabataanRegistration,
-                                'user' => $user,
-                                'barangayName' => $barangayName,
-                                'barangayLogoUrl' => $barangayLogoUrl,
-                                'profile' => $profile ?? [],
-                            ])
+                    <div class="prof-kk-preview-modal">
+                        <div class="prof-kk-responsive-container">
+                            <div class="prof-kk-paper">
+                                <div class="prof-kk-fs-scale-shell prof-kk-preview-scale-shell">
+                                    <div class="prof-kk-fs-scale-inner prof-kk-preview-scale-inner">
+                                        @include('profile::partials.kk-profiling-preview', [
+                                            'kabataanRegistration' => $kabataanRegistration,
+                                            'user' => $user,
+                                            'barangayName' => $barangayName,
+                                            'profile' => $profile ?? [],
+                                        ])
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 @endif
@@ -683,6 +669,39 @@
     <script>
     window.addEventListener('unload', function () {});
 
+    function scaleProfileKkPreview() {
+        const modal = document.getElementById('kkPreviewModal');
+        if (!modal || modal.style.display === 'none') return;
+        const shell = modal.querySelector('.prof-kk-preview-scale-shell');
+        const inner = modal.querySelector('.prof-kk-preview-scale-inner');
+        if (!shell || !inner) return;
+
+        const modalBody = modal.querySelector('.modal-body');
+        if (!modalBody) return;
+
+        const availableWidth = modalBody.clientWidth - 48;
+        const designWidth = 860;
+
+        if (availableWidth < designWidth && availableWidth > 0) {
+            const scale = Math.max(0.35, Math.min(1, availableWidth / designWidth));
+            if (typeof inner.style.zoom !== 'undefined' && CSS.supports('zoom', '1')) {
+                inner.style.zoom = String(scale);
+                inner.style.transform = '';
+                shell.style.height = 'auto';
+            } else {
+                inner.style.transformOrigin = 'top center';
+                inner.style.transform = `scale(${scale})`;
+                shell.style.height = `${Math.ceil(inner.scrollHeight * scale)}px`;
+            }
+        } else {
+            inner.style.zoom = '1';
+            inner.style.transform = '';
+            shell.style.height = 'auto';
+        }
+    }
+
+    window.addEventListener('resize', scaleProfileKkPreview);
+
     function setKabataanModalMaximized(backdrop, panel, toggleBtn, isMax) {
         backdrop?.classList.toggle('modal-maximized', isMax);
         panel?.classList.toggle('modal-maximized', isMax);
@@ -691,6 +710,7 @@
         if (maximizeIcon) maximizeIcon.hidden = isMax;
         if (restoreIcon) restoreIcon.hidden = !isMax;
         toggleBtn?.setAttribute('aria-label', isMax ? 'Restore down' : 'Maximize');
+        setTimeout(scaleProfileKkPreview, 50);
     }
 
     function resetKkPreviewModalState() {
@@ -706,6 +726,7 @@
             resetKkPreviewModalState();
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+            setTimeout(scaleProfileKkPreview, 30);
         }
     }
 

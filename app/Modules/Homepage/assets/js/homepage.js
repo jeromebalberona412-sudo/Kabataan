@@ -41,15 +41,33 @@ document.addEventListener('DOMContentLoaded', () => {
         navLinks.forEach((link) => link.classList.remove('active'));
     };
 
+    const sectionToNavMap = {
+        hero: 'hero',
+        about: 'about',
+        benefits: 'about',
+        'kk-profiling': 'about',
+        activities: 'about',
+        transparency: 'about',
+        process: 'about',
+        requirements: 'about',
+        participation: 'about',
+        'get-started': 'about',
+        faq: 'faq',
+        kabataanFooter: 'kabataanFooter',
+        'barangay-abyip': 'barangay-abyip',
+        barangays: 'barangays',
+    };
+
     const setActiveLink = (sectionId) => {
-        if (!sectionId || sectionId === 'kabataanFooter') {
+        const navKey = sectionToNavMap[sectionId] || sectionId;
+        if (!navKey) {
             clearActiveLinks();
             return;
         }
 
         navLinks.forEach((link) => {
             const linkSection = link.dataset.section || '';
-            link.classList.toggle('active', linkSection === sectionId);
+            link.classList.toggle('active', linkSection === navKey);
         });
     };
 
@@ -122,64 +140,103 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const trackedSections = isBarangayListPage
         ? []
-        : ['hero', 'about', 'benefits', 'transparency', 'faq', 'kabataanFooter']
+        : [
+            'hero',
+            'about',
+            'benefits',
+            'kk-profiling',
+            'activities',
+            'transparency',
+            'process',
+            'requirements',
+            'participation',
+            'get-started',
+            'faq',
+            'kabataanFooter',
+        ]
             .map((id) => document.getElementById(id))
             .filter(Boolean);
 
-    if ('IntersectionObserver' in window && trackedSections.length > 0) {
-        const visibility = new Map();
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-                visibility.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0);
-            });
-
-            let activeId = '';
-            let bestRatio = 0;
-
-            visibility.forEach((ratio, id) => {
-                if (ratio > bestRatio) {
-                    bestRatio = ratio;
-                    activeId = id;
-                }
-            });
-
-            if (bestRatio >= 0.2) {
-                setActiveLink(activeId);
-            } else {
-                clearActiveLinks();
+    if (trackedSections.length > 0) {
+        const updateScrollActive = () => {
+            if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 60)) {
+                setActiveLink('kabataanFooter');
+                return;
             }
-        }, {
-            root: null,
-            threshold: [0, 0.15, 0.3, 0.5, 0.7],
-            rootMargin: '-20% 0px -55% 0px',
-        });
+            if (window.scrollY < 80) {
+                setActiveLink('hero');
+                return;
+            }
+        };
 
-        trackedSections.forEach((section) => observer.observe(section));
+        window.addEventListener('scroll', updateScrollActive, { passive: true });
+
+        if ('IntersectionObserver' in window) {
+            const visibility = new Map();
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    visibility.set(entry.target.id, entry.isIntersecting ? entry.intersectionRatio : 0);
+                });
+
+                if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 60)) {
+                    setActiveLink('kabataanFooter');
+                    return;
+                }
+
+                if (window.scrollY < 80) {
+                    setActiveLink('hero');
+                    return;
+                }
+
+                let activeId = '';
+                let bestRatio = 0;
+
+                visibility.forEach((ratio, id) => {
+                    if (ratio > bestRatio) {
+                        bestRatio = ratio;
+                        activeId = id;
+                    }
+                });
+
+                if (bestRatio >= 0.15 && activeId) {
+                    setActiveLink(activeId);
+                }
+            }, {
+                root: null,
+                threshold: [0, 0.15, 0.3, 0.5, 0.7],
+                rootMargin: '-15% 0px -45% 0px',
+            });
+
+            trackedSections.forEach((section) => observer.observe(section));
+        }
     }
 
     navLinks.forEach((link) => {
         link.addEventListener('click', (event) => {
-            const sectionId = link.dataset.section;
-            if (sectionId === 'kabataanFooter') {
-                clearActiveLinks();
-            } else if (sectionId) {
-                setActiveLink(sectionId);
-            }
-
+            const sectionId = link.dataset.section || '';
             const linkHref = link.getAttribute('href') || '';
             const linkPath = linkHref.startsWith('/')
-                ? linkHref
+                ? linkHref.split('#')[0]
                 : (linkHref ? (new URL(linkHref, window.location.origin)).pathname : '');
             const currentPath = window.location.pathname;
             const isHomepage = currentPath === '/homepage' || currentPath === '/';
-            const targetsHomepage = linkPath === '/homepage' || linkPath === '/';
+            const targetsHomepage = linkPath === '/homepage' || linkPath === '/' || linkPath === '';
 
             if (isHomepage && targetsHomepage && sectionId) {
-                const target = document.getElementById(sectionId);
+                const targetId = sectionId === 'hero' ? 'hero' : sectionId;
+                const target = document.getElementById(targetId);
                 if (target) {
                     event.preventDefault();
+                    setActiveLink(sectionId);
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    if (history.pushState) {
+                        if (sectionId === 'hero') {
+                            history.pushState(null, '', window.location.pathname);
+                        } else {
+                            history.pushState(null, '', '#' + sectionId);
+                        }
+                    }
                 }
             }
 
@@ -209,11 +266,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return 'hero';
     })();
 
-    if (initialSection === 'barangays') {
-        setActiveLink('barangays');
+    if (initialSection === 'barangay-abyip' || initialSection === 'barangays') {
+        setActiveLink(initialSection);
     } else if (initialSection && initialSection !== 'hero') {
         requestAnimationFrame(() => scrollToSection(initialSection));
-        setActiveLink(initialSection === 'kabataanFooter' ? '' : initialSection);
+        setActiveLink(initialSection);
     } else {
         setActiveLink('hero');
     }

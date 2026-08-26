@@ -42,7 +42,6 @@
             <div class="kabataan-nav-links" id="kabataanNavLinks">
                 <a href="{{ route('homepage') }}" class="kabataan-nav-link" data-section="hero">Home</a>
                 <a href="{{ route('homepage') }}#about" class="kabataan-nav-link" data-section="about">About</a>
-                <a href="{{ route('homepage') }}#transparency" class="kabataan-nav-link" data-section="transparency">Transparency</a>
                 <a href="{{ route('baranggay_abyip.index') }}" class="kabataan-nav-link" data-section="barangay-abyip">Barangay ABYIP</a>
                 <a href="{{ route('program_accomplishments.barangays') }}" class="kabataan-nav-link" data-section="barangays">Program Accomplishment</a>
                 <a href="{{ route('homepage') }}#faq" class="kabataan-nav-link" data-section="faq">FAQs</a>
@@ -66,7 +65,6 @@
     <div class="kabataan-drawer" id="kabataanDrawer" aria-hidden="true">
         <a href="{{ route('homepage') }}" class="kabataan-drawer-link" data-section="hero">Home</a>
         <a href="{{ route('homepage') }}#about" class="kabataan-drawer-link" data-section="about">About</a>
-        <a href="{{ route('homepage') }}#transparency" class="kabataan-drawer-link" data-section="transparency">Transparency</a>
         <a href="{{ route('baranggay_abyip.index') }}" class="kabataan-drawer-link" data-section="barangay-abyip">Barangay ABYIP</a>
         <a href="{{ route('program_accomplishments.barangays') }}" class="kabataan-drawer-link" data-section="barangays">Program Accomplishment</a>
         <a href="{{ route('homepage') }}#faq" class="kabataan-drawer-link" data-section="faq">FAQs</a>

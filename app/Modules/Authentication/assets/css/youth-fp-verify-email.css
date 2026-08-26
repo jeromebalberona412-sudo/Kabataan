@@ -98,7 +98,7 @@
     font-size: 1rem;
     font-weight: 700;
     color: var(--youth-white);
-    background: linear-gradient(135deg, var(--youth-green) 0%, var(--youth-green-light) 100%);
+    background: linear-gradient(135deg, var(--youth-blue) 0%, var(--youth-blue-light) 100%);
     border: none;
     border-radius: 12px;
     cursor: pointer;
@@ -111,8 +111,8 @@
 }
 
 .fpve-resend-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--youth-green-dark) 0%, var(--youth-green) 100%);
-    box-shadow: 0 8px 24px rgba(68, 165, 62, 0.3);
+    background: linear-gradient(135deg, var(--youth-blue-dark) 0%, var(--youth-blue) 100%);
+    box-shadow: 0 8px 24px rgba(4, 80, 168, 0.3);
 }
 
 .fpve-resend-btn:disabled {
@@ -120,30 +120,9 @@
     cursor: not-allowed;
 }
 
-/* ── Loading spinner inside button ── */
+/* ── Loading spinner removed for default browser loading state ── */
 .fpve-spinner {
-    width: 18px;
-    height: 18px;
-    border: 2.5px solid rgba(255, 255, 255, 0.35);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: fpve-spin 0.7s linear infinite;
-    display: inline-block;
-    flex-shrink: 0;
-}
-
-/* hidden attribute must win over display:inline-block */
-.fpve-spinner[hidden] {
     display: none !important;
-}
-
-@keyframes fpve-spin {
-    to { transform: rotate(360deg); }
-}
-
-/* ── Accessibility: reduced motion ── */
-@media (prefers-reduced-motion: reduce) {
-    .fpve-spinner { animation-duration: 0.01ms !important; }
 }
 
 /* ── Cancel button ── */

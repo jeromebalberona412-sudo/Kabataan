@@ -34,5 +34,18 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('forgot-password*') || $request->is('reset-password*')) {
+                if ($request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.',
+                        'csrf_mismatch' => true,
+                    ], 419);
+                }
+
+                return redirect()->route('sign-in')
+                    ->with('sign_in_error', 'CSRF token mismatch. Your password has already been reset successfully. Please sign in using your new password.');
+            }
+        });
     })->create();

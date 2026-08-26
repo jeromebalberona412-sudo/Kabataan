@@ -8,6 +8,7 @@
             <span class="kabataan-eyebrow">Help Center</span>
             <h2 id="faqHeading">Frequently Asked Questions</h2>
             <p>Answers about SK OnePortal — registration, sign-in, KK Profiling, and who can use Kabataan.</p>
+            <p class="hp-card-tagalog faq-heading-tagalog">Mga sagot tungkol sa SK OnePortal — registration, sign-in, KK Profiling, at kung sino ang maaaring gumamit ng Kabataan.</p>
         </div>
 
         <div class="faq-search-bar">

@@ -272,21 +272,24 @@ class KKProfilingController extends Controller
     }
 
     /**
-     * Format respondent number for read-only display (e.g. 01).
+     * Format respondent number for read-only display (e.g. 1, 2, 3 or Auto-generated).
      */
     public static function formatRespondentDisplay(?string $respondentNumber): string
     {
-        if (! $respondentNumber) {
-            return '01';
+        if (! $respondentNumber || $respondentNumber === '—') {
+            return 'Auto-generated';
         }
 
-        if (preg_match('/(\d+)$/', $respondentNumber, $matches)) {
-            $n = ((int) $matches[1]) % 100;
-
-            return str_pad($n ?: 1, 2, '0', STR_PAD_LEFT);
+        if (strpos($respondentNumber, '-') !== false) {
+            $last = substr($respondentNumber, strrpos($respondentNumber, '-') + 1);
+            return (string) ((int) $last);
         }
 
-        return str_pad((abs(crc32($respondentNumber)) % 99) + 1, 2, '0', STR_PAD_LEFT);
+        if (is_numeric($respondentNumber)) {
+            return (string) ((int) $respondentNumber);
+        }
+
+        return (string) $respondentNumber;
     }
 
     /**

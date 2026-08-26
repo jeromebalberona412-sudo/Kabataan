@@ -30,7 +30,7 @@
                                     <input
                                         type="text"
                                         class="kkp-hdr-input kkp-hdr-input-readonly kkp-hdr-input-auto"
-                                        value=""
+                                        value="{{ !empty($respondentNumber) && $respondentNumber !== '—' ? (is_numeric($respondentNumber) ? (int)$respondentNumber : $respondentNumber) : '' }}"
                                         placeholder="Auto-generated"
                                         readonly
                                         tabindex="-1"

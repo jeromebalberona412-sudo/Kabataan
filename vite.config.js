@@ -78,6 +78,8 @@ export default defineConfig({
 
                 // Profile
                 'app/Modules/Profile/assets/css/profile.css',
+                'app/Modules/Profile/assets/css/profile-personal-info.css',
+                'app/Modules/Profile/assets/css/profile-personal-info-responsive.css',
                 'app/Modules/Profile/assets/js/profile.js',
                 'app/Modules/Profile/assets/js/profile-participation.js',
                 'app/Modules/Profile/assets/css/change-email.css',
