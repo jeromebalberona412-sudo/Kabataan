@@ -91,6 +91,7 @@ export default defineConfig({
                 // Homepage
                 'app/Modules/Homepage/assets/css/homepage-bootstrap.css',
                 'app/Modules/Homepage/assets/css/homepage.css',
+                'app/Modules/Homepage/assets/css/homepage-landing.css',
                 'app/Modules/Homepage/assets/css/about.css',
                 'app/Modules/Homepage/assets/css/pages.css',
                 'app/Modules/Homepage/assets/css/faqs.css',

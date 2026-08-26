@@ -1,0 +1,323 @@
+/* Homepage landing redesign — clean white + brand blue */
+
+.hp-hero-support {
+    margin: 0 0 1.25rem;
+    max-width: 36rem;
+    color: #475569;
+    font-size: 0.98rem;
+    line-height: 1.55;
+}
+
+.hp-hero-panel .kabataan-hero-panel-lead {
+    color: var(--text-primary);
+}
+
+.hp-narrow {
+    max-width: 46rem;
+    margin-inline: auto;
+}
+
+.hp-prose {
+    display: grid;
+    gap: 0.9rem;
+    color: var(--text-muted);
+    font-size: 1.02rem;
+    line-height: 1.65;
+    text-align: center;
+}
+
+.hp-prose p {
+    margin: 0;
+}
+
+.hp-note {
+    margin-top: 0.35rem !important;
+    padding: 0.85rem 1rem;
+    border: 1px solid #dbe7f5;
+    border-radius: var(--radius-sm);
+    background: #f4f8fd;
+    color: var(--brand-dark);
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.hp-benefit-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.hp-benefit-card,
+.hp-category-card,
+.hp-transparency-card,
+.hp-step {
+    background: #ffffff;
+    border: 1px solid #dbe7f5;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(1, 30, 60, 0.04);
+}
+
+.hp-benefit-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 1.35rem;
+    min-height: 100%;
+}
+
+.hp-benefit-icon,
+.hp-category-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #eaf2fc;
+    color: var(--brand-mid);
+}
+
+.hp-benefit-icon svg,
+.hp-category-icon svg {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+.hp-benefit-card h3,
+.hp-category-card h3,
+.hp-transparency-card h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--brand-dark);
+    line-height: 1.3;
+}
+
+.hp-benefit-card > p,
+.hp-transparency-card > p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.55;
+}
+
+.hp-card-tagalog {
+    font-size: 0.9rem !important;
+    color: #475569 !important;
+}
+
+.hp-card-link {
+    margin-top: auto;
+    align-self: flex-start;
+    color: var(--brand-mid);
+    font-weight: 700;
+    font-size: 0.92rem;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+}
+
+.hp-card-link:hover,
+.hp-card-link:focus-visible {
+    border-bottom-color: currentColor;
+    outline: none;
+}
+
+.hp-steps {
+    list-style: none;
+    margin: 1.75rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.85rem;
+}
+
+.hp-steps--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.hp-steps--5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.hp-step {
+    padding: 1rem 0.9rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 100%;
+}
+
+.hp-step-num {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--brand-mid);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.hp-step-title {
+    font-weight: 700;
+    color: var(--brand-dark);
+    font-size: 0.95rem;
+    line-height: 1.35;
+}
+
+.hp-step-text {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
+.hp-section-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.hp-category-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.hp-category-card {
+    padding: 1.1rem 0.9rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.hp-transparency-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.hp-transparency-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: 1.5rem;
+    min-height: 100%;
+}
+
+.hp-transparency-card .kabataan-button {
+    margin-top: auto;
+    align-self: flex-start;
+}
+
+.hp-final-cta {
+    padding: 3.25rem 0;
+    background: linear-gradient(135deg, #011e3c 0%, #0450a8 70%, #1a6fd4 100%);
+    color: #fff;
+    text-align: center;
+}
+
+.hp-final-cta h2 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.45rem, 2.6vw, 1.9rem);
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.hp-final-cta p {
+    margin: 0 auto 0.7rem;
+    max-width: 38rem;
+    color: rgba(255, 255, 255, 0.9);
+    line-height: 1.6;
+}
+
+.hp-final-tagalog {
+    font-weight: 600;
+    color: #fff !important;
+}
+
+.hp-final-actions {
+    justify-content: center;
+    margin: 1.25rem 0 1rem;
+}
+
+.hp-final-cta .kabataan-button-primary {
+    background: #fff;
+    color: #011e3c;
+    border-color: #fff;
+}
+
+.hp-final-cta .kabataan-button-primary:hover,
+.hp-final-cta .kabataan-button-primary:focus-visible {
+    background: #eef5ff;
+}
+
+.hp-final-cta .kabataan-button-secondary {
+    background: transparent;
+    border-color: rgba(255, 255, 255, 0.55);
+    color: #fff;
+}
+
+.hp-final-cta .kabataan-button-secondary:hover,
+.hp-final-cta .kabataan-button-secondary:focus-visible {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.hp-final-foot {
+    margin-top: 0.75rem !important;
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.82) !important;
+}
+
+@media (max-width: 1024px) {
+    .hp-benefit-grid,
+    .hp-transparency-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .hp-category-grid,
+    .hp-steps--4,
+    .hp-steps--5 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .hp-benefit-grid,
+    .hp-transparency-grid,
+    .hp-category-grid,
+    .hp-steps--4,
+    .hp-steps--5 {
+        grid-template-columns: 1fr;
+    }
+
+    .hp-hero-support {
+        font-size: 0.95rem;
+    }
+
+    .hp-final-cta {
+        padding: 2.5rem 0;
+    }
+
+    .hp-final-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .hp-final-actions .kabataan-button,
+    .hp-transparency-card .kabataan-button {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 390px) {
+    .hp-benefit-card,
+    .hp-transparency-card {
+        padding: 1rem;
+    }
+}

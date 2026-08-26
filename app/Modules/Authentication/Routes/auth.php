@@ -1,13 +1,13 @@
 <?php
 
-use App\Modules\Authentication\Controllers\AccountActivationController;
 use App\Modules\Authentication\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
 // Sign In routes (guest only)
 Route::middleware('guest')->group(function () {
     Route::get('/sign-in', [AuthController::class, 'showSignin'])->name('sign-in');
-    Route::post('/sign-in', [AuthController::class, 'signin']);
+    Route::post('/sign-in', [AuthController::class, 'signin'])
+        ->middleware('throttle:10,1');
 
     // Backward-compat alias: any route('signin') reference redirects to /sign-in
     Route::get('/login', fn () => redirect()->route('sign-in'))->name('login');
@@ -24,25 +24,17 @@ Route::middleware('guest')->group(function () {
     Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])
         ->name('password.request');
     Route::post('/forgot-password', [AuthController::class, 'sendResetLink'])
+        ->middleware('throttle:5,1')
         ->name('password.email');
     Route::get('/forgot-password/verify-email', [AuthController::class, 'showForgotPasswordVerifyEmail'])
         ->name('password.verify-email');
     Route::post('/forgot-password/verify-email/resend', [AuthController::class, 'resendForgotPasswordEmail'])
+        ->middleware('throttle:5,1')
         ->name('password.verify-email.resend');
     Route::get('/reset-password/{token}', [AuthController::class, 'showResetPassword'])
         ->name('password.reset');
     Route::post('/reset-password', [AuthController::class, 'resetPassword'])
         ->name('password.update');
-
-    Route::get('/verify-account', [AccountActivationController::class, 'showRequestForm'])
-        ->name('account.activation.request');
-    Route::post('/verify-account', [AccountActivationController::class, 'sendLink'])
-        ->middleware(['throttle:kabataan-account-activation-ip', 'throttle:kabataan-account-activation-email'])
-        ->name('account.activation.send');
-    Route::get('/verify-account/check-email', [AccountActivationController::class, 'showSent'])
-        ->name('account.activation.sent');
-    Route::get('/verify-account/already-active', [AccountActivationController::class, 'showAlreadyActive'])
-        ->name('account.activation.already-active');
 
     // Email Verification Routes (Prototype)
     Route::get('/email/verify', [AuthController::class, 'showEmailVerification'])

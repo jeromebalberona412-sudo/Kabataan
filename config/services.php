@@ -54,6 +54,9 @@ return [
         'secret_key' => env('TURNSTILE_SECRET_KEY'),
         'verify_url' => env('TURNSTILE_VERIFY_URL', 'https://challenges.cloudflare.com/turnstile/v0/siteverify'),
         'timeout' => env('TURNSTILE_TIMEOUT', 10),
+        // Progressive gate: require Turnstile on first use, then again after N failures/requests.
+        'failed_attempts' => (int) env('AUTH_TURNSTILE_FAILED_ATTEMPTS', 3),
+        'state_ttl_seconds' => (int) env('AUTH_TURNSTILE_STATE_TTL', 3600),
     ],
 
     'tesseract' => [

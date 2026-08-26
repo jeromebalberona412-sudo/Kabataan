@@ -18,6 +18,7 @@ use App\Services\PhilippineIdPipelineService;
 use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
 use App\Services\SupportingDocumentVerificationRecorder;
+use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
@@ -41,6 +42,7 @@ class KKProfilingWizardController extends Controller
         protected PhilippineIdDetectionService $philippineIdDetection,
         protected PhilippineIdPipelineService $philippineIdPipeline,
         protected TurnstileService $turnstileService,
+        protected TurnstileAttemptGuard $turnstileGuard,
         protected SupportingDocumentVerificationRecorder $documentVerificationRecorder,
         protected KkProfilingIdentityValidator $identityValidator,
     ) {}
@@ -334,7 +336,16 @@ class KKProfilingWizardController extends Controller
 
     public function sendVerification(Request $request, string $barangay)
     {
-        $this->assertTurnstilePassed($request);
+        if ($fail = $this->turnstileGuard->enforce(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request)) {
+            return response()->json([
+                'success' => false,
+                'message' => $fail,
+                'errors' => [
+                    'cf-turnstile-response' => [$fail],
+                ],
+                'turnstile_required' => true,
+            ], 422);
+        }
 
         $barangayRecord = $this->resolveBarangay($barangay);
         $wizard = $this->draftService->resolveWizard();
@@ -374,6 +385,19 @@ class KKProfilingWizardController extends Controller
         try {
             $wizard = $this->dispatchWizardSetPasswordEmail($wizard, $barangayRecord);
         } catch (ValidationException $e) {
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request);
+
+            if ($attempt['threshold_reached']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $attempt['message'] ?? 'Too many unsuccessful attempts. Please complete the security verification before trying again.',
+                    'errors' => [
+                        'email' => [$attempt['message'] ?? 'Too many unsuccessful attempts. Please complete the security verification before trying again.'],
+                    ],
+                    'turnstile_required' => true,
+                ], 422);
+            }
+
             throw $e;
         } catch (\Throwable $e) {
             report($e);
@@ -383,16 +407,28 @@ class KKProfilingWizardController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
-            throw ValidationException::withMessages([
-                'email' => ['Unable to send set password email right now. Please tap Resend set password link to try again.'],
-            ]);
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request);
+            $message = $attempt['message']
+                ?? 'Unable to send set password email right now. Please tap Resend set password link to try again.';
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+                'errors' => [
+                    'email' => [$message],
+                ],
+                'turnstile_required' => (bool) $attempt['turnstile_required'],
+            ], 422);
         }
+
+        $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request);
 
         return response()->json([
             'success' => true,
             'email' => $email,
             'verification_sent' => true,
             'message' => 'Set password link sent. Please check your inbox.',
+            'turnstile_required' => (bool) $attempt['turnstile_required'],
         ]);
     }
 

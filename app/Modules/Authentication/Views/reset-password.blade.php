@@ -53,8 +53,37 @@
                     <p class="card-helper-text">Enter your new password below.</p>
                 </div>
 
+                @php
+                    $isTokenInvalid = isset($tokenValid) && ! $tokenValid;
+                    $resetTokenError = $tokenError
+                        ?? ($isTokenInvalid
+                            ? 'Invalid or expired password reset link. Please request a new one.'
+                            : null);
+                @endphp
+
+                @if ($resetTokenError)
+                    <div class="youth-alert youth-alert-error" role="alert">
+                        <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>{{ $resetTokenError }}</span>
+                    </div>
+                    <div class="youth-register-section" style="margin-top: 0.75rem;">
+                        <p class="register-text">
+                            <a href="{{ route('password.request') }}" class="register-link">Request a new reset link</a>
+                        </p>
+                    </div>
+                @elseif ($errors->any())
+                    <div class="youth-alert youth-alert-error" role="alert">
+                        <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span>{{ $errors->first() }}</span>
+                    </div>
+                @endif
+
                 <!-- Reset Password Form -->
-                <form class="youth-signin-form" method="POST" action="{{ route('password.update') }}" id="resetPasswordForm" novalidate>
+                <form class="youth-signin-form" method="POST" action="{{ route('password.update') }}" id="resetPasswordForm" novalidate @if ($resetTokenError) style="display:none;" aria-hidden="true" @endif>
                     @csrf
                     <input type="hidden" name="token" value="{{ $token ?? '' }}">
                     <input type="hidden" name="email" value="{{ $email ?? request()->email }}">

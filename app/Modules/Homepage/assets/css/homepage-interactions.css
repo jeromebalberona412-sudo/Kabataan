@@ -18,6 +18,10 @@
 .homepage-body .about-feature-card,
 .homepage-body .about-join-card,
 .homepage-body .about-impact-card,
+.homepage-body .hp-benefit-card,
+.homepage-body .hp-program-card,
+.homepage-body .hp-announce-card,
+.homepage-body .hp-category-card,
 .homepage-body .faq-toggle {
     transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }

@@ -68,7 +68,20 @@
                 @endif
 
                 {{-- Forgot Password Form --}}
-                <form class="youth-signin-form" method="POST" action="{{ route('password.email') }}" id="forgotPasswordForm" novalidate>
+                @inject('turnstileService', 'App\Services\TurnstileService')
+                <form
+                    class="youth-signin-form"
+                    method="POST"
+                    action="{{ route('password.email') }}"
+                    id="forgotPasswordForm"
+                    novalidate
+                    @if($turnstileService->isEnabled())
+                        data-turnstile-enabled="1"
+                        data-turnstile-required="{{ (!empty($turnstileRequired) || session('turnstile_required')) ? '1' : '0' }}"
+                    @else
+                        data-turnstile-required="0"
+                    @endif
+                >
                     @csrf
 
                     {{-- Email Field --}}

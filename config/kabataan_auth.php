@@ -31,15 +31,6 @@ return [
         ))
     ))),
 
-    'account_activation' => [
-        'expire_minutes' => (int) env('ACCOUNT_ACTIVATION_EXPIRES_MINUTES', 60 * 24),
-        'cooldown_seconds' => (int) env('ACCOUNT_ACTIVATION_COOLDOWN_SECONDS', 60),
-        'rate_limit' => [
-            'ip_per_minute' => (int) env('ACCOUNT_ACTIVATION_IP_PER_MINUTE', 5),
-            'email_per_hour' => (int) env('ACCOUNT_ACTIVATION_EMAIL_PER_HOUR', 3),
-        ],
-    ],
-
     'remember' => [
         'lifetime_days' => (int) env('KABATAAN_REMEMBER_LIFETIME_DAYS', 7),
     ],

@@ -358,6 +358,24 @@
         });
     }
 
+    function challengeIfRequired(required) {
+        if (!isEnabled()) {
+            return Promise.resolve('');
+        }
+        if (!required) {
+            return Promise.resolve('');
+        }
+        return challenge();
+    }
+
+    function submitFormIfRequired(form) {
+        var required = Boolean(form && form.getAttribute('data-turnstile-required') === '1');
+        return challengeIfRequired(required).then(function (token) {
+            injectToken(form, token);
+            HTMLFormElement.prototype.submit.call(form);
+        });
+    }
+
     function bindClose() {
         var closeBtn = document.getElementById('turnstile-close-btn');
         var cancelBtn = document.getElementById('turnstile-cancel-btn');
@@ -414,11 +432,19 @@
         isEnabled: isEnabled,
         isOpen: isModalOpen,
         challenge: challenge,
+        challengeIfRequired: challengeIfRequired,
         cancel: function () {
             rejectPending('Verification cancelled.');
         },
         injectToken: injectToken,
         submitForm: submitForm,
+        submitFormIfRequired: submitFormIfRequired,
+        setFormRequired: function (form, required) {
+            if (!form) {
+                return;
+            }
+            form.setAttribute('data-turnstile-required', required ? '1' : '0');
+        },
     };
 
     window.kabataanTurnstileChallenge = function () {
@@ -443,7 +469,20 @@
         });
     };
 
+    window.kabataanTurnstileChallengeIfRequired = function (required) {
+        if (!isEnabled() || !required) {
+            return Promise.resolve('');
+        }
+        return window.kabataanTurnstileChallenge();
+    };
+
     window.kabataanTurnstileSubmitForm = function (form) {
+        if (form && form.getAttribute('data-turnstile-required') === '0') {
+            return window.KabataanTurnstileGate.submitFormIfRequired(form);
+        }
+        if (form && form.hasAttribute('data-turnstile-required')) {
+            return window.KabataanTurnstileGate.submitFormIfRequired(form);
+        }
         return window.kabataanTurnstileChallenge().then(function (token) {
             injectToken(form, token);
             HTMLFormElement.prototype.submit.call(form);

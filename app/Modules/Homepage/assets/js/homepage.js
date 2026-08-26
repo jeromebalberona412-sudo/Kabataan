@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const trackedSections = isBarangayListPage
         ? []
-        : ['hero', 'about', 'faq', 'kabataanFooter']
+        : ['hero', 'about', 'benefits', 'transparency', 'faq', 'kabataanFooter']
             .map((id) => document.getElementById(id))
             .filter(Boolean);
 

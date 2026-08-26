@@ -23,7 +23,9 @@ Route::get('/kkprofiling/verify/{id}/{hash}', [KKProfilingController::class, 've
 Route::get('/kkprofiling/verify-update/{id}/{hash}', [KKProfilingController::class, 'verifyUpdateEmail'])->name('kkprofiling.verify-update');
 Route::get('/kkprofiling/check-email', [KKProfilingController::class, 'showCheckEmail'])->name('kkprofiling.check-email');
 Route::post('/api/kkprofiling/check-email-exists', [KKProfilingController::class, 'checkEmailExists'])->name('kkprofiling.check-email-exists');
-Route::post('/api/kkprofiling/resend-verification', [KKProfilingController::class, 'resendVerification'])->name('kkprofiling.resend-verification');
+    Route::post('/api/kkprofiling/resend-verification', [KKProfilingController::class, 'resendVerification'])
+        ->middleware('throttle:5,1')
+        ->name('kkprofiling.resend-verification');
 
 // Registration wizard — register BEFORE /kkprofiling/{barangay} to avoid "wizard" slug conflicts
 Route::get('/kkprofiling/wizard/set-password/{token}/{hash}', [KKProfilingWizardController::class, 'openSetPasswordFromEmail'])
@@ -47,8 +49,12 @@ Route::prefix('/api/kkprofiling/{barangay}/wizard')->group(function () {
     Route::post('/draft-step-1', [KKProfilingWizardController::class, 'saveStep1Draft'])->name('kkprofiling.wizard.draft-step1');
     Route::post('/step-2', [KKProfilingWizardController::class, 'saveStep2'])->name('kkprofiling.wizard.step2');
     Route::post('/set-step', [KKProfilingWizardController::class, 'setStep'])->name('kkprofiling.wizard.set-step');
-    Route::post('/send-verification', [KKProfilingWizardController::class, 'sendVerification'])->name('kkprofiling.wizard.send-verification');
-    Route::post('/resend-verification', [KKProfilingWizardController::class, 'resendVerification'])->name('kkprofiling.wizard.resend-verification');
+    Route::post('/send-verification', [KKProfilingWizardController::class, 'sendVerification'])
+        ->middleware('throttle:5,1')
+        ->name('kkprofiling.wizard.send-verification');
+    Route::post('/resend-verification', [KKProfilingWizardController::class, 'resendVerification'])
+        ->middleware('throttle:5,1')
+        ->name('kkprofiling.wizard.resend-verification');
     Route::post('/finalize', [KKProfilingWizardController::class, 'finalize'])->name('kkprofiling.wizard.finalize');
     Route::post('/clear-draft', [KKProfilingWizardController::class, 'clearDraft'])->name('kkprofiling.wizard.clear-draft');
 });

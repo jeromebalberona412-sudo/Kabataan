@@ -17,7 +17,7 @@
     const STEP_META = {
         1: {
             title: 'Profiling Form',
-            desc: 'Complete your personal and demographic information.',
+            desc: '',
         },
         2: {
             title: 'Supporting Documents',
@@ -1165,7 +1165,9 @@
         }
 
         if (stepDescEl) {
-            stepDescEl.textContent = meta.desc;
+            const desc = String(meta.desc || '').trim();
+            stepDescEl.textContent = desc;
+            stepDescEl.hidden = desc === '';
         }
     }
 
@@ -1613,6 +1615,8 @@
         if (!response.ok) {
             const error = new Error(data.message || 'Request failed.');
             error.errors = data.errors || {};
+            error.turnstile_required = Boolean(data.turnstile_required);
+            error.payload = data;
             throw error;
         }
 
@@ -1636,6 +1640,8 @@
         if (!response.ok) {
             const error = new Error(data.message || 'Request failed.');
             error.errors = data.errors || {};
+            error.turnstile_required = Boolean(data.turnstile_required);
+            error.payload = data;
             throw error;
         }
 
@@ -1893,23 +1899,62 @@
         }
     }
 
+    async function obtainEmailVerifyTurnstileToken(required) {
+        if (!required) {
+            return '';
+        }
+        if (typeof window.kabataanTurnstileChallengeIfRequired === 'function') {
+            return window.kabataanTurnstileChallengeIfRequired(true);
+        }
+        if (typeof window.kabataanTurnstileChallenge === 'function') {
+            return window.kabataanTurnstileChallenge();
+        }
+        if (window.KabataanTurnstileGate?.challenge) {
+            return window.KabataanTurnstileGate.challenge();
+        }
+        if (typeof window.kkpChallengeTurnstile === 'function') {
+            return window.kkpChallengeTurnstile();
+        }
+        return '';
+    }
+
     async function sendVerificationEmail(isResend) {
         showEmailStatus('');
 
         try {
+            let required = root.dataset.turnstileRequired === '1';
             let turnstileToken = '';
-            if (typeof window.kabataanTurnstileChallenge === 'function') {
-                turnstileToken = await window.kabataanTurnstileChallenge();
-            } else if (window.KabataanTurnstileGate?.challenge) {
-                turnstileToken = await window.KabataanTurnstileGate.challenge();
-            } else if (typeof window.kkpChallengeTurnstile === 'function') {
-                turnstileToken = await window.kkpChallengeTurnstile();
+            try {
+                turnstileToken = await obtainEmailVerifyTurnstileToken(required);
+            } catch (challengeError) {
+                if (challengeError?.message === 'Verification cancelled.') {
+                    return false;
+                }
+                throw challengeError;
             }
 
             const endpoint = isResend ? `${apiBase}/resend-verification` : `${apiBase}/send-verification`;
-            const data = await postJson(endpoint, {
-                'cf-turnstile-response': turnstileToken,
-            });
+
+            let data;
+            try {
+                data = await postJson(endpoint, {
+                    'cf-turnstile-response': turnstileToken,
+                });
+            } catch (error) {
+                if (error.turnstile_required && !required) {
+                    root.dataset.turnstileRequired = '1';
+                    turnstileToken = await obtainEmailVerifyTurnstileToken(true);
+                    data = await postJson(endpoint, {
+                        'cf-turnstile-response': turnstileToken,
+                    });
+                } else {
+                    throw error;
+                }
+            }
+
+            if (typeof data.turnstile_required !== 'undefined') {
+                root.dataset.turnstileRequired = data.turnstile_required ? '1' : '0';
+            }
 
             if (data.registration_completed) {
                 showRegistrationCompleteState(Boolean(data.auto_approved));
@@ -1947,12 +1992,17 @@
                 return false;
             }
 
+            if (typeof error.turnstile_required !== 'undefined') {
+                root.dataset.turnstileRequired = error.turnstile_required ? '1' : '0';
+            }
+
             if (error.errors?.draft?.[0] && registrationCompleted) {
                 showRegistrationCompleteState(registrationAutoApproved);
                 return false;
             }
 
             const emailMsg = error.errors?.email?.[0]
+                || error.errors?.['cf-turnstile-response']?.[0]
                 || error.errors?.draft?.[0]
                 || error.message
                 || 'Failed to send set password link.';

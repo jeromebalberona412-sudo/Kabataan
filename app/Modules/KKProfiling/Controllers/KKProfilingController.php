@@ -21,6 +21,7 @@ use App\Services\KkRegistrationDraftService;
 use App\Services\KkSurveyResponseService;
 use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
+use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
 use Carbon\Carbon;
@@ -37,6 +38,7 @@ class KKProfilingController extends Controller
         protected KabataanPhotoService $photoService,
         protected BarangayZoneService $barangayZoneService,
         protected TurnstileService $turnstileService,
+        protected TurnstileAttemptGuard $turnstileGuard,
     ) {}
 
     /**
@@ -256,6 +258,10 @@ class KKProfilingController extends Controller
             'wizardDraftEmail' => $wizardDraftEmail,
             'turnstileEnabled' => app(TurnstileService::class)->isEnabled(),
             'turnstileSiteKey' => app(TurnstileService::class)->getSiteKey(),
+            'turnstileRequired' => app(TurnstileAttemptGuard::class)->isRequired(
+                TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY,
+                request()
+            ),
         ]);
     }
 
@@ -1026,10 +1032,11 @@ class KKProfilingController extends Controller
      */
     public function resendVerification(Request $request)
     {
-        if ($fail = $this->turnstileService->requestFailed($request)) {
+        if ($fail = $this->turnstileGuard->enforce(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request)) {
             return response()->json([
                 'success' => false,
                 'message' => $fail,
+                'turnstile_required' => true,
             ], 422);
         }
 
@@ -1054,9 +1061,12 @@ class KKProfilingController extends Controller
         $registration = $registration->latest()->first();
 
         if (! $registration) {
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request);
+
             return response()->json([
                 'success' => false,
-                'message' => 'No registration found for this email address.',
+                'message' => 'Unable to resend verification for this request. Please check your details and try again.',
+                'turnstile_required' => (bool) $attempt['turnstile_required'],
             ], 404);
         }
 
@@ -1064,15 +1074,22 @@ class KKProfilingController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'This email has already been verified or registration is complete.',
+                'turnstile_required' => $this->turnstileGuard->isRequired(
+                    TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY,
+                    $request
+                ),
             ], 422);
         }
 
         try {
             $this->sendVerificationEmail($registration);
 
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Verification email has been resent. Please check your inbox.',
+                'turnstile_required' => (bool) $attempt['turnstile_required'],
             ]);
         } catch (\Exception $e) {
             \Log::error('Failed to resend verification email', [
@@ -1080,9 +1097,12 @@ class KKProfilingController extends Controller
                 'error' => $e->getMessage(),
             ]);
 
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to send verification email. Please try again later.',
+                'message' => $attempt['message'] ?? 'Failed to send verification email. Please try again later.',
+                'turnstile_required' => (bool) $attempt['turnstile_required'],
             ], 500);
         }
     }
@@ -1103,6 +1123,10 @@ class KKProfilingController extends Controller
         return view('kkprofiling::check_email', [
             'email' => $email,
             'barangay' => $barangay,
+            'turnstileRequired' => $this->turnstileGuard->isRequired(
+                TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY,
+                $request
+            ),
         ]);
     }
 

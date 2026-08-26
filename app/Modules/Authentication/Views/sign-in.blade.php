@@ -86,6 +86,7 @@
                       @if($turnstileService->isEnabled())
                           data-turnstile-enabled="true"
                           data-turnstile-sitekey="{{ $turnstileService->getSiteKey() }}"
+                          data-turnstile-required="{{ (!empty($turnstileRequired) || session('turnstile_required')) ? '1' : '0' }}"
                       @endif>
                     @csrf
 
@@ -177,10 +178,12 @@
                         $isTurnstileErr = $signInErr && (
                             str_contains(strtolower($signInErr), 'verification') ||
                             str_contains(strtolower($signInErr), 'turnstile') ||
-                            str_contains(strtolower($signInErr), 'security check')
+                            str_contains(strtolower($signInErr), 'security check') ||
+                            str_contains(strtolower($signInErr), 'security verification')
                         );
+                        $needsTurnstileNow = (!empty($turnstileRequired) || session('turnstile_required'));
                     @endphp
-                    @if($isTurnstileErr && $turnstileService->isEnabled())
+                    @if($isTurnstileErr && $turnstileService->isEnabled() && $needsTurnstileNow)
                         <div id="turnstile-server-error"
                              style="display:none;"
                              aria-hidden="true">{{ $signInErr }}</div>
@@ -192,12 +195,6 @@
                     </button>
 
                 </form>
-
-                <div class="youth-login-secondary-actions">
-                    <a href="{{ route('account.activation.request') }}" class="youth-homepage-btn" id="verifyAccountBtn">
-                        Activate Account
-                    </a>
-                </div>
 
                 <!-- Registration Link -->
                 <div class="youth-register-section">

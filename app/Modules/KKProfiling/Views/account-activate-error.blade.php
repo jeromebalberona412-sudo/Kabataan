@@ -50,7 +50,7 @@
                     </p>
                 </div>
 
-                <a href="{{ route('account.activation.request') }}" class="youth-submit-btn kkp-setpw-signin-link">Activate Account</a>
+                <a href="{{ route('sign-in') }}" class="youth-submit-btn kkp-setpw-signin-link">Sign In</a>
                 <a href="{{ route('sign-in') }}" class="youth-homepage-btn">Back to Login</a>
             </div>
         </div>

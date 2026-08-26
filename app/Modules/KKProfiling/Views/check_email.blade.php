@@ -363,6 +363,7 @@
                         id="resendBtn"
                         disabled
                         data-email="{{ $email }}"
+                        data-turnstile-required="{{ !empty($turnstileRequired) ? '1' : '0' }}"
                         @if($barangay) data-barangay="{{ $barangay }}" @endif
                     >Resend Email Verification</button>
                     <span class="resend-timer" id="resendTimer">(1:00)</span>
@@ -470,24 +471,32 @@
                 }
 
                 try {
+                    let required = this.dataset.turnstileRequired === '1';
                     let turnstileToken = '';
-                    if (window.kabataanTurnstileChallenge) {
-                        try {
-                            turnstileToken = await window.kabataanTurnstileChallenge();
-                        } catch {
-                            this.disabled = false;
-                            return;
+                    const challenge = async function (needChallenge) {
+                        if (!needChallenge) {
+                            return '';
                         }
-                    } else if (window.KabataanTurnstileGate && window.KabataanTurnstileGate.challenge) {
-                        try {
-                            turnstileToken = await window.KabataanTurnstileGate.challenge();
-                        } catch {
-                            this.disabled = false;
-                            return;
+                        if (window.kabataanTurnstileChallengeIfRequired) {
+                            return window.kabataanTurnstileChallengeIfRequired(true);
                         }
+                        if (window.kabataanTurnstileChallenge) {
+                            return window.kabataanTurnstileChallenge();
+                        }
+                        if (window.KabataanTurnstileGate && window.KabataanTurnstileGate.challenge) {
+                            return window.KabataanTurnstileGate.challenge();
+                        }
+                        return '';
+                    };
+
+                    try {
+                        turnstileToken = await challenge(required);
+                    } catch {
+                        this.disabled = false;
+                        return;
                     }
 
-                    const response = await fetch('/api/kkprofiling/resend-verification', {
+                    let response = await fetch('/api/kkprofiling/resend-verification', {
                         method: 'POST',
                         credentials: 'same-origin',
                         headers: {
@@ -503,7 +512,37 @@
                         }),
                     });
 
-                    const data = await response.json();
+                    let data = await response.json();
+
+                    if (!response.ok && data.turnstile_required && !required) {
+                        this.dataset.turnstileRequired = '1';
+                        try {
+                            turnstileToken = await challenge(true);
+                        } catch {
+                            this.disabled = false;
+                            return;
+                        }
+                        response = await fetch('/api/kkprofiling/resend-verification', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            body: JSON.stringify({
+                                email: email,
+                                barangay: barangay,
+                                'cf-turnstile-response': turnstileToken,
+                            }),
+                        });
+                        data = await response.json();
+                    }
+
+                    if (typeof data.turnstile_required !== 'undefined') {
+                        this.dataset.turnstileRequired = data.turnstile_required ? '1' : '0';
+                    }
 
                     if (response.ok && data.success) {
                         this.textContent = 'Email sent!';

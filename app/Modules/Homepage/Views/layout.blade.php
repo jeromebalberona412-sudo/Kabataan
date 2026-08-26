@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0450a8">
-    <meta name="description" content="SK OnePortal Kabataan - Youth Community Platform for Santa Cruz, Laguna">
+    <meta name="description" content="SK OnePortal — convenient online platform para mas madaling makilahok ang Kabataan sa mga programa, aktibidad, at oportunidad ng Sangguniang Kabataan sa Santa Cruz, Laguna.">
     <title>@yield('title', 'SK OnePortal Kabataan')</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,6 +15,7 @@
     @vite([
         'app/Modules/Homepage/assets/css/homepage-bootstrap.css',
         'app/Modules/Homepage/assets/css/homepage.css',
+        'app/Modules/Homepage/assets/css/homepage-landing.css',
         'app/Modules/Homepage/assets/css/about.css',
         'app/Modules/Homepage/assets/css/pages.css',
         'app/Modules/Homepage/assets/css/faqs.css',
@@ -31,7 +32,7 @@
     <nav class="kabataan-nav" aria-label="Primary navigation">
         <div class="container kabataan-nav-inner">
             <a href="{{ route('homepage') }}" class="kabataan-brand">
-                <img src="/images/skoneportal_logo.webp" alt="Kabataan logo" class="kabataan-brand-logo">
+                <img src="/images/skoneportal_logo.webp" alt="SK OnePortal Kabataan logo" class="kabataan-brand-logo">
                 <span class="kabataan-brand-copy">
                     <strong>Kabataan</strong>
                     <small>SK OnePortal Santa Cruz</small>
@@ -40,16 +41,21 @@
 
             <div class="kabataan-nav-links" id="kabataanNavLinks">
                 <a href="{{ route('homepage') }}" class="kabataan-nav-link" data-section="hero">Home</a>
-                <a href="{{ route('homepage') }}" class="kabataan-nav-link" data-section="about">About</a>
+                <a href="{{ route('homepage') }}#about" class="kabataan-nav-link" data-section="about">About</a>
+                <a href="{{ route('homepage') }}#transparency" class="kabataan-nav-link" data-section="transparency">Transparency</a>
                 <a href="{{ route('baranggay_abyip.index') }}" class="kabataan-nav-link" data-section="barangay-abyip">Barangay ABYIP</a>
                 <a href="{{ route('program_accomplishments.barangays') }}" class="kabataan-nav-link" data-section="barangays">Program Accomplishment</a>
-                <a href="{{ route('homepage') }}" class="kabataan-nav-link" data-section="faq">FAQs</a>
-                <a href="{{ route('homepage') }}" class="kabataan-nav-link" data-section="kabataanFooter">Contact</a>
+                <a href="{{ route('homepage') }}#faq" class="kabataan-nav-link" data-section="faq">FAQs</a>
+                <a href="{{ route('homepage') }}#kabataanFooter" class="kabataan-nav-link" data-section="kabataanFooter">Contact</a>
             </div>
 
             <div class="kabataan-nav-actions">
-                <a href="{{ route('sign-in') }}" class="kabataan-nav-secondary kabataan-nav-auth-btn">Sign In</a>
-                <a href="{{ route('register') }}" class="kabataan-nav-primary kabataan-nav-auth-btn">Sign Up</a>
+                @auth
+                    <a href="{{ route('dashboard') }}" class="kabataan-nav-primary kabataan-nav-auth-btn">Go to Dashboard</a>
+                @else
+                    <a href="{{ route('sign-in') }}" class="kabataan-nav-secondary kabataan-nav-auth-btn">Sign In</a>
+                    <a href="{{ route('register') }}" class="kabataan-nav-primary kabataan-nav-auth-btn">Sign Up</a>
+                @endauth
                 <button type="button" class="kabataan-nav-toggle" id="kabataanNavToggle" aria-label="Open menu" aria-expanded="false">
                     <span></span><span></span><span></span>
                 </button>
@@ -59,14 +65,19 @@
 
     <div class="kabataan-drawer" id="kabataanDrawer" aria-hidden="true">
         <a href="{{ route('homepage') }}" class="kabataan-drawer-link" data-section="hero">Home</a>
-        <a href="{{ route('homepage') }}" class="kabataan-drawer-link" data-section="about">About</a>
+        <a href="{{ route('homepage') }}#about" class="kabataan-drawer-link" data-section="about">About</a>
+        <a href="{{ route('homepage') }}#transparency" class="kabataan-drawer-link" data-section="transparency">Transparency</a>
         <a href="{{ route('baranggay_abyip.index') }}" class="kabataan-drawer-link" data-section="barangay-abyip">Barangay ABYIP</a>
         <a href="{{ route('program_accomplishments.barangays') }}" class="kabataan-drawer-link" data-section="barangays">Program Accomplishment</a>
-        <a href="{{ route('homepage') }}" class="kabataan-drawer-link" data-section="faq">FAQs</a>
-        <a href="{{ route('homepage') }}" class="kabataan-drawer-link" data-section="kabataanFooter">Contact</a>
+        <a href="{{ route('homepage') }}#faq" class="kabataan-drawer-link" data-section="faq">FAQs</a>
+        <a href="{{ route('homepage') }}#kabataanFooter" class="kabataan-drawer-link" data-section="kabataanFooter">Contact</a>
         <div class="kabataan-drawer-actions">
-            <a href="{{ route('sign-in') }}" class="kabataan-nav-secondary">Sign In</a>
-            <a href="{{ route('register') }}" class="kabataan-nav-primary">Sign Up</a>
+            @auth
+                <a href="{{ route('dashboard') }}" class="kabataan-nav-primary">Go to Dashboard</a>
+            @else
+                <a href="{{ route('sign-in') }}" class="kabataan-nav-secondary">Sign In</a>
+                <a href="{{ route('register') }}" class="kabataan-nav-primary">Sign Up</a>
+            @endauth
         </div>
     </div>
 

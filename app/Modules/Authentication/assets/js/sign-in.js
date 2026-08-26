@@ -74,9 +74,16 @@
         });
     }
 
+    function turnstileRequired() {
+        return Boolean(signInForm && signInForm.dataset.turnstileRequired === '1');
+    }
+
     function runTurnstileThenSubmit() {
         return waitForGate().then(function (gate) {
-            return gate.challenge();
+            if (gate.challengeIfRequired) {
+                return gate.challengeIfRequired(turnstileRequired());
+            }
+            return turnstileRequired() ? gate.challenge() : Promise.resolve('');
         }).then(function (token) {
             window.KabataanTurnstileGate.injectToken(signInForm, token);
             isSubmitting = true;
@@ -131,9 +138,19 @@
 
         if (!validateFields()) return;
 
+        // Turnstile disabled entirely — submit directly.
         if (!signInForm.dataset.turnstileEnabled) {
             isSubmitting = true;
             setSigningIn();
+            signInForm.submit();
+            return;
+        }
+
+        // Progressive gate: only challenge when the server says it is required.
+        if (!turnstileRequired()) {
+            isSubmitting = true;
+            setSigningIn();
+            window.KabataanTurnstileGate.injectToken(signInForm, '');
             signInForm.submit();
             return;
         }
@@ -263,7 +280,7 @@
         }
 
         var serverErrEl = document.getElementById('turnstile-server-error');
-        if (serverErrEl && signInForm.dataset.turnstileEnabled) {
+        if (serverErrEl && signInForm.dataset.turnstileEnabled && turnstileRequired()) {
             waitForGate().then(function (gate) {
                 return gate.challenge();
             }).then(function (token) {

@@ -1451,7 +1451,7 @@ body.homepage-body.kabataan-homepage::after {
 }
 
 .kabataan-section-alt {
-    background: linear-gradient(180deg, rgba(4, 80, 168, 0.03), rgba(16, 185, 129, 0.02));
+    background: #f4f8fd;
 }
 
 .kabataan-section-heading {

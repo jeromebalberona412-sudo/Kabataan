@@ -111,6 +111,22 @@
             setLabel('Resend Reset Link');
         }
 
+        async function obtainTurnstileToken(required) {
+            if (!required) {
+                return '';
+            }
+            if (window.kabataanTurnstileChallengeIfRequired) {
+                return window.kabataanTurnstileChallengeIfRequired(true);
+            }
+            if (window.kabataanTurnstileChallenge) {
+                return window.kabataanTurnstileChallenge();
+            }
+            if (window.KabataanTurnstileGate && window.KabataanTurnstileGate.challenge) {
+                return window.KabataanTurnstileGate.challenge();
+            }
+            return '';
+        }
+
         async function handleResend() {
             if (resendInFlight || resendBtn.disabled) return;
 
@@ -122,24 +138,16 @@
             clearStatus();
 
             try {
+                let required = dataEl.dataset.turnstileRequired === '1';
                 let turnstileToken = '';
-                if (window.kabataanTurnstileChallenge) {
-                    try {
-                        turnstileToken = await window.kabataanTurnstileChallenge();
-                    } catch {
-                        enableResend();
-                        return;
-                    }
-                } else if (window.KabataanTurnstileGate && window.KabataanTurnstileGate.challenge) {
-                    try {
-                        turnstileToken = await window.KabataanTurnstileGate.challenge();
-                    } catch {
-                        enableResend();
-                        return;
-                    }
+                try {
+                    turnstileToken = await obtainTurnstileToken(required);
+                } catch {
+                    enableResend();
+                    return;
                 }
 
-                const response = await fetch(resendUrl, {
+                let response = await fetch(resendUrl, {
                     method: 'POST',
                     headers: {
                         'Accept':           'application/json',
@@ -154,7 +162,38 @@
                     }),
                 });
 
-                const data = await response.json().catch(() => ({}));
+                let data = await response.json().catch(() => ({}));
+
+                // Server says Turnstile is now required — challenge once and retry.
+                if (!response.ok && data.turnstile_required && !required) {
+                    dataEl.dataset.turnstileRequired = '1';
+                    try {
+                        turnstileToken = await obtainTurnstileToken(true);
+                    } catch {
+                        enableResend();
+                        return;
+                    }
+
+                    response = await fetch(resendUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Accept':           'application/json',
+                            'Content-Type':     'application/json',
+                            'X-CSRF-TOKEN':     csrfToken,
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                            email,
+                            'cf-turnstile-response': turnstileToken,
+                        }),
+                    });
+                    data = await response.json().catch(() => ({}));
+                }
+
+                if (typeof data.turnstile_required !== 'undefined') {
+                    dataEl.dataset.turnstileRequired = data.turnstile_required ? '1' : '0';
+                }
 
                 if (response.status === 410 || data.expired) {
                     if (resendSpinner) resendSpinner.hidden = true;

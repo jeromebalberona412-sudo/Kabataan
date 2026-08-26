@@ -5,7 +5,7 @@
             <div class="kkp-wizard-progress-meta">
                 <p class="kkp-wizard-progress-eyebrow" id="kkpWizardEyebrow">KK Profiling · <span id="kkpWizardBarangayName"></span></p>
                 <h1 class="kkp-wizard-progress-title" id="kkpWizardStepTitle">Profiling Form</h1>
-                <p class="kkp-wizard-progress-desc" id="kkpWizardStepDesc">Complete your personal and demographic information.</p>
+                <p class="kkp-wizard-progress-desc" id="kkpWizardStepDesc" hidden></p>
             </div>
         </div>
 

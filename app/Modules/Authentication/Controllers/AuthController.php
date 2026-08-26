@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Modules\Authentication\Services\TrustedDeviceService;
 use App\Services\KabataanAuthService;
 use App\Services\RegistrationEvaluationService;
+use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class AuthController extends Controller
     public function __construct(
         private readonly KabataanAuthService $kabataanAuthService,
         private readonly TurnstileService $turnstileService,
+        private readonly TurnstileAttemptGuard $turnstileGuard,
         private readonly TrustedDeviceService $trustedDeviceService,
     ) {}
 
@@ -38,7 +40,14 @@ class AuthController extends Controller
             request()->session()->regenerateToken();
         }
 
-        return response(view('authentication::sign-in'))->withHeaders([
+        $request = request();
+
+        return response(view('authentication::sign-in', [
+            'turnstileRequired' => $this->turnstileGuard->isRequired(
+                TurnstileAttemptGuard::ACTION_SIGNIN,
+                $request
+            ),
+        ]))->withHeaders([
             'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
             'Pragma' => 'no-cache',
             'Expires' => 'Sat, 01 Jan 2000 00:00:00 GMT',
@@ -47,25 +56,8 @@ class AuthController extends Controller
 
     public function signin(Request $request)
     {
-        // ── Turnstile verification ──────────────────────────────────────────
-        if ($this->turnstileService->isEnabled()) {
-            $token = (string) $request->input('cf-turnstile-response', '');
-
-            if ($token === '') {
-                if ($request->wantsJson()) {
-                    return response()->json(['success' => false, 'message' => 'Please complete the security verification.'], 422);
-                }
-
-                return back()->withInput($request->only('email'))->with('sign_in_error', 'Please complete the security verification.');
-            }
-
-            if (! $this->turnstileService->verify($token, $request->ip())) {
-                if ($request->wantsJson()) {
-                    return response()->json(['success' => false, 'message' => 'Security verification failed. Please try again.'], 422);
-                }
-
-                return back()->withInput($request->only('email'))->with('sign_in_error', 'Security verification failed. Please try again.');
-            }
+        if ($fail = $this->turnstileGuard->enforce(TurnstileAttemptGuard::ACTION_SIGNIN, $request)) {
+            return $this->signinFailureResponse($request, $fail, true);
         }
 
         $credentials = $request->validate([
@@ -88,11 +80,10 @@ class AuthController extends Controller
             || ! Hash::check($credentials['password'], $user->password)
             || ! $this->kabataanAuthService->canAccessPortal($user)
         ) {
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => KabataanAuthService::SIGNIN_DENIED_MESSAGE], 422);
-            }
+            $attempt = $this->turnstileGuard->recordFailure(TurnstileAttemptGuard::ACTION_SIGNIN, $request);
+            $message = $attempt['message'] ?? KabataanAuthService::SIGNIN_DENIED_MESSAGE;
 
-            return back()->withInput($request->only('email'))->with('sign_in_error', KabataanAuthService::SIGNIN_DENIED_MESSAGE);
+            return $this->signinFailureResponse($request, $message, (bool) $attempt['turnstile_required']);
         }
 
         // ── Status checks ───────────────────────────────────────────────────
@@ -112,11 +103,13 @@ class AuthController extends Controller
                 $user->update(['status' => User::STATUS_ACTIVE]);
             } else {
                 $msg = 'Please wait for SK officials to verify your account. You will receive an email once your registration has been approved.';
-                if ($request->wantsJson()) {
-                    return response()->json(['success' => false, 'message' => $msg], 422);
-                }
+                $attempt = $this->turnstileGuard->recordFailure(TurnstileAttemptGuard::ACTION_SIGNIN, $request);
 
-                return back()->withInput($request->only('email'))->with('sign_in_error', $msg);
+                return $this->signinFailureResponse(
+                    $request,
+                    $attempt['message'] ?? $msg,
+                    (bool) $attempt['turnstile_required']
+                );
             }
         }
 
@@ -125,23 +118,29 @@ class AuthController extends Controller
                 ? 'Reason: '.$registration->review_notes
                 : 'Please contact your SK officials for more information.';
             $msg = 'Your KK Profiling registration has been rejected. '.$reason;
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => $msg], 422);
-            }
+            $attempt = $this->turnstileGuard->recordFailure(TurnstileAttemptGuard::ACTION_SIGNIN, $request);
 
-            return back()->withInput($request->only('email'))->with('sign_in_error', $msg);
+            return $this->signinFailureResponse(
+                $request,
+                $attempt['message'] ?? $msg,
+                (bool) $attempt['turnstile_required']
+            );
         }
 
         if ($user->status === 'INACTIVE') {
             $msg = 'Your account has been deactivated. Please contact your SK officials.';
-            if ($request->wantsJson()) {
-                return response()->json(['success' => false, 'message' => $msg], 422);
-            }
+            $attempt = $this->turnstileGuard->recordFailure(TurnstileAttemptGuard::ACTION_SIGNIN, $request);
 
-            return back()->withInput($request->only('email'))->with('sign_in_error', $msg);
+            return $this->signinFailureResponse(
+                $request,
+                $attempt['message'] ?? $msg,
+                (bool) $attempt['turnstile_required']
+            );
         }
 
         // ── Authenticate ────────────────────────────────────────────────────
+        $this->turnstileGuard->clear(TurnstileAttemptGuard::ACTION_SIGNIN, $request);
+
         $remember = $request->boolean('remember');
 
         Auth::login($user, $remember);
@@ -158,6 +157,28 @@ class AuthController extends Controller
         }
 
         return redirect()->to($redirectUrl);
+    }
+
+    private function signinFailureResponse(Request $request, string $message, bool $turnstileRequired = false)
+    {
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+                'turnstile_required' => $turnstileRequired || $this->turnstileGuard->isRequired(
+                    TurnstileAttemptGuard::ACTION_SIGNIN,
+                    $request
+                ),
+            ], 422);
+        }
+
+        return back()
+            ->withInput($request->only('email'))
+            ->with('sign_in_error', $message)
+            ->with('turnstile_required', $turnstileRequired || $this->turnstileGuard->isRequired(
+                TurnstileAttemptGuard::ACTION_SIGNIN,
+                $request
+            ));
     }
 
     public function logout(Request $request)
@@ -199,15 +220,21 @@ class AuthController extends Controller
 
     public function showForgotPassword()
     {
-        return view('authentication::forgot-password');
+        return view('authentication::forgot-password', [
+            'turnstileRequired' => $this->turnstileGuard->isRequired(
+                TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD,
+                request()
+            ),
+        ]);
     }
 
     public function sendResetLink(Request $request)
     {
-        if ($fail = $this->turnstileService->requestFailed($request)) {
+        if ($fail = $this->turnstileGuard->enforce(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request)) {
             return back()
                 ->withInput($request->only('email'))
-                ->with('forgot_password_error', $fail);
+                ->with('forgot_password_error', $fail)
+                ->with('turnstile_required', true);
         }
 
         $request->validate([
@@ -217,12 +244,27 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (! $user || ! $this->kabataanAuthService->canAccessPortal($user)) {
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);
+
             return back()
                 ->withInput($request->only('email'))
-                ->with('forgot_password_error', 'No account found with this email address. Please check your email and try again.');
+                ->with('forgot_password_error', 'Invalid email.')
+                ->with('turnstile_required', (bool) $attempt['turnstile_required']);
         }
 
         $status = Password::sendResetLink($request->only('email'));
+
+        if ($status === Password::RESET_THROTTLED) {
+            $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);
+
+            return back()
+                ->withInput($request->only('email'))
+                ->with('forgot_password_error', 'Too many attempts. Please wait a moment before trying again.')
+                ->with(
+                    'turnstile_required',
+                    $this->turnstileGuard->isRequired(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request)
+                );
+        }
 
         if ($status === Password::RESET_LINK_SENT) {
             $sentAt = now();
@@ -234,15 +276,19 @@ class AuthController extends Controller
                 'expires_at' => $sentAt->copy()->addHours(2)->toIso8601String(),
             ]);
 
-            return redirect()->route('password.verify-email');
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);
+
+            return redirect()
+                ->route('password.verify-email')
+                ->with('turnstile_required', (bool) $attempt['turnstile_required']);
         }
+
+        $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);
 
         return back()
             ->withInput($request->only('email'))
-            ->with('forgot_password_error', $status === Password::RESET_THROTTLED
-                ? 'You recently requested a password reset. Please wait 60 seconds before requesting another link.'
-                : 'Unable to send a reset link to that email address. Please try again.'
-            );
+            ->with('forgot_password_error', 'Unable to send a reset link to that email address. Please try again.')
+            ->with('turnstile_required', (bool) $attempt['turnstile_required']);
     }
 
     public function showForgotPasswordVerifyEmail(Request $request)
@@ -267,15 +313,20 @@ class AuthController extends Controller
             'email' => (string) $state['email'],
             'resendAvailableAt' => $resendAvailableAt->toIso8601String(),
             'resendCooldownSecs' => max(0, (int) now()->diffInSeconds($resendAvailableAt, false)),
+            'turnstileRequired' => $this->turnstileGuard->isRequired(
+                TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD,
+                $request
+            ),
         ]);
     }
 
     public function resendForgotPasswordEmail(Request $request): JsonResponse
     {
-        if ($fail = $this->turnstileService->requestFailed($request)) {
+        if ($fail = $this->turnstileGuard->enforce(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request)) {
             return response()->json([
                 'ok' => false,
                 'message' => $fail,
+                'turnstile_required' => true,
             ], 422);
         }
 
@@ -308,16 +359,25 @@ class AuthController extends Controller
                 'message' => "Please wait {$remainingSecs} seconds before resending.",
                 'resend_available_at' => $resendAvailableAt->toIso8601String(),
                 'cooldown_remaining' => $remainingSecs,
+                'turnstile_required' => $this->turnstileGuard->isRequired(
+                    TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD,
+                    $request
+                ),
             ], 429);
         }
 
         $status = Password::sendResetLink(['email' => (string) $state['email']]);
 
         if ($status !== Password::RESET_LINK_SENT) {
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);
+
             return response()->json([
                 'ok' => false,
-                'message' => __($status),
-            ], 422);
+                'message' => $status === Password::RESET_THROTTLED
+                    ? 'Too many attempts. Please wait a moment before trying again.'
+                    : __($status),
+                'turnstile_required' => (bool) $attempt['turnstile_required'],
+            ], $status === Password::RESET_THROTTLED ? 429 : 422);
         }
 
         $newResendAvailableAt = now()->addSeconds(60);
@@ -326,19 +386,29 @@ class AuthController extends Controller
         $state['sent_at'] = now()->toIso8601String();
         $request->session()->put('kabataan_fp_verify', $state);
 
+        $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);
+
         return response()->json([
             'ok' => true,
             'message' => 'A new password reset link has been sent to your email.',
             'resend_available_at' => $newResendAvailableAt->toIso8601String(),
             'cooldown_remaining' => 60,
+            'turnstile_required' => (bool) $attempt['turnstile_required'],
         ]);
     }
 
     public function showResetPassword(Request $request, string $token)
     {
+        $email = trim((string) $request->query('email', ''));
+        $tokenValid = $this->isValidPasswordResetToken($email, $token);
+
         return view('authentication::reset-password', [
             'token' => $token,
-            'email' => $request->query('email', ''),
+            'email' => $email,
+            'tokenValid' => $tokenValid,
+            'tokenError' => $tokenValid
+                ? null
+                : 'Invalid or expired password reset link. Please request a new one.',
         ]);
     }
 
@@ -362,6 +432,12 @@ class AuthController extends Controller
             ]);
         }
 
+        if (! Password::broker()->tokenExists($user, (string) $request->input('token'))) {
+            throw ValidationException::withMessages([
+                'email' => 'Invalid or expired password reset link. Please request a new one.',
+            ]);
+        }
+
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $resetUser, string $password) {
@@ -379,13 +455,34 @@ class AuthController extends Controller
         );
 
         if ($status === Password::PASSWORD_RESET) {
+            $request->session()->forget('kabataan_fp_verify');
+
             return redirect()->route('sign-in')
                 ->with('success', 'Your password has been reset. You can now sign in.');
         }
 
+        $message = $status === Password::INVALID_TOKEN
+            ? 'Invalid or expired password reset link. Please request a new one.'
+            : __($status);
+
         throw ValidationException::withMessages([
-            'email' => __($status),
+            'email' => $message,
         ]);
+    }
+
+    private function isValidPasswordResetToken(string $email, string $token): bool
+    {
+        if ($email === '' || $token === '') {
+            return false;
+        }
+
+        $user = User::where('email', $email)->first();
+
+        if (! $user || ! $this->kabataanAuthService->canAccessPortal($user)) {
+            return false;
+        }
+
+        return Password::broker()->tokenExists($user, $token);
     }
 
     // Keep these for route compatibility (prototype routes still registered)

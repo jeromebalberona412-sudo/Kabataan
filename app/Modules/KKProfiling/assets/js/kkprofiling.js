@@ -2731,6 +2731,10 @@ function showEmailVerification(email) {
     // Button events
     if (triggerBtn) {
         triggerBtn.addEventListener('click', function () {
+            if (triggerBtn.disabled || triggerBtn.getAttribute('aria-disabled') === 'true') {
+                return;
+            }
+            setSignatureStatus('', false);
             openPad();
         });
     }

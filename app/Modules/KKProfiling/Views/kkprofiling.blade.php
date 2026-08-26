@@ -68,6 +68,7 @@
                 data-auto-approved="{{ ($registrationAutoApproved ?? false) ? '1' : '0' }}"
                 data-turnstile-enabled="{{ !empty($turnstileEnabled) ? '1' : '0' }}"
                 data-turnstile-sitekey="{{ $turnstileSiteKey ?? '' }}"
+                data-turnstile-required="{{ !empty($turnstileRequired) ? '1' : '0' }}"
                 @if(!empty($completedEmail)) data-completed-email="{{ $completedEmail }}" @endif
                 @if(!empty($wizardDraftEmail)) data-draft-email="{{ $wizardDraftEmail }}" @endif
                 @if($errors->has('email')) data-email-error="{{ $errors->first('email') }}" @endif
