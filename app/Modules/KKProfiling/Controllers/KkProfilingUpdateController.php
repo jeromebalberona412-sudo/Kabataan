@@ -58,7 +58,6 @@ class KkProfilingUpdateController extends Controller
             'kkBarangayLogoUrl' => KKProfilingController::getBarangayLogoUrl($registration->barangay_id),
             'kkBarangayZones' => $this->barangayZoneService->activeZonesForBarangay((int) $registration->barangay_id),
             'kkSelectedPurokZone' => $purok,
-            'kkSelectedFacebookProfileUrl' => $formData['facebook_profile_url'] ?? ($formData['facebook'] ?? ''),
         ]);
     }
 }

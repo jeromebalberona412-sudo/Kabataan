@@ -179,8 +179,8 @@ class BarangaySkProfileService
                     'title' => $post->title ?: 'Barangay Update',
                     'text' => $post->body ?? '',
                     'body' => $post->body ?? '',
-                    'author' => $post->user?->name ?? ('SK Brgy. '.($post->barangay?->name ?? '')),
-                    'author_name' => $post->user?->name ?? ('SK Brgy. '.($post->barangay?->name ?? '')),
+                    'author' => Str::limit($post->user?->name ?? ('SK Brgy. '.($post->barangay?->name ?? '')), 50, '...'),
+                    'author_name' => Str::limit($post->user?->name ?? ('SK Brgy. '.($post->barangay?->name ?? '')), 50, '...'),
                     'logo_url' => $logoUrl,
                     'image_url' => $images[0] ?? null,
                     'images' => $images,
@@ -235,7 +235,7 @@ class BarangaySkProfileService
 
         return [
             'id' => $comment->id,
-            'author_name' => $comment->author_name,
+            'author_name' => Str::limit($comment->author_name ?? 'Member', 50, '...'),
             'body' => $comment->body,
             'time' => $comment->created_at?->diffForHumans() ?? '',
             'user_type' => $comment->user_type,
@@ -306,10 +306,10 @@ class BarangaySkProfileService
                 $name .= ' '.$parts[3];
             }
 
-            return trim($name);
+            return Str::limit(trim($name), 50, '...');
         }
 
-        return trim((string) ($row->name ?? '')) ?: 'SK Official';
+        return Str::limit(trim((string) ($row->name ?? '')) ?: 'SK Official', 50, '...');
     }
 
     private function buildInitials(string $value): string

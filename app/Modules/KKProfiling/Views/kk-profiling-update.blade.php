@@ -74,7 +74,6 @@
                                 'barangayLogoUrl' => $kkBarangayLogoUrl ?? null,
                                 'barangayZones' => $kkBarangayZones ?? collect(),
                                 'selectedPurokZone' => $kkSelectedPurokZone ?? '',
-                                'selectedFacebookProfileUrl' => $kkSelectedFacebookProfileUrl ?? '',
                                 'emailReadonly' => true,
                             ])
                         </form>

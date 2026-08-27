@@ -46,6 +46,7 @@ class KabataanRegistration extends Model
         'tenant_id',
         'barangay_id',
         'user_id',
+        'previous_application_id',
         'reviewed_by_user_id',
         'last_name',
         'first_name',
@@ -66,6 +67,9 @@ class KabataanRegistration extends Model
         'password_set_at',
         'reviewed_at',
         'review_notes',
+        'rejection_reason',
+        'rejection_remarks',
+        'profiling_year',
         'archived_at',
         'archive_reason',
     ];
@@ -85,6 +89,21 @@ class KabataanRegistration extends Model
     public function barangay(): BelongsTo
     {
         return $this->belongsTo(Barangay::class);
+    }
+
+    public function previousApplication(): BelongsTo
+    {
+        return $this->belongsTo(KabataanRegistration::class, 'previous_application_id');
+    }
+
+    public function reApplications()
+    {
+        return $this->hasMany(KabataanRegistration::class, 'previous_application_id');
+    }
+
+    public function rejections()
+    {
+        return $this->hasMany(RejectedKkProfiling::class, 'kabataan_registration_id');
     }
 
     public function scopeForBarangay($query, int $barangayId)

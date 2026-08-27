@@ -1,6 +1,6 @@
 @php
     $headerUser = $user ?? auth()->user();
-    $userName = $headerUser->name ?? 'Youth User';
+    $userName = \Illuminate\Support\Str::limit($headerUser->name ?? 'Youth User', 50, '...');
     $userEmail = $headerUser->email ?? 'youth@skportal.com';
     $avatarUrl = $headerUser
         ? app(\App\Modules\Profile\Services\ProfileImageService::class)->resolveDisplayUrl($headerUser)

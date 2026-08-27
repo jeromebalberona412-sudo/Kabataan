@@ -260,7 +260,7 @@
                                 <label class="prof-kk-chk-lbl"><input type="checkbox" class="prof-kk-sq-chk" {{ $isChecked('sk_voted', 'No') ? 'checked' : '' }} disabled tabindex="-1"> No</label>
                             </div>
                         </div>
-                        <div class="prof-kk-demo-block prof-kk-assembly-followup">
+                        <div class="prof-kk-demo-block prof-kk-assembly-followup" id="prof-kkAssemblyYesCell">
                             <div class="prof-kk-demo-block-label">If Yes, How many times?</div>
                             <div class="prof-kk-demo-block-options">
                                 @foreach (['1-2 Times', '3-4 Times', '5 and above'] as $item)
@@ -268,7 +268,7 @@
                                 @endforeach
                             </div>
                         </div>
-                        <div class="prof-kk-demo-block prof-kk-assembly-followup">
+                        <div class="prof-kk-demo-block prof-kk-assembly-followup" id="prof-kkAssemblyNoCell">
                             <div class="prof-kk-demo-block-label">If No, Why?</div>
                             <div class="prof-kk-demo-block-options">
                                 <label class="prof-kk-chk-lbl"><input type="checkbox" class="prof-kk-sq-chk" {{ $isChecked('kk_reason', 'There was no KK Assembly Meeting', 'There was no KK Assembly') ? 'checked' : '' }} disabled tabindex="-1"> There was no KK Assembly Meeting</label>

@@ -84,7 +84,6 @@ class KkSurveyResponseService
             'voted_last_sk' => $yesNo($value('sk_voted')),
             'kk_assembly_attendance_count' => $value('kk_times'),
             'kk_assembly_non_attendance_reason' => $value('kk_reason'),
-            'facebook_profile_url' => $value('facebook_profile_url') ?: $value('facebook'),
             'willing_to_join_group_chat' => $yesNo($value('group_chat')),
             'participant_signature' => $value('signature'),
             'supporting_documents' => $this->resolveSupportingDocuments($formData),

@@ -917,7 +917,7 @@
     <script>
     window.CommunityFeedConfig = {
         userAvatar: @json($userAvatarUrl ?? ''),
-        userDisplayName: @json($user->name ?? 'Kabataan'),
+        userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
         commentsPageUrl: @json(url('/dashboard/comments/__ID__')),
         feedPollMs: 5000,
     };
@@ -925,7 +925,7 @@
         post: @json($commentPreviewPost ?? null),
         defaultLogo: @json(asset('images/SK_OnePortal_logo.png')),
         userAvatar: @json($userAvatarUrl ?? ''),
-        userDisplayName: @json($user->name ?? 'Kabataan'),
+        userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
         feedUrl: @json(route('dashboard')),
     };
     </script>
@@ -1329,6 +1329,11 @@
         return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    function feedTruncate(str, max = 50) {
+        const s = String(str ?? '').trim();
+        return s.length > max ? s.substring(0, max) + '...' : s;
+    }
+
     function feedAvatarUrl(url, name) {
         if (url) return url;
         return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=1a56db&color=fff&size=80`;
@@ -1497,7 +1502,7 @@
                 ${feedImgTag(comment.author_avatar_url, comment.author_name, 'comment-avatar')}
                 <div class="fb-comment-main">
                     <div class="fb-comment-head">
-                        <span class="comment-author">${feedEscape(comment.author_name)}</span>
+                        <span class="comment-author">${feedEscape(feedTruncate(comment.author_name))}</span>
                         <span class="fb-comment-dot">·</span>
                         <span class="comment-time">${feedEscape(comment.time || '')}</span>
                     </div>
@@ -1551,7 +1556,7 @@
                ${feedImgTag(comment.author_avatar_url, comment.author_name, 'comment-avatar')}
                <div class="comment-content">
                  <div class="fb-comment-head">
-                   <p class="comment-author">${feedEscape(comment.author_name)}</p>
+                   <p class="comment-author">${feedEscape(feedTruncate(comment.author_name))}</p>
                    <span class="fb-comment-dot">·</span>
                    <span class="comment-time">${feedEscape(comment.time)}</span>
                    ${optionsHtml}
@@ -1562,7 +1567,7 @@
                      <button type="button" class="comment-like-btn${comment.liked ? ' liked' : ''}" data-type="${feedEscape(type)}">${commentLikeInner(type)}</button>
                      ${reactionPickerHtml(type)}
                    </div>
-                   <button type="button" class="comment-reply-btn" onclick="feedStartReply(${postId}, ${comment.id}, '${feedEscape(comment.author_name).replace(/'/g, "\\'")}')">Reply</button>
+                   <button type="button" class="comment-reply-btn" onclick="feedStartReply(${postId}, ${comment.id}, '${feedEscape(feedTruncate(comment.author_name)).replace(/'/g, "\\'")}')">Reply</button>
                  </div>
                </div>
              </div>
@@ -1631,7 +1636,7 @@
           <div class="post-header">
             ${feedImgTag(p.author_avatar_url || p.barangay_logo_url, p.author_name, 'post-avatar')}
             <div class="post-info">
-              <h3 class="post-author">${feedEscape(p.author_name ?? ('SK Brgy. ' + (p.barangay_name ?? '')))}</h3>
+              <h3 class="post-author">${feedEscape(feedTruncate(p.author_name ?? ('SK Brgy. ' + (p.barangay_name ?? ''))))}</h3>
               <p class="post-meta">
                 <span class="post-type ${p.type}">${feedEscape(p.type)}</span>
                 <span class="post-time">${feedEscape(p.time)}</span>
@@ -1761,7 +1766,7 @@
                     <img src="${feedEscape(feedAvatarUrl(row.avatar_url, row.name))}" alt="">
                     <span class="reaction-viewer-emoji">${REACTION_EMOJI[row.reaction_type] || ''}</span>
                 </div>
-                <span class="reaction-viewer-name">${feedEscape(row.name || 'Member')}</span>
+                <span class="reaction-viewer-name">${feedEscape(feedTruncate(row.name || 'Member'))}</span>
             </div>
         `).join('');
     }

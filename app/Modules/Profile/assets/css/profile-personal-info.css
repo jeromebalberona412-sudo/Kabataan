@@ -163,11 +163,13 @@
     overflow-x: hidden;
 }
 
-/* Ã¢â€â‚¬Ã¢â€â‚¬ RESPONSIVE CONTAINER Ã¢â€â‚¬Ã¢â€â‚¬ */
+/* ── RESPONSIVE CONTAINER ── */
 .prof-kk-responsive-container {
     width: 100%;
     overflow-x: hidden;
     overflow-y: visible;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .prof-kk-responsive-container form {
@@ -177,22 +179,9 @@
 }
 
 .prof-kk-responsive-container::-webkit-scrollbar {
-    height: 8px;
-    width: 8px;
-}
-
-.prof-kk-responsive-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.prof-kk-responsive-container::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-.prof-kk-responsive-container::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    display: none;
+    width: 0;
+    height: 0;
 }
 
 /* Ã¢â€â‚¬Ã¢â€â‚¬ FORM HEADER Ã¢â€â‚¬Ã¢â€â‚¬ */
@@ -399,7 +388,6 @@
 .prof-kk-name-col,
 .prof-kk-loc-col,
 .prof-kk-inline-pair,
-.prof-kk-footer-fb-field,
 .prof-kk-footer-chat,
 .prof-kk-personal-left,
 .prof-kk-sex-block,
@@ -702,25 +690,34 @@
     z-index: 2;
 }
 
-#prof-kkAssemblyNoCell {
+#prof-kkAssemblyNoCell,
+.prof-kk-assembly-followup:has(#prof-kkAssemblyNoCell),
+.prof-kk-assembly-followup:last-child {
     overflow: visible;
 }
 
-#prof-kkAssemblyNoCell .prof-kk-demo-block-options {
+#prof-kkAssemblyNoCell .prof-kk-demo-block-options,
+.prof-kk-assembly-followup:last-child .prof-kk-demo-block-options {
     overflow: visible;
     padding: 3px 4px;
 }
 
-#prof-kkAssemblyNoCell .prof-kk-chk-lbl {
+#prof-kkAssemblyNoCell .prof-kk-chk-lbl,
+.prof-kk-assembly-followup:last-child .prof-kk-chk-lbl {
     white-space: normal;
-    font-size: 9px;
+    word-break: normal;
+    overflow-wrap: break-word;
+    font-size: 9.5px;
     line-height: 1.25;
     align-items: flex-start;
     width: 100%;
+    display: flex;
 }
 
-#prof-kkAssemblyNoCell .prof-kk-sq-chk {
+#prof-kkAssemblyNoCell .prof-kk-sq-chk,
+.prof-kk-assembly-followup:last-child .prof-kk-sq-chk {
     margin-top: 1px;
+    flex-shrink: 0;
 }
 
 /* Ã¢â€â‚¬Ã¢â€â‚¬ LOCATION ROW: 5 columns Ã¢â€â‚¬Ã¢â€â‚¬ */
@@ -1236,87 +1233,6 @@
     margin-bottom: 6px;
     flex-wrap: wrap;
     justify-content: flex-start;
-}
-
-.prof-kk-footer-fb {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 0 0 auto;
-    min-width: 0;
-    margin-right: 24px;
-}
-
-.prof-kk-footer-fb-label-col {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    flex-shrink: 0;
-    padding-bottom: 9px;
-    line-height: 1.1;
-}
-
-.prof-kk-footer-fb-label-col .prof-kk-inline-label {
-    display: block;
-    margin: 0;
-    line-height: 1.1;
-}
-
-.prof-kk-footer-fb-label-col .prof-kk-optional-label,
-.prof-kk-footer-fb-label-col .prof-kk-required {
-    position: absolute;
-    left: 0;
-    top: calc(100% - 1px);
-    margin-top: 0;
-}
-
-.prof-kk-optional-label {
-    display: block;
-    font-weight: 400;
-    color: #64748b;
-    font-size: 8.5px;
-    line-height: 1;
-}
-
-.prof-kk-footer-fb-field {
-    position: relative;
-    flex: 0 0 auto;
-    width: 50ch;
-    min-width: 50ch;
-    max-width: 50ch;
-    padding-bottom: 12px;
-}
-
-.prof-kk-footer-fb-field > .prof-kk-field-error {
-    text-align: center;
-    white-space: normal;
-}
-
-.prof-kk-footer-fb .prof-kk-inline-label {
-    font-size: 9.5px;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.prof-kk-footer-fb .prof-kk-uline-fb {
-    font-size: 10px;
-    width: 100%;
-    min-width: 50ch;
-    max-width: 50ch;
-    text-align: center;
-    overflow: visible;
-    text-overflow: clip;
-    white-space: nowrap;
-    padding: 2px 2px 1px;
-    box-sizing: border-box;
-}
-
-.prof-kk-footer-fb .prof-kk-uline-fb::placeholder {
-    font-size: 9px;
-    color: #94a3b8;
-    opacity: 1;
-    text-align: center;
 }
 
 .prof-kk-inline-pair--email {

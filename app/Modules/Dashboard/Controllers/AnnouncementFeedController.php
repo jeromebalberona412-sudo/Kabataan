@@ -19,6 +19,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class AnnouncementFeedController extends Controller
@@ -322,7 +323,7 @@ class AnnouncementFeedController extends Controller
             'parent_id' => $request->input('parent_id'),
             'user_id' => $user->id,
             'user_type' => self::USER_TYPE,
-            'author_name' => $authorName !== '' ? $authorName : $user->name,
+            'author_name' => Str::limit($authorName !== '' ? $authorName : $user->name, 50, '...'),
             'body' => $request->body,
         ]);
 
@@ -460,8 +461,12 @@ class AnnouncementFeedController extends Controller
             $userId,
             self::USER_TYPE
         );
-        $authorName = $post->user?->name
-            ?? ($post->is_federation_wide ? 'SK Federation' : ('SK Brgy. '.($post->barangay?->name ?? '')));
+        $authorName = Str::limit(
+            $post->user?->name
+                ?? ($post->is_federation_wide ? 'SK Federation' : ('SK Brgy. '.($post->barangay?->name ?? ''))),
+            50,
+            '...'
+        );
         $commentsLoaded = $post->relationLoaded('comments');
         $registrations = $commentsLoaded
             ? $this->kabataanRegistrationsForPost($post)
@@ -551,7 +556,7 @@ class AnnouncementFeedController extends Controller
         return [
             'id' => $comment->id,
             'parent_id' => $comment->parent_id,
-            'author_name' => $comment->author_name,
+            'author_name' => Str::limit($comment->author_name ?? 'Member', 50, '...'),
             'body' => $comment->body,
             'time' => $comment->created_at?->diffForHumans() ?? 'Just now',
             'user_type' => $comment->user_type,
@@ -712,7 +717,7 @@ class AnnouncementFeedController extends Controller
             return $this->kabataanDisplayName($reaction->user, $registrations);
         }
 
-        return $reaction->user?->name ?? 'Member';
+        return Str::limit($reaction->user?->name ?? 'Member', 50, '...');
     }
 
     private function kabataanDisplayName(?User $user, Collection $registrations): string
@@ -725,10 +730,10 @@ class AnnouncementFeedController extends Controller
         if ($registration) {
             $name = trim($registration->first_name.' '.$registration->last_name);
 
-            return $name !== '' ? $name : ($user->name ?: 'Youth Member');
+            return Str::limit($name !== '' ? $name : ($user->name ?: 'Youth Member'), 50, '...');
         }
 
-        return $user->name ?: 'Youth Member';
+        return Str::limit($user->name ?: 'Youth Member', 50, '...');
     }
 
     /**

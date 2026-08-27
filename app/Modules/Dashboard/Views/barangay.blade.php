@@ -497,7 +497,7 @@
                                     @endif
                                 </div>
                                 <div class="officer-details">
-                                    <p class="officer-name">{{ $official['name'] }}</p>
+                                    <p class="officer-name">{{ \Illuminate\Support\Str::limit($official['name'], 50, '...') }}</p>
                                     <p class="officer-role">{{ $official['role'] }}</p>
                                 </div>
                             </div>
@@ -529,7 +529,7 @@
         post: @json($commentPreviewPost ?? null),
         defaultLogo: @json(asset('images/SK_OnePortal_logo.png')),
         userAvatar: @json($userAvatarUrl ?? ''),
-        userDisplayName: @json($user->name ?? 'Kabataan'),
+        userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
         feedUrl: @json(url('/barangay/'.$slug)),
         viewOnly: @json(! ($canEngage ?? false)),
         syncUrl: true,

@@ -1579,7 +1579,6 @@ class KKProfilingWizardController extends Controller
         $validated['kk_reason'] = $request->input('kk_assembly') === 'No'
             ? ($request->input('kk_reason') ?: $request->input('kk_reasonChk'))
             : null;
-        $validated['facebook_profile_url'] = null;
         $validated['group_chat'] = null;
         $validated['signature_name'] = $request->input('signature_name');
 
@@ -1616,7 +1615,6 @@ class KKProfilingWizardController extends Controller
             'kk_assembly',
             'kk_times',
             'kk_reason',
-            'facebook_profile_url',
             'group_chat',
             'signature',
             'signature_name',

@@ -2100,34 +2100,22 @@ body.youth-profile {
 
 .kk-preview-modal-container .modal-body {
     flex: 1 1 auto;
-    overflow-y: scroll;
-    overflow-x: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
     padding: 24px 20px;
     background: #eef2f6;
-    scrollbar-gutter: stable;
-    scrollbar-width: thin;
-    scrollbar-color: #94a3b8 #f1f5f9;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
 }
 
-.kk-preview-modal-container .modal-body::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-    display: block;
-}
-
-.kk-preview-modal-container .modal-body::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-}
-
-.kk-preview-modal-container .modal-body::-webkit-scrollbar-thumb {
-    background: #94a3b8;
-    border-radius: 4px;
-}
-
-.kk-preview-modal-container .modal-body::-webkit-scrollbar-thumb:hover {
-    background: #64748b;
+.kk-preview-modal-container .modal-body::-webkit-scrollbar,
+.kk-preview-modal-container *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
 }
 
 .kk-preview-modal-container .prof-kk-paper {
@@ -2140,10 +2128,12 @@ body.youth-profile {
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
+    overflow: visible !important;
 }
 
 .prof-kk-preview-modal {
     width: 100%;
+    overflow: visible !important;
 }
 
 .prof-kk-preview .prof-kk-personal-row {
@@ -2187,21 +2177,30 @@ body.youth-profile {
     }
 
     .kk-preview-modal-container .modal-body {
-        overflow-x: auto;
+        overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        padding: 16px 12px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .kk-preview-modal-container .modal-body::-webkit-scrollbar {
+        display: none;
+        width: 0;
+        height: 0;
     }
 
     .kk-preview-modal-container .prof-kk-paper {
-        min-width: 860px;
-        width: 860px;
-        max-width: none;
+        width: 100%;
+        max-width: 860px;
+        box-sizing: border-box;
+        padding: 16px 12px;
     }
 
     .kk-preview-modal-container .prof-kk-preview-scale-inner {
-        min-width: 860px;
-        width: 860px;
-        max-width: none;
+        width: 100%;
+        max-width: 860px;
     }
 
     .kk-preview-modal-container .prof-kk-personal-row {

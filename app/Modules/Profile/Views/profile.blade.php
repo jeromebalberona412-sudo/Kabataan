@@ -79,14 +79,68 @@
             max-height: none;
             border-radius: 0;
         }
+        /* Force no scrollbars on any modal or preview inner elements */
+        #kkPreviewModal,
+        #kkPreviewModal *,
+        .kk-preview-modal-container,
+        .kk-preview-modal-container *,
+        .kk-preview-modal-body,
+        .prof-kk-preview-modal,
+        .prof-kk-responsive-container,
+        .prof-kk-preview-scale-shell,
+        .prof-kk-preview-scale-inner,
+        .prof-kk-paper,
+        .prof-kk-preview {
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+        }
+
+        #kkPreviewModal::-webkit-scrollbar,
+        #kkPreviewModal *::-webkit-scrollbar,
+        .kk-preview-modal-container::-webkit-scrollbar,
+        .kk-preview-modal-container *::-webkit-scrollbar,
+        .kk-preview-modal-body::-webkit-scrollbar,
+        .prof-kk-preview-modal::-webkit-scrollbar,
+        .prof-kk-responsive-container::-webkit-scrollbar,
+        .prof-kk-preview-scale-shell::-webkit-scrollbar,
+        .prof-kk-preview-scale-inner::-webkit-scrollbar,
+        .prof-kk-paper::-webkit-scrollbar,
+        .prof-kk-preview::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            background: transparent !important;
+            -webkit-appearance: none !important;
+        }
+
+        .kk-preview-modal-container .modal-body,
+        .kk-preview-modal-body {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            scroll-behavior: smooth !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+
+        .kk-preview-modal-container .prof-kk-preview-modal,
+        .kk-preview-modal-container .prof-kk-responsive-container,
+        .kk-preview-modal-container .prof-kk-paper,
+        .kk-preview-modal-container .prof-kk-preview-scale-shell,
+        .kk-preview-modal-container .prof-kk-preview-scale-inner,
+        .kk-preview-modal-container .prof-kk-preview {
+            overflow: visible !important;
+            overflow-x: visible !important;
+            overflow-y: visible !important;
+            max-height: none !important;
+        }
+
         @media (max-width: 768px) {
             .kabataan-modal-backdrop:not(.modal-maximized) {
-                padding: 56px 14px 28px;
+                padding: 40px 10px 20px;
             }
             .kabataan-modal-backdrop:not(.modal-maximized) .kk-preview-modal-container,
             .kabataan-modal-backdrop:not(.modal-maximized) .kkp-docs-modal-container {
                 width: calc(100% - 8px);
-                max-height: 68vh;
+                max-height: min(85vh, calc(100dvh - 56px));
                 border-radius: 14px;
             }
             .profile-picture-upload-modal__box,
@@ -679,7 +733,8 @@
         const modalBody = modal.querySelector('.modal-body');
         if (!modalBody) return;
 
-        const availableWidth = modalBody.clientWidth - 48;
+        const pad = window.innerWidth <= 768 ? 24 : 40;
+        const availableWidth = modalBody.clientWidth - pad;
         const designWidth = 860;
 
         if (availableWidth < designWidth && availableWidth > 0) {
@@ -726,6 +781,7 @@
             resetKkPreviewModalState();
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+            document.documentElement.style.overflow = 'hidden';
             setTimeout(scaleProfileKkPreview, 30);
         }
     }
@@ -734,7 +790,8 @@
         const modal = document.getElementById('kkPreviewModal');
         if (modal) {
             modal.style.display = 'none';
-            document.body.style.overflow = 'auto';
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
             resetKkPreviewModalState();
         }
     }

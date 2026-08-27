@@ -1,7 +1,7 @@
 @php
     $postType = strtolower((string) ($post['type'] ?? 'update'));
     $typeLabel = ucfirst($postType);
-    $authorName = $post['author_name'] ?? ('SK Brgy. '.$name);
+    $authorName = \Illuminate\Support\Str::limit($post['author_name'] ?? ('SK Brgy. '.$name), 50, '...');
     $avatar = $post['author_avatar_url'] ?? ($post['barangay_logo_url'] ?? ($logo_url ?? null));
     $images = $post['images'] ?? [];
     if ($images === [] && ! empty($post['image_url'])) {

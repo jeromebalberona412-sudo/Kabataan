@@ -70,7 +70,6 @@ class KkSurveyResponse extends Model
         'voted_last_sk',
         'kk_assembly_attendance_count',
         'kk_assembly_non_attendance_reason',
-        'facebook_profile_url',
         'willing_to_join_group_chat',
         'participant_signature',
         'supporting_documents',

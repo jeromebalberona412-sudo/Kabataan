@@ -301,18 +301,27 @@ class KkRegistrationDraftService
     {
         $email = strtolower(trim($email));
 
-        $existingUser = User::where('email', $email)
-            ->whereIn('status', ['ACTIVE', 'PENDING_APPROVAL', 'INACTIVE'])
-            ->exists();
-
-        $existingRegistration = KabataanRegistration::where('email', $email)
+        $activePendingRegistration = KabataanRegistration::where('email', $email)
             ->where('barangay_id', $barangayId)
-            ->whereIn('status', ['email_verified', 'password_set', 'active', 'pending_verification'])
-            ->exists();
+            ->whereIn('status', ['pending_verification', 'email_verified', 'password_set', 'pending'])
+            ->whereNull('deleted_at')
+            ->first();
 
-        if ($existingUser || $existingRegistration) {
+        if ($activePendingRegistration) {
             throw ValidationException::withMessages([
-                'email' => ['This email is already registered. Please use a different email address.'],
+                'registration' => ['You already have a KK Profiling application under review. Please wait for the SK Official\'s review.'],
+            ]);
+        }
+
+        $approvedRegistration = KabataanRegistration::where('email', $email)
+            ->where('barangay_id', $barangayId)
+            ->whereIn('status', ['active', 'approved'])
+            ->whereNull('deleted_at')
+            ->first();
+
+        if ($approvedRegistration) {
+            throw ValidationException::withMessages([
+                'email' => ['This email already has an approved KK Profiling record.'],
             ]);
         }
     }
@@ -354,9 +363,16 @@ class KkRegistrationDraftService
             $formData = $this->buildFormData($step1, $wizard);
             $formData['supporting_documents'] = $this->promoteDocuments($wizard);
 
+            $previousRejected = KabataanRegistration::where('email', $email)
+                ->where('barangay_id', $barangay->id)
+                ->where('status', 'rejected')
+                ->latest('id')
+                ->first();
+
             $registration = KabataanRegistration::create([
                 'tenant_id' => $barangay->tenant_id,
                 'barangay_id' => $barangay->id,
+                'previous_application_id' => $previousRejected?->id,
                 'last_name' => $step1['last_name'],
                 'first_name' => $step1['first_name'],
                 'middle_name' => $step1['middle_name'] ?? null,
@@ -366,22 +382,34 @@ class KkRegistrationDraftService
                 'profile_photo_path' => null,
                 'form_data' => $formData,
                 'status' => 'password_set',
+                'profiling_year' => now()->year,
                 'email_verified_at' => $wizard['email_verified_at'] ?? now(),
                 'submitted_at' => now(),
             ]);
 
-            $user = User::create([
-                'name' => $registration->full_name,
-                'email' => $email,
-                'password' => bcrypt($password),
-                'email_verified_at' => now(),
-                'tenant_id' => $registration->tenant_id,
-                'barangay_id' => $registration->barangay_id,
-                'role' => 'kabataan',
-                'status' => 'PENDING_APPROVAL',
-                'profile_image_url' => null,
-                'profile_image_uploaded_at' => null,
-            ]);
+            $user = User::where('email', $email)->first();
+            if ($user) {
+                $user->update([
+                    'name' => $registration->full_name,
+                    'password' => bcrypt($password),
+                    'status' => 'PENDING_APPROVAL',
+                    'tenant_id' => $registration->tenant_id,
+                    'barangay_id' => $registration->barangay_id,
+                ]);
+            } else {
+                $user = User::create([
+                    'name' => $registration->full_name,
+                    'email' => $email,
+                    'password' => bcrypt($password),
+                    'email_verified_at' => now(),
+                    'tenant_id' => $registration->tenant_id,
+                    'barangay_id' => $registration->barangay_id,
+                    'role' => 'kabataan',
+                    'status' => 'PENDING_APPROVAL',
+                    'profile_image_url' => null,
+                    'profile_image_uploaded_at' => null,
+                ]);
+            }
 
             $registration->markPasswordSet();
             $registration->linkUser($user->id);

@@ -350,7 +350,6 @@
 .kkp-name-col,
 .kkp-loc-col,
 .kkp-inline-pair,
-.kkp-footer-fb-field,
 .kkp-footer-chat,
 .kkp-personal-left,
 .kkp-sex-block,
@@ -410,10 +409,6 @@
     text-align: left;
     margin-top: 2px;
     position: static;
-}
-
-.kkp-footer-fb > .kkp-field-error {
-    display: none;
 }
 
 .kkp-sex-block + .kkp-field-error,

@@ -87,15 +87,41 @@ class AuthController extends Controller
         }
 
         // ── Status checks ───────────────────────────────────────────────────
-        // Load registration only when status requires it — single query, reused below
-        $registration = null;
-        $needsRegistration = in_array($user->status, [User::STATUS_PENDING_APPROVAL, 'REJECTED'], true);
+        // Load latest registration
+        $registration = KabataanRegistration::select(['id', 'user_id', 'status', 'evaluation_status', 'review_notes', 'rejection_reason', 'rejection_remarks', 'email', 'barangay_id'])
+            ->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->orWhere('email', $user->email);
+            })
+            ->latest('id')
+            ->first();
 
-        if ($needsRegistration) {
-            $registration = KabataanRegistration::select(['id', 'user_id', 'evaluation_status', 'review_notes'])
-                ->where('user_id', $user->id)
-                ->latest('id')
-                ->first();
+        if ($user->status === 'REJECTED' || ($registration && $registration->status === 'rejected')) {
+            $reason = $registration?->rejection_reason ?: ($registration?->review_notes ?: 'Incorrect or incomplete information');
+            $remarks = $registration?->rejection_remarks;
+            $msg = 'Your KK Profiling registration has been rejected. Reason: '.$reason.($remarks ? ' (Remarks: '.$remarks.')' : '');
+            $attempt = $this->turnstileGuard->recordFailure(TurnstileAttemptGuard::ACTION_SIGNIN, $request);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'rejection' => [
+                        'reason' => $reason,
+                        'remarks' => $remarks,
+                        'email' => $user->email,
+                    ],
+                ], 422);
+            }
+
+            return back()
+                ->withInput($request->only('email'))
+                ->with('sign_in_error', $msg)
+                ->with('rejection_data', [
+                    'reason' => $reason,
+                    'remarks' => $remarks,
+                    'email' => $user->email,
+                ]);
         }
 
         if ($user->status === User::STATUS_PENDING_APPROVAL) {
@@ -111,20 +137,6 @@ class AuthController extends Controller
                     (bool) $attempt['turnstile_required']
                 );
             }
-        }
-
-        if ($user->status === 'REJECTED') {
-            $reason = $registration?->review_notes
-                ? 'Reason: '.$registration->review_notes
-                : 'Please contact your SK officials for more information.';
-            $msg = 'Your KK Profiling registration has been rejected. '.$reason;
-            $attempt = $this->turnstileGuard->recordFailure(TurnstileAttemptGuard::ACTION_SIGNIN, $request);
-
-            return $this->signinFailureResponse(
-                $request,
-                $attempt['message'] ?? $msg,
-                (bool) $attempt['turnstile_required']
-            );
         }
 
         if ($user->status === 'INACTIVE') {

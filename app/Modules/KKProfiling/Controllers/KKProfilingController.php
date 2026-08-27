@@ -627,7 +627,6 @@ class KKProfilingController extends Controller
         $validated['kk_reason'] = $request->input('kk_assembly') === 'No'
             ? ($request->input('kk_reason') ?: $request->input('kk_reasonChk'))
             : null;
-        $validated['facebook_profile_url'] = null;
         $validated['group_chat'] = null;
         $validated['signature_name'] = $request->input('signature_name');
 
@@ -900,52 +899,74 @@ class KKProfilingController extends Controller
         $validated['kk_reason'] = $request->input('kk_assembly') === 'No'
             ? ($request->input('kk_reason') ?: $request->input('kk_reasonChk'))
             : null;
-        $validated['facebook_profile_url'] = null;
         $validated['group_chat'] = null;
 
         \Log::info('Validation passed');
 
         $email = strtolower(trim($validated['email']));
-        $existingUser = User::where('email', $email)
-            ->whereIn('status', ['ACTIVE', 'PENDING_APPROVAL', 'INACTIVE'])
-            ->exists();
 
-        $verifiedRegistration = KabataanRegistration::where('email', $email)
+        // Check for active pending registration
+        $activePendingRegistration = KabataanRegistration::where('email', $email)
             ->where('barangay_id', $barangayRecord->id)
-            ->where('status', 'email_verified')
-            ->exists();
+            ->whereIn('status', ['pending_verification', 'email_verified', 'password_set', 'pending'])
+            ->whereNull('deleted_at')
+            ->first();
 
-        if ($existingUser || $verifiedRegistration) {
+        // Check for active approved registration
+        $approvedRegistration = KabataanRegistration::where('email', $email)
+            ->where('barangay_id', $barangayRecord->id)
+            ->whereIn('status', ['active', 'approved'])
+            ->whereNull('deleted_at')
+            ->first();
+
+        if ($approvedRegistration) {
             return $this->submitErrorResponse($request, [
-                'email' => 'This email already exists. Please use a different email address.',
+                'email' => 'This email already has an approved KK Profiling record.',
             ]);
         }
 
-        $existingRegistration = KabataanRegistration::where('email', $validated['email'])
+        if ($activePendingRegistration) {
+            return $this->submitErrorResponse($request, [
+                'registration' => 'You already have a KK Profiling application under review. Please wait for the SK Official\'s review.',
+            ]);
+        }
+
+        // Find previous rejected application if any to link as re-application
+        $previousRejected = KabataanRegistration::where('email', $email)
             ->where('barangay_id', $barangayRecord->id)
+            ->where('status', 'rejected')
+            ->latest('id')
             ->first();
 
-        $registration = KabataanRegistration::updateOrCreate(
-            [
-                'email' => $validated['email'],
-                'barangay_id' => $barangayRecord->id,
-            ],
-            [
-                'tenant_id' => $barangayRecord->tenant_id,
-                'last_name' => $validated['last_name'],
-                'first_name' => $validated['first_name'],
-                'middle_name' => $validated['middle_name'] ?? null,
-                'suffix' => $validated['suffix'] ?? null,
-                'contact_number' => $validated['contact_number'] ?? null,
-                'profile_photo_path' => null,
-                'form_data' => $validated,
-                'status' => 'pending_verification',
-                'evaluation_status' => null,
-                'evaluation_notes' => null,
-                'review_notes' => null,
-                'submitted_at' => now(),
-            ]
-        );
+        $previousApplicationId = $previousRejected?->id;
+        $userId = $previousRejected?->user_id;
+
+        if (! $userId) {
+            $userByEmail = User::where('email', $email)->first();
+            $userId = $userByEmail?->id;
+        }
+
+        // Create a NEW application record (never overwrite rejected applications)
+        $registration = KabataanRegistration::create([
+            'tenant_id' => $barangayRecord->tenant_id,
+            'barangay_id' => $barangayRecord->id,
+            'user_id' => $userId,
+            'previous_application_id' => $previousApplicationId,
+            'last_name' => $validated['last_name'],
+            'first_name' => $validated['first_name'],
+            'middle_name' => $validated['middle_name'] ?? null,
+            'suffix' => $validated['suffix'] ?? null,
+            'email' => $validated['email'],
+            'contact_number' => $validated['contact_number'] ?? null,
+            'profile_photo_path' => null,
+            'form_data' => $validated,
+            'status' => 'pending_verification',
+            'evaluation_status' => null,
+            'evaluation_notes' => null,
+            'review_notes' => null,
+            'profiling_year' => $validated['profile_updated_year'] ?? now()->year,
+            'submitted_at' => now(),
+        ]);
 
         try {
             (new KkSurveyResponseService)->syncFromRegistration($registration->fresh(), 'pending');
@@ -1018,19 +1039,46 @@ class KKProfilingController extends Controller
             }
         }
 
-        $existingUser = User::where('email', $email)
-            ->whereIn('status', ['ACTIVE', 'PENDING_APPROVAL', 'INACTIVE'])
+        // Check for active pending or approved registrations
+        $activeRegistration = KabataanRegistration::query()
+            ->where('email', $email)
+            ->whereIn('status', ['active', 'approved', 'pending_verification', 'password_set', 'pending', 'email_verified'])
+            ->whereNull('deleted_at')
+            ->first();
+
+        if ($activeRegistration) {
+            $isPending = in_array($activeRegistration->status, ['pending_verification', 'password_set', 'pending', 'email_verified'], true);
+            $msg = $isPending
+                ? 'You already have a KK Profiling application under review. Please wait for the SK Official\'s review.'
+                : 'This email is already registered. Please use a different email address.';
+
+            return response()->json([
+                'exists' => true,
+                'message' => $msg,
+            ]);
+        }
+
+        // If user only has a rejected registration, allow re-application
+        $hasRejected = KabataanRegistration::query()
+            ->where('email', $email)
+            ->where('status', 'rejected')
             ->exists();
 
-        $verifiedRegistration = KabataanRegistration::where('email', $email)
-            ->where('status', 'email_verified')
-            ->exists();
+        if ($hasRejected) {
+            return response()->json([
+                'exists' => false,
+                'is_reapplication' => true,
+                'message' => null,
+            ]);
+        }
 
-        $exists = $existingUser || $verifiedRegistration;
+        $existingApprovedUser = User::where('email', $email)
+            ->where('status', 'ACTIVE')
+            ->exists();
 
         return response()->json([
-            'exists' => $exists,
-            'message' => $exists ? 'This email already exists. Please use a different email address.' : null,
+            'exists' => $existingApprovedUser,
+            'message' => $existingApprovedUser ? 'This email already exists. Please use a different email address.' : null,
         ]);
     }
 

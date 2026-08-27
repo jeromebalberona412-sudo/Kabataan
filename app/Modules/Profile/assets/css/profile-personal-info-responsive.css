@@ -1,5 +1,11 @@
 ﻿/* Profile personal info preview — responsive (Profile-owned) */
 
+.prof-kk-preview-modal {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible !important;
+}
+
 .prof-kk-preview-modal .prof-kk-paper {
     background: #fff;
     border: 1px solid #cbd5e1;
@@ -9,15 +15,24 @@
     font-size: 12px;
     color: #111;
     box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    overflow: visible !important;
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .prof-kk-preview-modal .prof-kk-responsive-container {
     width: 100%;
-    overflow-x: hidden;
-    overflow-y: visible;
+    overflow: visible !important;
 }
 
-.prof-kk-preview-modal .prof-kk-preview-scale-shell,
+.prof-kk-preview-modal .prof-kk-preview-scale-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible !important;
+    position: relative;
+}
+
 .prof-kk-fs-scale-shell {
     width: 100%;
     max-width: 100%;
@@ -25,7 +40,13 @@
     position: relative;
 }
 
-.prof-kk-preview-modal .prof-kk-preview-scale-inner,
+.prof-kk-preview-modal .prof-kk-preview-scale-inner {
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+    overflow: visible !important;
+}
+
 .prof-kk-fs-scale-inner {
     width: 100%;
     max-width: 860px;
@@ -198,6 +219,17 @@ body.homepage-body.prof-kk-form-page,
         -webkit-tap-highlight-color: rgba(4, 80, 168, 0.12);
     }
 
+    .prof-kk-fs-scale-inner #prof-kkAssemblyNoCell .prof-kk-chk-lbl,
+    .prof-kk-fs-scale-inner .prof-kk-assembly-followup:last-child .prof-kk-chk-lbl {
+        white-space: normal;
+        word-break: normal;
+        overflow-wrap: break-word;
+        font-size: 9.5px;
+        line-height: 1.25;
+        align-items: flex-start;
+        width: 100%;
+    }
+
     .prof-kk-fs-scale-inner .prof-kk-chk-lbl:not(.prof-kk-chk-lbl--readonly) {
         cursor: pointer;
     }
@@ -302,13 +334,6 @@ body.homepage-body.prof-kk-form-page,
     .prof-kk-fs-scale-inner .prof-kk-demo-two-col,
     .prof-kk-fs-scale-inner .prof-kk-demo-options-2col {
         grid-template-columns: 1fr 1fr;
-    }
-
-    .prof-kk-fs-scale-inner .prof-kk-footer-fb-field,
-    .prof-kk-fs-scale-inner .prof-kk-footer-fb .prof-kk-uline-fb {
-        width: 50ch;
-        min-width: 50ch;
-        max-width: 50ch;
     }
 
     .prof-kk-fs-scale-inner .prof-kk-form-header {

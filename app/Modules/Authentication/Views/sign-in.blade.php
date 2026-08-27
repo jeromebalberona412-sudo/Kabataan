@@ -60,7 +60,24 @@
                     <p class="card-subtitle">Sign in to your account</p>
                 </div>
 
-                @if (session('sign_in_error'))
+                @if (session('rejection_data'))
+                    <div class="youth-rejection-box mb-3" style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+                        <div style="display: flex; gap: 10px; align-items: flex-start;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e11d48" stroke-width="2" style="flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                            <div style="flex: 1; text-align: left;">
+                                <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 700; color: #9f1239;">KK Profiling Application Rejected</h4>
+                                <p style="margin: 0 0 6px 0; font-size: 12.5px; color: #be123c;">Your previous KK Profiling application was not approved.</p>
+                                <p style="margin: 0 0 4px 0; font-size: 12px; color: #881337;"><strong>Reason:</strong> {{ session('rejection_data.reason') }}</p>
+                                @if(!empty(session('rejection_data.remarks')))
+                                    <p style="margin: 0 0 8px 0; font-size: 12px; color: #881337;"><strong>Remarks:</strong> {{ session('rejection_data.remarks') }}</p>
+                                @endif
+                                <a href="{{ route('kkprofiling.signup', ['email' => session('rejection_data.email'), 'reapply' => 1]) }}" class="btn btn-sm btn-danger mt-2" style="display: inline-flex; align-items: center; gap: 6px; background: #e11d48; color: #fff; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 6px; text-decoration: none;">
+                                    Re-apply for KK Profiling
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                @elseif (session('sign_in_error'))
                     <div class="youth-alert youth-alert-error" role="alert">
                         <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>

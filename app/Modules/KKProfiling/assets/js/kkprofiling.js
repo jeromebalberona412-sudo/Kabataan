@@ -467,11 +467,6 @@ function kkpValidateContact(value, requireEmpty) {
             return null;
         }
 
-        const fbWrap = el.closest('.kkp-footer-fb-field');
-        if (fbWrap) {
-            return fbWrap;
-        }
-
         const inlinePair = el.closest('.kkp-inline-pair');
         if (inlinePair) {
             return inlinePair;
@@ -1406,7 +1401,6 @@ window.validateKkProfilingForm = async function (options = {}) {
         if (!el) return;
         el.classList.add('kkp-input-err');
         const host = el.closest('.kkp-inline-pair')
-            || el.closest('.kkp-footer-fb-field')
             || el.closest('.kkp-name-col')
             || el.parentNode;
         if (!host) return;
