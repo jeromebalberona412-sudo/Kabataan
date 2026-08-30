@@ -1,7 +1,7 @@
 /**
  * KK Profiling — smart live camera ID capture.
  * Lightweight document detection + stability auto-capture.
- * OCR runs only AFTER capture (existing wizard detect-id path).
+ * AI ID verification runs only AFTER capture (existing wizard detect-id path).
  */
 (function () {
     const modal = document.getElementById('kkpIdCameraModal');
@@ -46,14 +46,14 @@
 
     const cfg = {
         autoCapture: modal.dataset.autoCapture !== '0',
-        stabilityMs: Math.max(400, Number(modal.dataset.stabilityMs) || 1000),
-        sampleIntervalMs: Math.max(120, Number(modal.dataset.sampleIntervalMs) || 220),
-        helpAfterMs: Math.max(4000, Number(modal.dataset.helpAfterMs) || 12000),
-        minEdge: Number(modal.dataset.minEdge) || 12,
-        minContrast: Number(modal.dataset.minContrast) || 16,
-        minBrightness: Number(modal.dataset.minBrightness) || 40,
-        maxBrightness: Number(modal.dataset.maxBrightness) || 220,
-        maxMotion: Number(modal.dataset.maxMotion) || 14,
+        stabilityMs: Math.max(350, Number(modal.dataset.stabilityMs) || 700),
+        sampleIntervalMs: Math.max(100, Number(modal.dataset.sampleIntervalMs) || 180),
+        helpAfterMs: Math.max(4000, Number(modal.dataset.helpAfterMs) || 10000),
+        minEdge: Number(modal.dataset.minEdge) || 7,
+        minContrast: Number(modal.dataset.minContrast) || 10,
+        minBrightness: Number(modal.dataset.minBrightness) || 28,
+        maxBrightness: Number(modal.dataset.maxBrightness) || 235,
+        maxMotion: Number(modal.dataset.maxMotion) || 22,
     };
 
     function setStatus(message, tone = 'info') {
@@ -168,12 +168,8 @@
         stopCamera();
         targetInputId = null;
         capturing = false;
-        if (typeof modal.close === 'function' && modal.open) {
-            modal.close();
-        } else {
-            modal.hidden = true;
-            modal.removeAttribute('open');
-        }
+        modal.hidden = true;
+        modal.removeAttribute('open');
         setStatus('');
         setDetectMessage('');
         setGuideState('idle');
@@ -184,13 +180,13 @@
     }
 
     function openModalShell() {
-        if (typeof modal.showModal === 'function') {
-            if (!modal.open) {
-                modal.showModal();
-            }
-        } else {
-            modal.hidden = false;
-            modal.setAttribute('open', 'open');
+        // Inline live camera panel (not a dialog/modal overlay).
+        modal.hidden = false;
+        modal.setAttribute('open', 'open');
+        try {
+            modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } catch (_error) {
+            // ignore
         }
     }
 
@@ -201,7 +197,7 @@
     function updateCopy(side) {
         const label = sideLabel(side);
         if (titleEl) {
-            titleEl.textContent = `Scan the ${label} of your ID`;
+            titleEl.textContent = `Capture the ${label} of your ID`;
         }
         if (hintEl) {
             hintEl.textContent = cfg.autoCapture
@@ -229,7 +225,7 @@
     }
 
     /**
-     * Lightweight document heuristics inside the guide (NOT OCR).
+     * Lightweight document heuristics inside the guide (not full AI analysis).
      */
     function analyzeGuideRegion() {
         if (!video || video.readyState < 2) {
@@ -342,12 +338,13 @@
 
         const lightingOk = mean >= cfg.minBrightness
             && mean <= cfg.maxBrightness
-            && glare < 0.32
-            && crush < 0.45;
+            && glare < 0.42
+            && crush < 0.55;
         const contrastOk = contrast >= cfg.minContrast;
         const edgeOk = edgeScore >= cfg.minEdge;
         // Blank paper / empty scene: low edges + low structure.
-        const structureOk = edgeScore >= (cfg.minEdge * 0.9) && (structureGap >= 5 || contrast >= (cfg.minContrast + 5));
+        const structureOk = edgeScore >= (cfg.minEdge * 0.75)
+            && (structureGap >= 3.5 || contrast >= Math.max(8, cfg.minContrast * 0.85));
         const detected = lightingOk && contrastOk && edgeOk && structureOk;
         const stable = detected && hasPrevious && motion <= cfg.maxMotion;
 
@@ -413,12 +410,6 @@
             }
 
             detectedStreak += 1;
-            // Require a short streak before treating as a real detection (fewer false positives).
-            if (detectedStreak < 2) {
-                setGuideState('searching');
-                setDetectMessage('Looking for an ID inside the frame…');
-                return;
-            }
 
             if (!analysis.stable) {
                 stableSince = null;
@@ -449,14 +440,106 @@
         }, cfg.sampleIntervalMs);
     }
 
-    async function startCamera() {
-        if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-            showFallback('Camera access is unavailable on insecure connections. You can upload an ID photo instead.');
-            return;
+    function isLocalhostHost() {
+        const host = String(location.hostname || '').toLowerCase();
+        return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+    }
+
+    function canUseLiveMediaStream() {
+        return Boolean(navigator.mediaDevices?.getUserMedia)
+            && (window.isSecureContext || isLocalhostHost());
+    }
+
+    /**
+     * On HTTP LAN / insecure origins, getUserMedia is blocked.
+     * Open the device camera via capture=environment instead of showing an insecure warning.
+     */
+    function openNativeDeviceCamera(inputId) {
+        const input = document.getElementById(inputId);
+        if (!input) {
+            return false;
         }
 
-        if (!navigator.mediaDevices?.getUserMedia) {
-            showFallback('Camera access is unavailable. You can upload an ID photo instead.');
+        const previousAccept = input.getAttribute('accept');
+        input.setAttribute('accept', 'image/*');
+        input.setAttribute('capture', 'environment');
+
+        const cleanup = () => {
+            input.removeAttribute('capture');
+            if (previousAccept) {
+                input.setAttribute('accept', previousAccept);
+            } else {
+                input.setAttribute('accept', '.jpg,.jpeg,.png,image/jpeg,image/png');
+            }
+        };
+
+        input.addEventListener('change', cleanup, { once: true });
+        window.setTimeout(cleanup, 120000);
+        input.click();
+        return true;
+    }
+
+    function markWizardCaptured(inputId) {
+        if (typeof window.KkpWizardMarkIdCaptured === 'function') {
+            window.KkpWizardMarkIdCaptured(inputId);
+        } else {
+            const badge = document.getElementById(`${inputId}CapturedBadge`);
+            if (badge) {
+                badge.hidden = false;
+                badge.removeAttribute('hidden');
+            }
+        }
+    }
+
+    function canvasToJpegBlob(sourceCanvas, quality) {
+        return new Promise((resolve) => {
+            sourceCanvas.toBlob((result) => resolve(result), 'image/jpeg', quality);
+        });
+    }
+
+    async function exportCaptureBlob(sourceCanvas, sourceWidth, sourceHeight) {
+        const maxEdge = 1600;
+        const maxBytes = Math.floor(1.6 * 1024 * 1024);
+        let outW = sourceWidth;
+        let outH = sourceHeight;
+        const longest = Math.max(sourceWidth, sourceHeight);
+
+        if (longest > maxEdge) {
+            const scale = maxEdge / longest;
+            outW = Math.max(1, Math.round(sourceWidth * scale));
+            outH = Math.max(1, Math.round(sourceHeight * scale));
+        }
+
+        let exportCanvas = sourceCanvas;
+        if (outW !== sourceWidth || outH !== sourceHeight) {
+            exportCanvas = document.createElement('canvas');
+            exportCanvas.width = outW;
+            exportCanvas.height = outH;
+            const exportCtx = exportCanvas.getContext('2d');
+            if (!exportCtx) {
+                return null;
+            }
+            exportCtx.drawImage(sourceCanvas, 0, 0, outW, outH);
+        }
+
+        let quality = 0.82;
+        let blob = await canvasToJpegBlob(exportCanvas, quality);
+        while (blob && blob.size > maxBytes && quality > 0.55) {
+            quality = Math.max(0.55, quality - 0.08);
+            blob = await canvasToJpegBlob(exportCanvas, quality);
+        }
+
+        return blob;
+    }
+
+    async function startCamera() {
+        // Prefer device camera capture on insecure HTTP (e.g. LAN IP serve) — do not show insecure warning.
+        if (!canUseLiveMediaStream()) {
+            const inputId = targetInputId;
+            closeModal();
+            if (inputId) {
+                openNativeDeviceCamera(inputId);
+            }
             return;
         }
 
@@ -479,8 +562,23 @@
                 if (video) {
                     video.srcObject = mediaStream;
                     await video.play().catch(() => {});
+                    // Wait until frames are available so auto-detect can start immediately.
+                    if (video.readyState < 2) {
+                        await new Promise((resolve) => {
+                            const onReady = () => {
+                                video.removeEventListener('loadeddata', onReady);
+                                video.removeEventListener('playing', onReady);
+                                resolve();
+                            };
+                            video.addEventListener('loadeddata', onReady, { once: true });
+                            video.addEventListener('playing', onReady, { once: true });
+                            window.setTimeout(resolve, 900);
+                        });
+                    }
                 }
                 startDetectionLoop();
+                setDetectMessage('Looking for an ID inside the frame…');
+                setGuideState('searching');
                 return;
             } catch (error) {
                 lastError = error;
@@ -489,10 +587,21 @@
 
         const name = String(lastError?.name || '');
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+            // Still try native capture (mobile) before falling back to gallery upload.
+            const inputId = targetInputId;
+            closeModal();
+            if (inputId && openNativeDeviceCamera(inputId)) {
+                return;
+            }
             showFallback('Camera permission was denied. Please allow camera access in your browser settings or upload an ID photo instead.');
             return;
         }
 
+        const inputId = targetInputId;
+        closeModal();
+        if (inputId && openNativeDeviceCamera(inputId)) {
+            return;
+        }
         showFallback('Camera is unavailable. You can upload an ID photo instead.');
     }
 
@@ -638,9 +747,7 @@
         setStatus('Image quality looks good. Processing your ID…', 'info');
         setDetectMessage('Image quality looks good.');
 
-        const blob = await new Promise((resolve) => {
-            canvas.toBlob((result) => resolve(result), 'image/jpeg', 0.92);
-        });
+        const blob = await exportCaptureBlob(canvas, width, height);
 
         if (!blob) {
             setStatus('Unable to capture image. Please try upload instead.', 'error');
@@ -664,8 +771,9 @@
 
         const fileName = `id-${targetSide}-${Date.now()}.jpg`;
         const file = new File([blob], fileName, { type: 'image/jpeg', lastModified: Date.now() });
+        const capturedInputId = targetInputId;
 
-        const ok = assignFileToInput(targetInputId, file);
+        const ok = assignFileToInput(capturedInputId, file);
         if (!ok) {
             setStatus('Unable to save capture. Please upload an ID photo instead.', 'error');
             capturing = false;
@@ -676,7 +784,9 @@
             return;
         }
 
-        // Wizard change handler will run quality → OCR on the server.
+        markWizardCaptured(capturedInputId);
+
+        // Wizard change handler will run quality → AI verification on the server.
         closeModal();
     }
 
@@ -793,9 +903,11 @@
         useUploadFallback();
     });
 
-    modal.addEventListener('cancel', (event) => {
-        event.preventDefault();
-        closeModal();
+    modal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !modal.hidden) {
+            event.preventDefault();
+            closeModal();
+        }
     });
 
     window.KkpIdCamera = {

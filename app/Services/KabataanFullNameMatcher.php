@@ -158,18 +158,53 @@ class KabataanFullNameMatcher
      */
     public function matches(array $form, array $ocr, bool $strictMiddle = false): bool
     {
-        if ($this->matchesComponents($form, $ocr, $strictMiddle)) {
-            return true;
+        foreach ($this->ocrComponentPermutations($ocr) as $candidate) {
+            if ($this->matchesComponents($form, $candidate, $strictMiddle)) {
+                return true;
+            }
         }
 
-        $swappedOcr = [
-            'first' => $ocr['middle'],
-            'middle' => $ocr['first'],
-            'last' => $ocr['last'],
-            'suffix' => $ocr['suffix'],
-        ];
+        return false;
+    }
 
-        return $this->matchesComponents($form, $swappedOcr, $strictMiddle);
+    /**
+     * Format-agnostic identity check: Step 1 first/last/(middle initial) may appear in any ID layout
+     * (LAST, FIRST M. / FIRST MIDDLE LAST / FIRST LAST / etc.).
+     *
+     * @param  array{first: string, middle: string, last: string, suffix: string}  $form
+     */
+    public function formIdentityVisibleInText(array $form, string ...$texts): bool
+    {
+        $haystack = $this->normalizeOcrNameText(implode("\n", array_filter($texts, static fn ($t) => trim((string) $t) !== '')));
+
+        if ($haystack === '' || ($form['first'] ?? '') === '' || ($form['last'] ?? '') === '') {
+            return false;
+        }
+
+        $compact = preg_replace('/[^A-Z0-9]/', '', $haystack) ?? '';
+        if ($compact === '') {
+            return false;
+        }
+
+        if (! $this->compactContainsNamePart($compact, $form['last'])) {
+            return false;
+        }
+
+        if (! $this->compactContainsFirstName($compact, $form['first'])) {
+            return false;
+        }
+
+        // Middle: first letter only when Step 1 has a middle name AND the ID shows a middle initial.
+        // Missing middle on the ID is OK (many cards omit it).
+        if (($form['middle'] ?? '') !== '') {
+            $formInitial = $this->middleInitial($form['middle']);
+            $ocrInitial = $this->detectMiddleInitialInText($haystack, $form);
+            if ($formInitial !== '' && $ocrInitial !== '' && $formInitial !== $ocrInitial) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -177,35 +212,166 @@ class KabataanFullNameMatcher
      */
     public function matchesFormToOcrText(array $form, string $ocrText, bool $strictMiddle = false): bool
     {
+        unset($strictMiddle);
+
+        // Primary path: order/format-agnostic token presence.
+        if ($this->formIdentityVisibleInText($form, $ocrText)) {
+            return true;
+        }
+
         $ocrText = $this->normalizeOcrNameText($ocrText);
 
         if ($ocrText === '' || $form['first'] === '' || $form['last'] === '') {
             return false;
         }
 
-        if (! $this->ocrTextContainsFormLast($form['last'], $ocrText)) {
-            return false;
-        }
-
-        if (! $this->ocrTextContainsFormFirst($form['first'], $ocrText)) {
-            return false;
-        }
-
-        if ($form['middle'] !== '' && ! $this->ocrTextContainsFormMiddle($form['middle'], $ocrText)) {
-            return false;
-        }
-
-        if ($form['suffix'] !== '' && ! str_contains($ocrText, $form['suffix'])) {
-            return false;
-        }
-
         $parsed = $this->parseOcrName($ocrText, $form);
 
-        if ($parsed !== null && $this->matchesComponents($form, $parsed, $strictMiddle)) {
+        return is_array($parsed) && $this->matches($form, $parsed, false);
+    }
+
+    /**
+     * @param  array{first: string, middle: string, last: string, suffix: string}  $ocr
+     * @return list<array{first: string, middle: string, last: string, suffix: string}>
+     */
+    private function ocrComponentPermutations(array $ocr): array
+    {
+        $first = (string) ($ocr['first'] ?? '');
+        $middle = (string) ($ocr['middle'] ?? '');
+        $last = (string) ($ocr['last'] ?? '');
+        $suffix = (string) ($ocr['suffix'] ?? '');
+
+        $base = static fn (string $f, string $m, string $l): array => [
+            'first' => $f,
+            'middle' => $m,
+            'last' => $l,
+            'suffix' => $suffix,
+        ];
+
+        $candidates = [
+            $base($first, $middle, $last),
+            $base($first, $last, $middle),
+            $base($middle, $first, $last),
+            $base($middle, $last, $first),
+            $base($last, $first, $middle),
+            $base($last, $middle, $first),
+        ];
+
+        // Deduplicate identical permutations.
+        $unique = [];
+        $seen = [];
+        foreach ($candidates as $candidate) {
+            $key = $candidate['first'].'|'.$candidate['middle'].'|'.$candidate['last'];
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $unique[] = $candidate;
+        }
+
+        return $unique;
+    }
+
+    private function compactContainsNamePart(string $compact, string $part): bool
+    {
+        $partKey = preg_replace('/[^A-Z0-9]/', '', strtoupper($this->normalizeToken($part))) ?? '';
+        if ($partKey === '' || strlen($partKey) < 2) {
+            return false;
+        }
+
+        if (str_contains($compact, $partKey)) {
             return true;
         }
 
-        return true;
+        // Soft OCR typos for long surnames/first names.
+        if (strlen($partKey) >= 5) {
+            $len = strlen($compact);
+            $needleLen = strlen($partKey);
+            for ($i = 0; $i <= $len - $needleLen; $i++) {
+                $window = substr($compact, $i, $needleLen);
+                similar_text($partKey, $window, $percent);
+                if ($percent >= 90.0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function compactContainsFirstName(string $compact, string $firstName): bool
+    {
+        $firstName = $this->normalizeToken($firstName);
+        if ($firstName === '') {
+            return false;
+        }
+
+        $fullKey = preg_replace('/[^A-Z0-9]/', '', $firstName) ?? '';
+        if ($fullKey !== '' && str_contains($compact, $fullKey)) {
+            return true;
+        }
+
+        $tokens = preg_split('/\s+/', $firstName) ?: [];
+        $significant = [];
+        foreach ($tokens as $token) {
+            $key = preg_replace('/[^A-Z0-9]/', '', $token) ?? '';
+            if (strlen($key) >= 2) {
+                $significant[] = $key;
+            }
+        }
+
+        if ($significant === []) {
+            return false;
+        }
+
+        $hits = 0;
+        foreach ($significant as $key) {
+            if (str_contains($compact, $key) || $this->compactContainsNamePart($compact, $key)) {
+                $hits++;
+            }
+        }
+
+        // Multi-word first names (e.g. JUANA PAULA): require majority of tokens.
+        if (count($significant) >= 2) {
+            return $hits >= (int) ceil(count($significant) * 0.5);
+        }
+
+        return $hits >= 1;
+    }
+
+    /**
+     * @param  array{first: string, middle: string, last: string, suffix: string}  $form
+     */
+    private function detectMiddleInitialInText(string $haystack, array $form): string
+    {
+        // Patterns common on PH IDs: "LAST, FIRST M." or "FIRST M. LAST" or trailing " M "
+        if (preg_match('/,\s*[A-Z][A-Z\s\-]+\s+([A-Z])\.?(?:\s|$)/i', $haystack, $m) === 1) {
+            return strtoupper($m[1]);
+        }
+
+        if (preg_match('/\b([A-Z])\.\s+[A-Z]{2,}\b/i', $haystack, $m) === 1) {
+            // "M. SURNAME" style — weak; prefer initial between first and last when possible
+        }
+
+        $first = preg_quote($form['first'], '/');
+        $last = preg_quote($form['last'], '/');
+        if (
+            $first !== ''
+            && $last !== ''
+            && preg_match('/\b'.$first.'\b\s+([A-Z])\.?\s+\b'.$last.'\b/i', $haystack, $m) === 1
+        ) {
+            return strtoupper($m[1]);
+        }
+
+        if (
+            $first !== ''
+            && $last !== ''
+            && preg_match('/\b'.$last.'\b\s*,\s*\b'.$first.'\b\s+([A-Z])\.?/i', $haystack, $m) === 1
+        ) {
+            return strtoupper($m[1]);
+        }
+
+        return '';
     }
 
     /**
@@ -625,34 +791,22 @@ class KabataanFullNameMatcher
 
     private function middleNamesMatch(string $formMiddle, string $ocrMiddle, bool $strict = false): bool
     {
-        if ($formMiddle === '' && $ocrMiddle === '') {
-            return true;
-        }
-
-        if ($strict && $formMiddle !== '' && $ocrMiddle === '') {
-            return false;
-        }
+        // Philippine IDs often print middle initial only (e.g. "A." vs Step 1 "ANDRES").
+        // Always compare the first letter only — never require the full middle name.
+        unset($strict);
 
         if ($formMiddle === '' || $ocrMiddle === '') {
-            return ! $strict;
+            return true;
         }
 
         $formInitial = $this->middleInitial($formMiddle);
         $ocrInitial = $this->middleInitial($ocrMiddle);
 
-        if ($formInitial !== '' && $ocrInitial !== '' && $formInitial === $ocrInitial) {
+        if ($formInitial === '' || $ocrInitial === '') {
             return true;
         }
 
-        if ($this->isMiddleInitialToken($ocrMiddle) && $formInitial === $this->normalizeMiddleInitialToken($ocrMiddle)) {
-            return true;
-        }
-
-        if ($strict) {
-            return false;
-        }
-
-        return $this->tokenMatches($formMiddle, $ocrMiddle);
+        return $formInitial === $ocrInitial;
     }
 
     private function ocrTextContainsFormMiddle(string $formMiddle, string $ocrText): bool
@@ -663,16 +817,13 @@ class KabataanFullNameMatcher
             return true;
         }
 
-        if (str_contains($ocrText, $formMiddle)) {
-            return true;
-        }
-
         $initial = $this->middleInitial($formMiddle);
 
         if ($initial === '') {
-            return false;
+            return true;
         }
 
+        // First letter only (with optional period), not the full middle name.
         if ((bool) preg_match(
             '/(?:^|[\s,])'.preg_quote($initial, '/').'(?:\.(?=[\s,.]|$)|(?=[\s,.]|$))/i',
             $ocrText,

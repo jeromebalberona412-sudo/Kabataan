@@ -42,7 +42,7 @@ return [
 
     // Front vs back of the same upload must not be the same (or near-same) photo.
     'front_back' => [
-        'phash_hamming_threshold' => (int) env('DOCUMENT_FRONT_BACK_PHASH_THRESHOLD', 5),
+        'phash_hamming_threshold' => (int) env('DOCUMENT_FRONT_BACK_PHASH_THRESHOLD', 1),
         'ocr_text_similarity_percent' => (float) env('DOCUMENT_FRONT_BACK_OCR_SIMILARITY', 85),
     ],
 
@@ -70,15 +70,15 @@ return [
     'camera' => [
         'auto_capture_enabled' => (bool) env('DOCUMENT_CAMERA_AUTO_CAPTURE', true),
         // How long the ID must remain stable before auto-capture.
-        'auto_capture_stability_ms' => (int) env('DOCUMENT_CAMERA_STABILITY_MS', 1000),
+        'auto_capture_stability_ms' => (int) env('DOCUMENT_CAMERA_STABILITY_MS', 700),
         // How often to sample the guide region for lightweight detection (not OCR).
-        'sample_interval_ms' => (int) env('DOCUMENT_CAMERA_SAMPLE_MS', 220),
+        'sample_interval_ms' => (int) env('DOCUMENT_CAMERA_SAMPLE_MS', 180),
         // After this long without auto-capture, show manual/upload help.
-        'help_after_ms' => (int) env('DOCUMENT_CAMERA_HELP_AFTER_MS', 12000),
-        'min_edge_score' => (float) env('DOCUMENT_CAMERA_MIN_EDGE', 12),
-        'min_contrast' => (float) env('DOCUMENT_CAMERA_MIN_CONTRAST', 16),
-        'min_brightness' => (float) env('DOCUMENT_CAMERA_MIN_BRIGHTNESS', 40),
-        'max_brightness' => (float) env('DOCUMENT_CAMERA_MAX_BRIGHTNESS', 220),
-        'max_motion' => (float) env('DOCUMENT_CAMERA_MAX_MOTION', 14),
+        'help_after_ms' => (int) env('DOCUMENT_CAMERA_HELP_AFTER_MS', 10000),
+        'min_edge_score' => (float) env('DOCUMENT_CAMERA_MIN_EDGE', 7),
+        'min_contrast' => (float) env('DOCUMENT_CAMERA_MIN_CONTRAST', 10),
+        'min_brightness' => (float) env('DOCUMENT_CAMERA_MIN_BRIGHTNESS', 28),
+        'max_brightness' => (float) env('DOCUMENT_CAMERA_MAX_BRIGHTNESS', 235),
+        'max_motion' => (float) env('DOCUMENT_CAMERA_MAX_MOTION', 22),
     ],
 ];

@@ -2534,7 +2534,23 @@ function showEmailVerification(email) {
         padStatusEl.classList.toggle('is-invalid', !isValid);
     }
 
-    function applySavedSignature(dataUrl) {
+    function notifySignatureChanged() {
+        if (sigInput) {
+            // Programmatic .value updates do not fire form autosave listeners.
+            sigInput.dispatchEvent(new Event('input', { bubbles: true }));
+            sigInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        if (typeof window.kkpOnSignatureChanged === 'function') {
+            try {
+                window.kkpOnSignatureChanged(sigInput ? sigInput.value : '');
+            } catch (e) {
+                // Draft hook must never block signature UX
+            }
+        }
+    }
+
+    function applySavedSignature(dataUrl, options = {}) {
         if (sigInput) sigInput.value = dataUrl;
         if (typeof window.clearSignatureError === 'function') {
             window.clearSignatureError();
@@ -2554,6 +2570,10 @@ function showEmailVerification(email) {
         }
         if (clearSavedBtn) clearSavedBtn.hidden = false;
         hasSignature = true;
+
+        if (options.notify !== false) {
+            notifySignatureChanged();
+        }
     }
 
     function fillWhiteBackground() {
@@ -2576,13 +2596,18 @@ function showEmailVerification(email) {
     }
 
     function exportSignatureWithWhiteBackground() {
+        // Export at CSS pixel size (not devicePixelRatio canvas) so draft/session
+        // payloads stay small enough to survive refresh and mobile↔desktop reloads.
+        const rect = canvas.getBoundingClientRect();
+        const cssW = Math.max(1, Math.min(700, Math.round(rect.width || 500)));
+        const cssH = Math.max(1, Math.min(360, Math.round(rect.height || 260)));
         const out = document.createElement('canvas');
-        out.width = canvas.width;
-        out.height = canvas.height;
+        out.width = cssW;
+        out.height = cssH;
         const octx = out.getContext('2d');
         octx.fillStyle = '#ffffff';
         octx.fillRect(0, 0, out.width, out.height);
-        octx.drawImage(canvas, 0, 0);
+        octx.drawImage(canvas, 0, 0, cssW, cssH);
         return out.toDataURL('image/png');
     }
 
@@ -2739,6 +2764,7 @@ function showEmailVerification(email) {
         if (typeof window.kkpRefreshSignatureName === 'function') {
             window.kkpRefreshSignatureName();
         }
+        notifySignatureChanged();
     }
 
     function isNearWhitePixel(r, g, b, a) {
@@ -2935,12 +2961,13 @@ function showEmailVerification(email) {
         if (!dataUrl || !sigInput) {
             return;
         }
-        applySavedSignature(dataUrl);
+        // Restore from draft — do not re-trigger autosave.
+        applySavedSignature(dataUrl, { notify: false });
     };
 
     // Initial state (in case of server-side repopulation)
     if (sigInput && sigInput.value && sigPreview && sigOverlay) {
-        applySavedSignature(sigInput.value);
+        applySavedSignature(sigInput.value, { notify: false });
     }
 
     // Confirmation modal buttons

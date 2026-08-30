@@ -28,11 +28,7 @@ class PerceptualHashService
             return $fromGd;
         }
 
-        $fromWindows = $this->hashWithWindowsDrawing($absolutePath);
-        if (is_string($fromWindows) && $fromWindows !== '') {
-            return $fromWindows;
-        }
-
+        // Skip Windows PowerShell hashing — it can take 10–20s per image and stalls detect-id.
         return $this->structuralFingerprint($absolutePath);
     }
 
@@ -54,14 +50,14 @@ class PerceptualHashService
             return null;
         }
 
-        $a = hexdec($hashA);
-        $b = hexdec($hashB);
-        $xor = $a ^ $b;
+        // Compare nibble-by-nibble — avoid hexdec() on 64-bit values (can overflow to float).
         $distance = 0;
-
-        while ($xor !== 0) {
-            $distance += $xor & 1;
-            $xor >>= 1;
+        for ($i = 0; $i < 16; $i++) {
+            $xor = hexdec($hashA[$i]) ^ hexdec($hashB[$i]);
+            while ($xor !== 0) {
+                $distance += $xor & 1;
+                $xor >>= 1;
+            }
         }
 
         return $distance;

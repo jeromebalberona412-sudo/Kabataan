@@ -13,6 +13,7 @@ use App\Rules\ValidEmailAddress;
 use App\Services\BarangayZoneService;
 use App\Services\DuplicateKabataanRegistrationService;
 use App\Services\IdImageQualityService;
+use App\Services\IdVerificationAiService;
 use App\Services\KkProfilingIdentityValidator;
 use App\Services\KkRegistrationDraftService;
 use App\Services\OCRService;
@@ -50,6 +51,7 @@ class KKProfilingWizardController extends Controller
         protected KkProfilingIdentityValidator $identityValidator,
         protected IdImageQualityService $idImageQuality,
         protected OCRService $ocrService,
+        protected IdVerificationAiService $idVerificationAi,
     ) {}
 
     public function saveStep1(Request $request, string $barangay)
@@ -784,8 +786,10 @@ class KKProfilingWizardController extends Controller
 
     public function detectId(Request $request, string $barangay)
     {
+        // Keep PHP under a tight budget so stuck Gemini/network calls fail instead of hanging.
         if (function_exists('set_time_limit')) {
-            @set_time_limit(180);
+            $geminiTimeout = max(12, min(25, (int) config('ocr.gemini.timeout', 18)));
+            @set_time_limit($geminiTimeout + 20);
         }
 
         $barangayRecord = $this->resolveBarangay($barangay);
@@ -818,7 +822,8 @@ class KKProfilingWizardController extends Controller
                         'success' => false,
                         'validation_error' => true,
                         'needs_review' => false,
-                        'document_detected' => 'no',
+                        'verification_status' => 'invalid_image',
+                        'document_detected' => null,
                         'id_type' => 'Unknown',
                         'confidence' => 0,
                         'ocr_status' => 'invalid_upload',
@@ -851,7 +856,8 @@ class KKProfilingWizardController extends Controller
                             'quality_error' => true,
                             'quality_code' => $quality['code'] ?? null,
                             'needs_review' => false,
-                            'document_detected' => 'no',
+                            'verification_status' => 'invalid_image',
+                            'document_detected' => null,
                             'id_type' => 'Unknown',
                             'confidence' => 0,
                             'ocr_status' => 'invalid_image',
@@ -870,6 +876,105 @@ class KKProfilingWizardController extends Controller
         $selfiePath = config('documents.selfie_verification_enabled')
             ? $request->file('selfie')?->getRealPath()
             : null;
+
+        // Reuse AI extraction for the same images, but ALWAYS re-check against current Step 1 identity.
+        if (is_string($frontPath) && is_string($backPath)) {
+            $pairHash = $this->idVerificationAi->pairHash($frontPath, $backPath, $documentType);
+            $existing = is_array($wizard['step2_data']['id_verification'] ?? null)
+                ? $wizard['step2_data']['id_verification']
+                : null;
+
+            if (
+                is_array($existing)
+                && is_string($existing['pair_hash'] ?? null)
+                && hash_equals((string) $existing['pair_hash'], $pairHash)
+                && $this->isReusableStoredVerification($existing)
+            ) {
+                $payload = [
+                    'success' => (bool) ($existing['success'] ?? false),
+                    'validation_error' => false,
+                    'needs_review' => (bool) ($existing['needs_review'] ?? false),
+                    'verification_status' => $existing['verification_status'] ?? 'success',
+                    'document_detected' => $existing['document_detected'] ?? null,
+                    'id_type' => $existing['id_type'] ?? 'Unknown',
+                    'detected_id_type' => $existing['detected_id_type'] ?? ($existing['id_type'] ?? null),
+                    'expected_id_type' => $documentType,
+                    'confidence' => $existing['confidence'] ?? 0,
+                    'confidence_band' => $existing['confidence_band'] ?? null,
+                    'full_name' => $existing['detected_name'] ?? null,
+                    'given_name' => $existing['form_suggestions']['first_name'] ?? null,
+                    'middle_name' => $existing['form_suggestions']['middle_name'] ?? null,
+                    'surname' => $existing['form_suggestions']['last_name'] ?? null,
+                    'birthdate' => $existing['detected_birthdate'] ?? null,
+                    'sex' => null,
+                    'address' => $existing['detected_address'] ?? null,
+                    'id_number' => $existing['id_number'] ?? null,
+                    'ocr_status' => $existing['ocr_status'] ?? null,
+                    'message' => null,
+                    'raw_text' => $existing['raw_text'] ?? null,
+                    'pair_hash' => $pairHash,
+                    'from_cache' => true,
+                    'source' => $existing['source'] ?? 'wizard_cache',
+                    'is_philippine_id' => $existing['is_philippine_id'] ?? null,
+                    'image_quality' => $existing['image_quality'] ?? null,
+                    'expiry_date' => $existing['expiry_date'] ?? null,
+                    'data' => is_array($existing['data'] ?? null) ? $existing['data'] : null,
+                ];
+
+                // Re-apply Step 1 name/birthday/address gates with the latest profiling fields.
+                $verification = $this->philippineIdDetection->buildVerificationRecord(
+                    $payload,
+                    $documentType,
+                    $registrationFields,
+                );
+                $this->draftService->storeIdVerification($wizard, $verification);
+
+                $formSuggestions = is_array($verification['form_suggestions'] ?? null)
+                    ? $verification['form_suggestions']
+                    : $this->philippineIdDetection->mapToFormFields($payload);
+
+                $publicOcr = [
+                    'success' => (bool) ($verification['success'] ?? false),
+                    'validation_error' => (bool) ($verification['validation_error'] ?? false),
+                    'needs_review' => (bool) ($verification['needs_review'] ?? false),
+                    'verification_status' => $verification['verification_status'] ?? 'success',
+                    'document_detected' => $verification['document_detected'] ?? null,
+                    'id_type' => $verification['id_type'] ?? 'Unknown',
+                    'detected_id_type' => $verification['detected_id_type'] ?? ($payload['detected_id_type'] ?? null),
+                    'expected_id_type' => $documentType,
+                    'confidence' => $verification['confidence'] ?? 0,
+                    'full_name' => $verification['detected_name'] ?? null,
+                    'birthdate' => $verification['detected_birthdate'] ?? null,
+                    'sex' => null,
+                    'address' => $verification['detected_address'] ?? null,
+                    'id_number' => $verification['id_number'] ?? null,
+                    'message' => $this->sanitizePublicVerificationMessage($verification['message'] ?? null),
+                    'name_match' => $verification['name_match'] ?? null,
+                    'birthdate_match' => $verification['birthdate_match'] ?? null,
+                    'address_match' => $verification['address_match'] ?? null,
+                    'pair_hash' => $pairHash,
+                    'from_cache' => true,
+                    'source' => $verification['source'] ?? 'wizard_cache',
+                ];
+
+                Log::info('ID detect-id reused AI extraction; rechecked Step 1 identity', [
+                    'pair_hash' => $pairHash,
+                    'name_match' => $verification['name_match'] ?? null,
+                    'validation_error' => $verification['validation_error'] ?? null,
+                ]);
+
+                return response()->json([
+                    'success' => (bool) ($verification['success'] ?? false),
+                    'ocr' => $publicOcr,
+                    'form_suggestions' => $formSuggestions,
+                    'message' => $publicOcr['message'],
+                    'validation_error' => (bool) ($verification['validation_error'] ?? false),
+                    'needs_review' => (bool) ($verification['needs_review'] ?? false),
+                    'verification_status' => $verification['verification_status'] ?? null,
+                    'from_cache' => true,
+                ], ($verification['validation_error'] ?? false) ? 422 : 200);
+            }
+        }
 
         if (
             $this->philippineIdDetection->isSupportedDocumentType($documentType)
@@ -957,6 +1062,7 @@ class KKProfilingWizardController extends Controller
                 $request->file('front'),
                 $request->file('back'),
                 $documentType,
+                $registrationFields,
             );
         } catch (\Throwable $exception) {
             report($exception);
@@ -983,39 +1089,72 @@ class KKProfilingWizardController extends Controller
         $this->draftService->storeIdVerification($wizard, $verification);
 
         $publicOcr = [
-            'success' => (bool) ($payload['success'] ?? false),
-            'validation_error' => (bool) ($payload['validation_error'] ?? false),
-            'needs_review' => (bool) ($payload['needs_review'] ?? false),
-            'document_detected' => $payload['document_detected'] ?? null,
-            'id_type' => $payload['id_type'] ?? 'Unknown',
+            'success' => (bool) ($verification['success'] ?? false),
+            'validation_error' => (bool) ($verification['validation_error'] ?? false),
+            'needs_review' => (bool) ($verification['needs_review'] ?? false),
+            'verification_status' => $verification['verification_status'] ?? ($payload['verification_status'] ?? null),
+            'document_detected' => array_key_exists('document_detected', $verification)
+                ? $verification['document_detected']
+                : (array_key_exists('document_detected', $payload) ? $payload['document_detected'] : null),
+            'id_type' => $verification['id_type'] ?? ($payload['id_type'] ?? 'Unknown'),
             'detected_id_type' => $payload['detected_id_type'] ?? null,
             'expected_id_type' => $payload['expected_id_type'] ?? null,
-            'confidence' => $payload['confidence'] ?? 0,
-            'confidence_band' => $payload['confidence_band'] ?? null,
-            'full_name' => $payload['full_name'] ?? null,
-            'birthdate' => $payload['birthdate'] ?? null,
-            'sex' => $payload['sex'] ?? null,
-            'address' => $payload['address'] ?? null,
-            'id_number' => $payload['id_number'] ?? null,
-            'ocr_status' => $payload['ocr_status'] ?? null,
-            'message' => $payload['message'] ?? null,
+            'confidence' => $verification['confidence'] ?? ($payload['confidence'] ?? 0),
+            'confidence_band' => $verification['confidence_band'] ?? ($payload['confidence_band'] ?? null),
+            'full_name' => $verification['detected_name'] ?? ($payload['full_name'] ?? null),
+            'birthdate' => $verification['detected_birthdate'] ?? ($payload['birthdate'] ?? null),
+            'sex' => null,
+            'address' => $verification['detected_address'] ?? ($payload['address'] ?? null),
+            'id_number' => $verification['id_number'] ?? ($payload['id_number'] ?? null),
+            'ocr_status' => $verification['ocr_status'] ?? ($payload['ocr_status'] ?? null),
+            'message' => $this->sanitizePublicVerificationMessage($verification['message'] ?? ($payload['message'] ?? null)),
+            'name_match' => $verification['name_match'] ?? null,
+            'birthdate_match' => $verification['birthdate_match'] ?? null,
+            'address_match' => $verification['address_match'] ?? null,
             'face_match' => $payload['face_match'] ?? false,
             'face_verification' => $payload['face_verification'] ?? null,
             'text_length' => (int) ($payload['text_length'] ?? 0),
             'source' => $payload['source'] ?? null,
             'auto_detected' => (bool) ($payload['auto_detected'] ?? false),
             'auto_corrected' => (bool) ($payload['auto_corrected'] ?? false),
+            'pair_hash' => $verification['pair_hash'] ?? ($payload['pair_hash'] ?? null),
+            'from_cache' => (bool) ($verification['from_cache'] ?? ($payload['from_cache'] ?? false)),
+            'is_philippine_id' => $verification['is_philippine_id'] ?? ($payload['is_philippine_id'] ?? null),
+            'image_quality' => $verification['image_quality'] ?? ($payload['image_quality'] ?? null),
+            'expiry_date' => $verification['expiry_date'] ?? ($payload['expiry_date'] ?? null),
+            'data' => is_array($payload['data'] ?? null) ? $payload['data'] : null,
         ];
 
         return response()->json([
-            'success' => (bool) ($payload['success'] ?? false),
+            'success' => (bool) ($verification['success'] ?? false),
             'ocr' => $publicOcr,
             'form_suggestions' => $formSuggestions,
-            'message' => $payload['message'] ?? null,
-            'validation_error' => (bool) ($payload['validation_error'] ?? false),
-            'needs_review' => (bool) ($payload['needs_review'] ?? false),
+            'message' => $this->sanitizePublicVerificationMessage($verification['message'] ?? ($payload['message'] ?? null)),
+            'validation_error' => (bool) ($verification['validation_error'] ?? false),
+            'needs_review' => (bool) ($verification['needs_review'] ?? false),
+            'verification_status' => $verification['verification_status'] ?? ($payload['verification_status'] ?? null),
             'face_match' => (bool) ($payload['face_match'] ?? false),
-        ], ($payload['validation_error'] ?? false) ? 422 : 200);
+            'from_cache' => (bool) ($publicOcr['from_cache'] ?? false),
+        ], ($verification['validation_error'] ?? false) ? 422 : 200);
+    }
+
+    /**
+     * @param  array<string, mixed>  $verification
+     */
+    private function isReusableStoredVerification(array $verification): bool
+    {
+        $status = strtolower((string) ($verification['verification_status'] ?? ''));
+        if (in_array($status, ['unavailable', 'error', 'invalid_response'], true)) {
+            return false;
+        }
+
+        $detected = $verification['document_detected'] ?? null;
+        if ($detected === null || $detected === '') {
+            return $status === 'invalid_image';
+        }
+
+        return in_array($detected, [true, false, 'yes', 'no', 1, 0, '1', '0'], true)
+            || $status === 'success';
     }
 
     public function documentPreview(string $barangay, string $type, ?string $side = 'front')
@@ -1126,6 +1265,23 @@ class KKProfilingWizardController extends Controller
         }
 
         if ($documentType === SupportingDocumentTypes::SCHOOL_ID) {
+            // Prefer Gemini vision path (shared with other ID types) when enabled.
+            if (
+                in_array(strtolower((string) config('ocr.provider', 'gemini')), ['gemini', 'groq'], true)
+                && $this->idVerificationAi->isEnabled()
+                && $front instanceof UploadedFile
+                && $back instanceof UploadedFile
+            ) {
+                $detected = $this->philippineIdDetection->detectUploadedPair($front, $back, $documentType, $registrationFields);
+                $ocrPayload = $this->philippineIdDetection->buildVerificationRecord(
+                    $detected,
+                    $documentType,
+                    $registrationFields,
+                );
+
+                return [$ocrPayload, is_array($ocrPayload['form_suggestions'] ?? null) ? $ocrPayload['form_suggestions'] : null];
+            }
+
             $result = $this->identityValidator->validateUploadedId(
                 $barangayId,
                 $registrationFields,
@@ -1196,7 +1352,7 @@ class KKProfilingWizardController extends Controller
                     ]);
                 }
 
-                $detected = $this->philippineIdDetection->detectUploadedPair($front, $back, $documentType);
+                $detected = $this->philippineIdDetection->detectUploadedPair($front, $back, $documentType, $registrationFields);
                 $ocrPayload = $this->philippineIdDetection->buildVerificationRecord(
                     $detected,
                     $documentType,
@@ -1214,7 +1370,7 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        $detected = $this->philippineIdDetection->detectUploadedPair($front, $back, $documentType);
+        $detected = $this->philippineIdDetection->detectUploadedPair($front, $back, $documentType, $registrationFields);
         $ocrPayload = $this->philippineIdDetection->buildVerificationRecord(
             $detected,
             $documentType,
@@ -1229,19 +1385,17 @@ class KKProfilingWizardController extends Controller
      */
     private function assertStep2DocumentAllowedToProceed(string $documentType, array $payload): void
     {
+        // Supporting ID upload is optional for continuing to Step 3.
+        // Invalid / weak detections are stored for SK review but must not block Next.
         if ($this->step2DocumentLooksValid($documentType, $payload)) {
             return;
         }
 
-        $label = SupportingDocumentTypes::label($documentType);
-        $message = trim((string) ($payload['message'] ?? ''));
-
-        if ($message === '') {
-            $message = "We couldn't confidently identify a valid {$label} from your upload. Please upload a clearer front and back photo.";
-        }
-
-        throw ValidationException::withMessages([
-            'document_type' => [$message],
+        Log::info('KK wizard Step 2 ID verification soft-fail; allowing continue', [
+            'document_type' => $documentType,
+            'verification_status' => $payload['verification_status'] ?? null,
+            'document_detected' => $payload['document_detected'] ?? null,
+            'success' => $payload['success'] ?? null,
         ]);
     }
 
@@ -1381,6 +1535,23 @@ class KKProfilingWizardController extends Controller
         }
 
         return false;
+    }
+
+    private function sanitizePublicVerificationMessage(mixed $message): ?string
+    {
+        if (! is_string($message) || trim($message) === '') {
+            return null;
+        }
+
+        $sanitized = preg_replace('/\bOCR\b/i', 'AI', $message) ?? $message;
+        $sanitized = preg_replace('/\bTesseract\b/i', 'AI', $sanitized) ?? $sanitized;
+        $sanitized = str_ireplace('ID text detected', 'ID details detected', $sanitized);
+        $sanitized = str_ireplace('Text detected from', 'Details detected from', $sanitized);
+        $sanitized = str_ireplace("couldn't read any text from this ID", "couldn't verify this ID", $sanitized);
+        $sanitized = str_ireplace('could not read any text from this ID', 'could not verify this ID', $sanitized);
+        $sanitized = str_ireplace('No useful text detected', 'No usable ID details detected', $sanitized);
+
+        return $sanitized;
     }
 
     private function finalizeRegistrationResponse(KabataanRegistration $registration): JsonResponse

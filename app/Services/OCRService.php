@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
@@ -15,7 +16,10 @@ class OCRService
         private readonly ImagePreprocessingService $preprocessing,
         private readonly KabataanFullNameMatcher $nameMatcher,
         private readonly PerceptualHashService $perceptualHash,
+        private readonly IdVerificationAiService $idVerificationAi,
     ) {}
+
+    // Legacy Tesseract/Python OCR helpers remain below but are unused while OCR_PROVIDER=groq.
 
     /**
      * Public gate for ID-like OCR text (used by wizard detect-id / step-2).
@@ -47,6 +51,18 @@ class OCRService
                 'success' => false,
                 'ocr_status' => 'invalid_image',
                 'message' => 'Image file not found.',
+                'lines' => [],
+                'full_text' => '',
+                'text_length' => 0,
+            ];
+        }
+
+        // Python / Tesseract / Windows OCR kept in codebase but disabled while Groq is primary.
+        if (! (bool) config('ocr.legacy_engines_enabled', false)) {
+            return [
+                'success' => false,
+                'ocr_status' => 'skipped',
+                'message' => 'AI ID analysis is required. Please try again.',
                 'lines' => [],
                 'full_text' => '',
                 'text_length' => 0,
@@ -97,7 +113,7 @@ class OCRService
             return [
                 'success' => false,
                 'ocr_status' => 'ocr_empty',
-                'message' => 'We couldn\'t read any text from this ID. Please make sure the ID is clear, properly aligned, and well lit.',
+                'message' => 'We couldn\'t verify this ID. Please make sure the photos are clear, properly aligned, and well lit.',
                 'lines' => [],
                 'full_text' => '',
                 'text_length' => 0,
@@ -246,6 +262,22 @@ class OCRService
             ];
         }
 
+        // Single-image path: reuse pair analyzer with the same image only when legacy is needed.
+        // Prefer Groq pair flow from the wizard (front+back). For single images, skip to API/local.
+        if ($this->shouldUseVisionAi()) {
+            // Pair endpoint is preferred; single-side falls through only if legacy enabled.
+            if (! (bool) config('ocr.legacy_engines_enabled', false)) {
+                return [
+                    'success' => false,
+                    'validation_error' => true,
+                    'verification_status' => 'invalid_image',
+                    'document_detected' => null,
+                    'message' => 'Please upload both front and back of your ID for verification.',
+                    'source' => 'gemini',
+                ];
+            }
+        }
+
         $apiResult = $this->detectIdViaApi($imagePath, $documentType);
 
         if ($this->isUsableDetectionResult($apiResult)) {
@@ -279,6 +311,7 @@ class OCRService
         string $frontPath,
         string $backPath,
         ?string $documentType = null,
+        array $registrationFields = [],
     ): array {
         $frontPath = $this->normalizeImagePath($frontPath);
         $backPath = $this->normalizeImagePath($backPath);
@@ -296,7 +329,8 @@ class OCRService
                 'success' => false,
                 'validation_error' => true,
                 'needs_review' => false,
-                'document_detected' => 'no',
+                'verification_status' => 'invalid_image',
+                'document_detected' => null,
                 'id_type' => 'Unknown',
                 'detected_id_type' => 'Unknown',
                 'confidence' => 0,
@@ -306,19 +340,202 @@ class OCRService
             ];
         }
 
+        $pairHash = $this->idVerificationAi->pairHash($frontPath, $backPath, $documentType);
+        $identityHash = $this->identityFingerprint($registrationFields);
+        $cacheKey = 'kkp_id_verify:'.$pairHash.':'.$identityHash;
+        $lockKey = 'kkp_id_verify_lock:'.$pairHash; // lock per image pair (not per identity)
+        $ttlHours = max(1, min(48, (int) (
+            config('ocr.gemini.cache_ttl_hours')
+            ?? config('ocr.groq.cache_ttl_hours', 12)
+        )));
+
+        $cached = Cache::get($cacheKey);
+        if (is_array($cached) && $this->isCacheableVerificationResult($cached)) {
+            $cached['pair_hash'] = $pairHash;
+            $cached['from_cache'] = true;
+
+            Log::info('ID pair verification cache hit', [
+                'pair_hash' => $pairHash,
+                'verification_status' => $cached['verification_status'] ?? null,
+                'document_detected' => $cached['document_detected'] ?? null,
+                'source' => $cached['source'] ?? null,
+            ]);
+
+            return $cached;
+        }
+
+        $lock = null;
+        $store = Cache::getStore();
+
+        try {
+            if ($store instanceof \Illuminate\Contracts\Cache\LockProvider) {
+                $lock = Cache::lock($lockKey, 50);
+                $lock->block(20);
+
+                $cached = Cache::get($cacheKey);
+                if (is_array($cached) && $this->isCacheableVerificationResult($cached)) {
+                    $cached['pair_hash'] = $pairHash;
+                    $cached['from_cache'] = true;
+
+                    return $cached;
+                }
+            }
+
+            $result = $this->runDetectIdPairPipeline(
+                $frontPath,
+                $backPath,
+                $documentType,
+                $registrationFields,
+                $pairHash,
+            );
+
+            if ($this->isCacheableVerificationResult($result)) {
+                Cache::put($cacheKey, $result, now()->addHours($ttlHours));
+            }
+
+            return $result;
+        } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+            Log::warning('ID pair verification lock timeout', ['pair_hash' => $pairHash]);
+
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'verification_status' => 'unavailable',
+                'document_detected' => null,
+                'id_type' => 'Unknown',
+                'confidence' => 0,
+                'ocr_status' => 'ocr_failed',
+                'message' => 'ID verification is temporarily unavailable. Please try again.',
+                'pair_hash' => $pairHash,
+                'source' => 'lock_timeout',
+            ];
+        } finally {
+            if ($lock !== null) {
+                try {
+                    $lock->release();
+                } catch (\Throwable) {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $registrationFields
+     * @return array<string, mixed>
+     */
+    private function runDetectIdPairPipeline(
+        string $frontPath,
+        string $backPath,
+        ?string $documentType,
+        array $registrationFields,
+        string $pairHash,
+    ): array {
+        // Gemini is the primary supporting-document validator. Only allow a local
+        // Tesseract shortcut when OCR_PROVIDER is not gemini (legacy/groq installs).
+        $provider = strtolower((string) config('ocr.provider', 'gemini'));
+        $allowLocalShortcut = $provider !== 'gemini'
+            && (bool) config('ocr.prefer_local_before_ai', config('ocr.prefer_local_before_groq', true));
+
+        if (
+            $allowLocalShortcut
+            && $this->shouldUseVisionAi()
+            && (bool) config('ocr.tesseract_precheck_enabled', true)
+            && $this->tesseract->isAvailable()
+        ) {
+            $local = $this->detectIdViaLocalOcrPrecheck($frontPath, $backPath, $documentType);
+            if ($this->localPrecheckIsSufficient($local)) {
+                $local['pair_hash'] = $pairHash;
+                $local['from_cache'] = false;
+                $local['verification_status'] = $local['verification_status'] ?? 'success';
+
+                Log::info('ID pair local OCR precheck sufficient — skipping vision AI', [
+                    'pair_hash' => $pairHash,
+                    'document_detected' => $local['document_detected'] ?? null,
+                    'confidence' => $local['confidence'] ?? null,
+                    'source' => $local['source'] ?? 'local_ocr_precheck',
+                ]);
+
+                return $this->enforceDetectionAccuracy($local, $documentType);
+            }
+        }
+
+        if ($this->shouldUseVisionAi()) {
+            $analyzeBack = (bool) config('ocr.gemini.analyze_back', false);
+            $aiResult = $this->idVerificationAi->analyzeIdPair(
+                $frontPath,
+                $backPath,
+                $documentType,
+                $registrationFields,
+            );
+            $aiResult['pair_hash'] = $pairHash;
+            $aiResult['from_cache'] = false;
+
+            // Optional local back OCR. Off by default for Gemini — Tesseract often added 10–30s.
+            $localBackCheck = (bool) config('ocr.gemini.local_back_check', false);
+            if (
+                $localBackCheck
+                && ! $analyzeBack
+                && ! in_array(strtolower((string) ($aiResult['verification_status'] ?? '')), ['unavailable', 'error', 'invalid_response', 'invalid_image'], true)
+            ) {
+                $aiResult = $this->mergeLocalBackCheck($aiResult, $backPath, $documentType);
+            }
+
+            $verificationStatus = strtolower((string) ($aiResult['verification_status'] ?? ''));
+
+            // Service/quality undetermined states must not be gated into document_detected=no.
+            if (in_array($verificationStatus, ['unavailable', 'error', 'invalid_response', 'invalid_image'], true)) {
+                $aiResult['document_detected'] = null;
+                $aiResult['success'] = false;
+                $aiResult['validation_error'] = true;
+                $aiResult['needs_review'] = false;
+
+                Log::info('ID pair AI verification undetermined', [
+                    'verification_status' => $verificationStatus,
+                    'error_category' => $aiResult['error_category'] ?? null,
+                    'pair_hash' => $pairHash,
+                    'source' => $aiResult['source'] ?? 'gemini',
+                ]);
+
+                return $aiResult;
+            }
+
+            $gated = $this->enforceDetectionAccuracy($aiResult, $documentType);
+            $gated['pair_hash'] = $pairHash;
+
+            Log::info('ID pair AI verification completed', [
+                'document_detected' => $gated['document_detected'] ?? null,
+                'verification_status' => $gated['verification_status'] ?? null,
+                'id_type' => $gated['id_type'] ?? null,
+                'confidence' => $gated['confidence'] ?? null,
+                'pair_hash' => $pairHash,
+                'source' => $gated['source'] ?? 'gemini',
+            ]);
+
+            return $gated;
+        }
+
+        // --- Legacy OCR path (disabled while OCR_PROVIDER=groq / OCR_LEGACY_ENGINES_ENABLED=false) ---
         $apiResult = $this->detectIdPairViaApi($frontPath, $backPath, $documentType);
 
         if ($this->isUsableDetectionResult($apiResult)) {
             $gated = $this->enforceDetectionAccuracy($apiResult, $documentType);
 
             if (! ($gated['validation_error'] ?? false)) {
+                $gated['pair_hash'] = $pairHash;
+
                 return $gated;
             }
 
             $local = $this->detectIdViaLocalOcr($frontPath, $backPath, $documentType);
             if (! ($local['validation_error'] ?? false)) {
+                $local['pair_hash'] = $pairHash;
+
                 return $local;
             }
+
+            $gated['pair_hash'] = $pairHash;
 
             return $gated;
         }
@@ -326,9 +543,264 @@ class OCRService
         Log::info('Philippine ID OCR pair API unavailable — using local OCR fallback', [
             'document_type' => $documentType,
             'api_message' => $apiResult['message'] ?? null,
+            'pair_hash' => $pairHash,
         ]);
 
-        return $this->detectIdViaLocalOcr($frontPath, $backPath, $documentType);
+        $local = $this->detectIdViaLocalOcr($frontPath, $backPath, $documentType);
+        $local['pair_hash'] = $pairHash;
+
+        return $local;
+    }
+
+    /**
+     * @param  array<string, mixed>  $result
+     */
+    private function isCacheableVerificationResult(array $result): bool
+    {
+        $status = strtolower((string) ($result['verification_status'] ?? ''));
+
+        // Cache definitive analysis only — never cache transient API failures.
+        if (in_array($status, ['unavailable', 'error', 'invalid_response'], true)) {
+            return false;
+        }
+
+        $detected = $result['document_detected'] ?? null;
+        if ($detected === null || $detected === '') {
+            // invalid_image with null detection can still be cached briefly to avoid re-burning tokens
+            // on the same unreadable file — but only when status is invalid_image.
+            return $status === 'invalid_image';
+        }
+
+        return in_array($detected, [true, false, 'yes', 'no', 1, 0, '1', '0'], true)
+            || $status === 'success';
+    }
+
+    /**
+     * Tesseract-only extract used for precheck (does not require OCR_LEGACY_ENGINES_ENABLED).
+     *
+     * @return array<string, mixed>
+     */
+    private function extractTextTesseractOnly(string $imagePath): array
+    {
+        $imagePath = $this->normalizeImagePath($imagePath);
+
+        if (! is_file($imagePath)) {
+            return [
+                'success' => false,
+                'ocr_status' => 'invalid_image',
+                'message' => 'Image file not found.',
+                'lines' => [],
+                'full_text' => '',
+                'text_length' => 0,
+            ];
+        }
+
+        if (! $this->tesseract->isAvailable()) {
+            return [
+                'success' => false,
+                'ocr_status' => 'tesseract_unavailable',
+                'message' => 'Tesseract unavailable.',
+                'lines' => [],
+                'full_text' => '',
+                'text_length' => 0,
+            ];
+        }
+
+        $stagedPath = $this->stageImageForOcr($imagePath);
+
+        try {
+            return $this->normalizePayload($this->tesseract->extractText($stagedPath));
+        } finally {
+            $this->deleteStagedImage($stagedPath, $imagePath);
+        }
+    }
+
+    /**
+     * Lightweight local OCR path for Groq skip decisions (Tesseract only).
+     *
+     * @return array<string, mixed>
+     */
+    private function detectIdViaLocalOcrPrecheck(string $frontPath, string $backPath, ?string $documentType): array
+    {
+        $frontOcr = $this->extractTextTesseractOnly($frontPath);
+        $backOcr = $this->extractTextTesseractOnly($backPath);
+        $frontText = trim((string) ($frontOcr['full_text'] ?? ''));
+        $backText = trim((string) ($backOcr['full_text'] ?? ''));
+        $combined = trim($frontText.($backText !== '' ? "\n".$backText : ''));
+
+        if ($combined === '' || ! $this->textHasSupportingIdSignal($combined)) {
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'document_detected' => null,
+                'verification_status' => 'invalid_image',
+                'confidence' => 0,
+                'source' => 'local_ocr_precheck',
+                'raw_text' => '',
+            ];
+        }
+
+        // Reuse full local classifier without Python/Windows engines.
+        $classified = $this->classifyDocumentFromText($combined, $documentType);
+        $confidence = (float) ($classified['confidence'] ?? 0);
+        $minConfidence = (float) config('ocr.min_detect_confidence', 0.50);
+        $detectedType = (string) ($classified['id_type'] ?? 'Unknown');
+        $matchesSelected = $this->detectedTypeMatchesSelection($detectedType, $documentType)
+            || $documentType === 'other_id'
+            || $this->textSupportsSelectedIdType($combined, (string) $documentType, is_array($classified['scores'] ?? null) ? $classified['scores'] : []);
+
+        if ($confidence < max(0.58, $minConfidence) || ! $matchesSelected) {
+            return [
+                'success' => false,
+                'validation_error' => true,
+                'document_detected' => null,
+                'verification_status' => 'invalid_image',
+                'confidence' => $confidence,
+                'id_type' => $detectedType,
+                'source' => 'local_ocr_precheck',
+                'raw_text' => $combined,
+            ];
+        }
+
+        $fields = [
+            'full_name' => $classified['full_name'] ?? null,
+            'given_name' => null,
+            'middle_name' => null,
+            'surname' => null,
+            'birthdate' => $classified['birthdate'] ?? null,
+            'address' => $classified['address'] ?? null,
+            'id_number' => $classified['id_number'] ?? null,
+        ];
+
+        return [
+            'success' => true,
+            'validation_error' => false,
+            'needs_review' => $confidence < 0.8,
+            'verification_status' => 'success',
+            'document_detected' => 'yes',
+            'id_type' => ($documentType && $documentType !== '') ? $documentType : $detectedType,
+            'detected_id_type' => $detectedType,
+            'expected_id_type' => $documentType,
+            'confidence' => $confidence,
+            'confidence_band' => $confidence >= 0.8 ? 'high' : 'medium',
+            'ocr_status' => 'ocr_success',
+            'full_name' => $fields['full_name'] ?? null,
+            'given_name' => $fields['given_name'] ?? null,
+            'middle_name' => $fields['middle_name'] ?? null,
+            'surname' => $fields['surname'] ?? null,
+            'birthdate' => $fields['birthdate'] ?? null,
+            'sex' => null,
+            'address' => $fields['address'] ?? null,
+            'id_number' => $fields['id_number'] ?? null,
+            'raw_text' => $combined,
+            'message' => 'ID detected via local OCR.',
+            'source' => 'local_ocr_precheck',
+            'front' => $this->publicOcrSummary($frontOcr),
+            'back' => $this->publicOcrSummary($backOcr),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $local
+     */
+    private function localPrecheckIsSufficient(array $local): bool
+    {
+        if (($local['source'] ?? '') !== 'local_ocr_precheck') {
+            return false;
+        }
+
+        if (! ($local['success'] ?? false) || ($local['validation_error'] ?? false)) {
+            return false;
+        }
+
+        $detected = $local['document_detected'] ?? null;
+        if (! in_array($detected, [true, 'yes', 1, '1'], true)) {
+            return false;
+        }
+
+        $confidence = (float) ($local['confidence'] ?? 0);
+        $name = trim((string) ($local['full_name'] ?? ''));
+        $raw = trim((string) ($local['raw_text'] ?? ''));
+
+        // Require strong OCR + at least a name or solid ID text length before skipping Groq.
+        return $confidence >= 0.62
+            && ($name !== '' || ($raw !== '' && mb_strlen($raw) >= 40 && $this->textHasNameCandidate(strtolower($raw))));
+    }
+
+    /**
+     * When Groq only sees the front, ensure the back still looks like an ID card.
+     *
+     * @param  array<string, mixed>  $groqResult
+     * @return array<string, mixed>
+     */
+    private function mergeLocalBackCheck(array $groqResult, string $backPath, ?string $documentType): array
+    {
+        $backOcr = $this->extractTextTesseractOnly($backPath);
+        $backText = trim((string) ($backOcr['full_text'] ?? ''));
+
+        // If Tesseract is unavailable, do not invent a failure — keep Groq front result.
+        if (($backOcr['ocr_status'] ?? '') === 'tesseract_unavailable') {
+            $groqResult['back_check'] = 'tesseract_unavailable';
+
+            return $groqResult;
+        }
+
+        $looksLikeId = $backText !== '' && (
+            $this->textHasSupportingIdSignal($backText)
+            || mb_strlen($backText) >= 18
+        );
+
+        if (! $looksLikeId) {
+            // Soft: if front was clearly an ID, keep front success but note back weakness for review.
+            $frontDetected = $groqResult['document_detected'] ?? null;
+            if (in_array($frontDetected, [true, 'yes', 1, '1'], true)) {
+                $groqResult['needs_review'] = true;
+                $groqResult['back_check'] = 'weak';
+                $existingRaw = trim((string) ($groqResult['raw_text'] ?? ''));
+                if ($backText !== '') {
+                    $groqResult['raw_text'] = trim($existingRaw.($existingRaw !== '' ? "\n" : '').$backText);
+                }
+            }
+
+            return $groqResult;
+        }
+
+        $existingRaw = trim((string) ($groqResult['raw_text'] ?? ''));
+        $groqResult['raw_text'] = trim($existingRaw.($existingRaw !== '' ? "\n" : '').$backText);
+        $groqResult['back_check'] = 'ok';
+
+        return $groqResult;
+    }
+
+    private function shouldUseVisionAi(): bool
+    {
+        $provider = strtolower((string) config('ocr.provider', 'gemini'));
+
+        return in_array($provider, ['gemini', 'groq'], true) && $this->idVerificationAi->isEnabled();
+    }
+
+    /**
+     * Fingerprint Step 1 identity fields so cached AI results re-validate when profile changes.
+     *
+     * @param  array<string, mixed>  $registrationFields
+     */
+    private function identityFingerprint(array $registrationFields): string
+    {
+        $parts = [
+            strtolower(trim((string) ($registrationFields['first_name'] ?? ''))),
+            strtolower(trim((string) ($registrationFields['middle_name'] ?? ''))),
+            strtolower(trim((string) ($registrationFields['last_name'] ?? ''))),
+            strtolower(trim((string) ($registrationFields['birthday'] ?? ''))),
+            strtolower(trim((string) ($registrationFields['purok_zone'] ?? ''))),
+        ];
+
+        return hash('sha256', implode('|', $parts));
+    }
+
+    /** @deprecated Use shouldUseVisionAi() */
+    private function shouldUseGroq(): bool
+    {
+        return $this->shouldUseVisionAi();
     }
 
     /**
@@ -338,6 +810,7 @@ class OCRService
         UploadedFile $front,
         UploadedFile $back,
         ?string $documentType = null,
+        array $registrationFields = [],
     ): array {
         $frontPath = $front->getRealPath();
         $backPath = $back->getRealPath();
@@ -355,7 +828,8 @@ class OCRService
                 'success' => false,
                 'validation_error' => true,
                 'needs_review' => false,
-                'document_detected' => 'no',
+                'verification_status' => 'invalid_image',
+                'document_detected' => null,
                 'id_type' => 'Unknown',
                 'detected_id_type' => 'Unknown',
                 'confidence' => 0,
@@ -369,7 +843,7 @@ class OCRService
         $stagedBack = $this->stageImageForOcr($backPath, $back->getClientOriginalExtension() ?: null);
 
         try {
-            return $this->detectIdPair($stagedFront, $stagedBack, $documentType);
+            return $this->detectIdPair($stagedFront, $stagedBack, $documentType, $registrationFields);
         } finally {
             $this->deleteStagedImage($stagedFront, $frontPath);
             $this->deleteStagedImage($stagedBack, $backPath);
@@ -378,6 +852,7 @@ class OCRService
 
     /**
      * Exact bytes or near-duplicate (re-saved / resized) front+back photos.
+     * Kept strict: PhilSys front vs back often look similar under coarse aHash.
      */
     public function frontAndBackAreSameImage(string $pathA, string $pathB): bool
     {
@@ -392,12 +867,34 @@ class OCRService
             return false;
         }
 
-        if ($sizeA === $sizeB) {
-            $hashA = @hash_file('sha256', $pathA);
-            $hashB = @hash_file('sha256', $pathB);
+        $hashA = @hash_file('sha256', $pathA);
+        $hashB = @hash_file('sha256', $pathB);
 
-            if (is_string($hashA) && is_string($hashB) && $hashA !== '' && hash_equals($hashA, $hashB)) {
-                return true;
+        if (is_string($hashA) && is_string($hashB) && $hashA !== '' && hash_equals($hashA, $hashB)) {
+            return true;
+        }
+
+        // Different enough byte sizes → treat as different photos.
+        $larger = max($sizeA, $sizeB);
+        $smaller = min($sizeA, $sizeB);
+        if ($larger > 0 && ($smaller / $larger) < 0.90) {
+            return false;
+        }
+
+        $infoA = @getimagesize($pathA);
+        $infoB = @getimagesize($pathB);
+        if (is_array($infoA) && is_array($infoB)) {
+            $wA = (int) ($infoA[0] ?? 0);
+            $hA = (int) ($infoA[1] ?? 0);
+            $wB = (int) ($infoB[0] ?? 0);
+            $hB = (int) ($infoB[1] ?? 0);
+            // Different aspect / resolution strongly suggests different captures.
+            if ($wA > 0 && $hA > 0 && $wB > 0 && $hB > 0) {
+                $ratioA = $wA / max(1, $hA);
+                $ratioB = $wB / max(1, $hB);
+                if (abs($ratioA - $ratioB) > 0.08) {
+                    return false;
+                }
             }
         }
 
@@ -405,8 +902,12 @@ class OCRService
         $phashB = $this->perceptualHash->hashFromFile($pathB);
 
         if (! is_string($phashA) || ! is_string($phashB) || $phashA === '' || $phashB === '') {
-            // Last-resort without decoder: same dimensions + nearly same size + matching head/tail samples.
             return $this->frontAndBackLookStructurallyIdentical($pathA, $pathB, $sizeA, $sizeB);
+        }
+
+        // Structural fingerprints only match when exact.
+        if (str_starts_with($phashA, 'struct:') || str_starts_with($phashB, 'struct:')) {
+            return hash_equals($phashA, $phashB);
         }
 
         $distance = $this->perceptualHash->hammingDistance($phashA, $phashB);
@@ -414,9 +915,18 @@ class OCRService
             return $this->frontAndBackLookStructurallyIdentical($pathA, $pathB, $sizeA, $sizeB);
         }
 
-        $threshold = (int) config('documents.front_back.phash_hamming_threshold', 5);
+        $sizeRatio = $smaller / $larger;
 
-        return $distance <= max(0, $threshold);
+        // distance 0 = essentially the same photo (incl. mild re-encode).
+        // distance 1 only when filesizes are also nearly identical.
+        // Higher distances are too noisy for PhilSys-style front vs back cards.
+        if ($distance === 0) {
+            return $sizeRatio >= 0.70;
+        }
+
+        $threshold = max(0, min(2, (int) config('documents.front_back.phash_hamming_threshold', 1)));
+
+        return $distance <= $threshold && $sizeRatio >= 0.97;
     }
 
     private function frontAndBackLookStructurallyIdentical(string $pathA, string $pathB, int $sizeA, int $sizeB): bool
@@ -494,7 +1004,7 @@ class OCRService
         if (! config('ocr.api_enabled', true)) {
             return [
                 'success' => false,
-                'message' => 'OCR API is disabled.',
+                'message' => 'AI verification is disabled.',
             ];
         }
 
@@ -503,7 +1013,7 @@ class OCRService
         if ($apiUrl === '') {
             return [
                 'success' => false,
-                'message' => 'OCR API URL is not configured.',
+                'message' => 'AI verification URL is not configured.',
             ];
         }
 
@@ -531,7 +1041,7 @@ class OCRService
 
             return [
                 'success' => false,
-                'message' => 'OCR service is unavailable.',
+                'message' => 'AI ID verification is temporarily unavailable.',
             ];
         }
 
@@ -546,7 +1056,7 @@ class OCRService
         if (! config('ocr.api_enabled', true)) {
             return [
                 'success' => false,
-                'message' => 'OCR API is disabled.',
+                'message' => 'AI verification is disabled.',
             ];
         }
 
@@ -555,7 +1065,7 @@ class OCRService
         if ($apiUrl === '') {
             return [
                 'success' => false,
-                'message' => 'OCR API URL is not configured.',
+                'message' => 'AI verification URL is not configured.',
             ];
         }
 
@@ -583,7 +1093,7 @@ class OCRService
 
             return [
                 'success' => false,
-                'message' => 'OCR service is unavailable.',
+                'message' => 'AI ID verification is temporarily unavailable.',
             ];
         }
 
@@ -851,9 +1361,9 @@ class OCRService
         ]);
 
         $message = match ($confidenceBand) {
-            'high' => "ID text detected. Information was extracted from your {$idLabel}. Please review for accuracy.",
-            'medium' => "Text detected from your {$idLabel}, but please review the information carefully.",
-            default => "We could not confidently read the ID. Please retake the photo or upload a clearer image.",
+            'high' => "ID details detected. Information was extracted from your {$idLabel}. Please review for accuracy.",
+            'medium' => "Details detected from your {$idLabel}, but please review the information carefully.",
+            default => "We could not confidently verify the ID. Please retake the photo or upload a clearer image.",
         };
 
         $result = [
@@ -1080,10 +1590,76 @@ class OCRService
      */
     private function enforceDetectionAccuracy(array $payload, ?string $documentType): array
     {
+        $verificationStatus = strtolower((string) ($payload['verification_status'] ?? ''));
+        if (in_array($verificationStatus, ['unavailable', 'error', 'invalid_response', 'invalid_image'], true)) {
+            $payload['document_detected'] = null;
+            $payload['success'] = false;
+            $payload['validation_error'] = true;
+            $payload['needs_review'] = false;
+            $payload['verification_status'] = $verificationStatus;
+
+            return $payload;
+        }
+
+        // Explicit undetermined (null) must never be rewritten as "no".
+        if (array_key_exists('document_detected', $payload)
+            && $payload['document_detected'] === null
+            && ($payload['validation_error'] ?? false) === true) {
+            $payload['verification_status'] = $verificationStatus !== '' ? $verificationStatus : 'unavailable';
+            $payload['success'] = false;
+            $payload['needs_review'] = false;
+
+            return $payload;
+        }
+
+        $explicitNonDocument = $this->isExplicitNonDocument($payload['document_detected'] ?? null);
+        $explicitDocument = $this->isExplicitDocument($payload['document_detected'] ?? null);
+
+        if (($payload['validation_error'] ?? false) === true && $explicitNonDocument) {
+            $payload['success'] = false;
+            $payload['needs_review'] = false;
+            $payload['verification_status'] = $verificationStatus !== '' ? $verificationStatus : 'success';
+            $payload['document_detected'] = 'no';
+
+            return $payload;
+        }
+
+        // Vision AI already decided successfully — preserve YES/NO; only soft-check type mismatch below.
+        if (
+            in_array(($payload['source'] ?? ''), ['gemini', 'groq'], true)
+            && ($verificationStatus === 'success' || $verificationStatus === '')
+        ) {
+            if ($explicitNonDocument) {
+                $payload['verification_status'] = 'success';
+                $payload['document_detected'] = 'no';
+                $payload['success'] = false;
+                $payload['validation_error'] = true;
+                $payload['needs_review'] = false;
+
+                return $payload;
+            }
+
+            if ($explicitDocument) {
+                $payload['verification_status'] = 'success';
+                $payload['document_detected'] = 'yes';
+                // Continue into type-match gates without empty-text rejection.
+                $rawText = trim((string) (
+                    $payload['raw_text']
+                    ?? $payload['full_text']
+                    ?? data_get($payload, 'ocr.raw_text')
+                    ?? data_get($payload, 'ocr.full_text')
+                    ?? ''
+                ));
+
+                return $this->enforceGroqDetectedDocumentGates($payload, $documentType, $rawText);
+            }
+        }
+
         if (($payload['validation_error'] ?? false) === true
             && strtolower((string) ($payload['document_detected'] ?? '')) === 'no') {
             $payload['success'] = false;
             $payload['needs_review'] = false;
+            $payload['verification_status'] = $verificationStatus !== '' ? $verificationStatus : 'success';
 
             return $payload;
         }
@@ -1108,6 +1684,7 @@ class OCRService
                 'success' => false,
                 'validation_error' => true,
                 'needs_review' => false,
+                'verification_status' => 'success',
                 'document_detected' => 'no',
                 'id_type' => $extra['id_type'] ?? (($detectedType !== '' && strcasecmp($detectedType, 'Unknown') !== 0) ? $detectedType : 'Unknown'),
                 'detected_id_type' => $extra['detected_id_type'] ?? ($detectedType !== '' ? $detectedType : null),
@@ -1167,6 +1744,7 @@ class OCRService
                 'success' => false,
                 'validation_error' => true,
                 'needs_review' => false,
+                'verification_status' => 'success',
                 'document_detected' => 'yes',
                 'id_type' => $detectedType,
                 'detected_id_type' => $detectedType,
@@ -1184,14 +1762,24 @@ class OCRService
             : 0.0;
 
         if ($confidence < $acceptFloor && $selectedScore < $acceptFloor) {
-            return $reject(
-                'We could not confidently identify this as your selected ID. Please retake clearer front and back photos.'
-            );
+            return array_merge($payload, [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'verification_status' => 'invalid_image',
+                'document_detected' => null,
+                'confidence' => $confidence,
+                'confidence_band' => 'low',
+                'ocr_status' => 'ocr_low_confidence',
+                'message' => 'We couldn\'t reliably read this document. Please upload a clearer image.',
+                'raw_text' => $rawText,
+            ]);
         }
 
         // Passed gates — never leave document_detected empty/no on a soft pass.
         $payload['raw_text'] = $rawText;
         $payload['document_detected'] = 'yes';
+        $payload['verification_status'] = 'success';
         $payload['validation_error'] = false;
         $payload['auto_corrected'] = false;
         $payload['confidence_band'] = $this->confidenceBand($confidence, $minConfidence);
@@ -1216,6 +1804,77 @@ class OCRService
                 $payload['needs_review'] = false;
             }
         }
+
+        return $payload;
+    }
+
+    private function isExplicitDocument(mixed $value): bool
+    {
+        if ($value === true || $value === 1 || $value === 1.0) {
+            return true;
+        }
+
+        $raw = strtolower(trim((string) $value));
+
+        return in_array($raw, ['yes', 'true', '1', 'y'], true);
+    }
+
+    private function isExplicitNonDocument(mixed $value): bool
+    {
+        if ($value === false || $value === 0 || $value === 0.0) {
+            return true;
+        }
+
+        $raw = strtolower(trim((string) $value));
+
+        return in_array($raw, ['no', 'false', '0', 'n'], true);
+    }
+
+    /**
+     * Soft gates for Groq payloads that already confirmed an ID.
+     * Does not convert undetermined/unavailable into document_detected=no.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function enforceGroqDetectedDocumentGates(array $payload, ?string $documentType, string $rawText): array
+    {
+        $confidence = (float) ($payload['confidence'] ?? 0);
+        $minConfidence = (float) config('ocr.min_detect_confidence', 0.50);
+        $detectedType = trim((string) ($payload['id_type'] ?? $payload['detected_id_type'] ?? 'Unknown'));
+        $matchesSelected = $this->detectedTypeMatchesSelection($detectedType, $documentType);
+
+        if (
+            is_string($documentType)
+            && $documentType !== ''
+            && $documentType !== 'other_id'
+            && ! $matchesSelected
+            && in_array($detectedType, ['national_id', 'philhealth_id', 'voters_id', 'school_id'], true)
+        ) {
+            $expectedLabel = $this->documentTypeLabel($documentType);
+            $detectedLabel = $this->documentTypeLabel($detectedType);
+
+            return array_merge($payload, [
+                'success' => false,
+                'validation_error' => true,
+                'needs_review' => false,
+                'verification_status' => 'success',
+                'document_detected' => 'yes',
+                'id_type' => $detectedType,
+                'detected_id_type' => $detectedType,
+                'expected_id_type' => $documentType,
+                'confidence' => $confidence,
+                'confidence_band' => $this->confidenceBand($confidence, $minConfidence),
+                'message' => "You selected {$expectedLabel}, but the images look like {$detectedLabel}. Please upload the correct ID or change the document type.",
+                'raw_text' => $rawText,
+                'auto_corrected' => false,
+            ]);
+        }
+
+        $payload['verification_status'] = 'success';
+        $payload['document_detected'] = 'yes';
+        $payload['raw_text'] = $rawText;
+        $payload['confidence_band'] = $payload['confidence_band'] ?? $this->confidenceBand($confidence, $minConfidence);
 
         return $payload;
     }
@@ -1676,14 +2335,14 @@ class OCRService
         if (! is_array($payload)) {
             return [
                 'success' => false,
-                'message' => 'Invalid OCR API response.',
+                'message' => 'Invalid AI verification response.',
             ];
         }
 
         if ($status >= 500) {
             return [
                 'success' => false,
-                'message' => (string) ($payload['detail'] ?? $payload['message'] ?? 'OCR service error.'),
+                'message' => (string) ($payload['detail'] ?? $payload['message'] ?? 'AI verification error.'),
             ];
         }
 

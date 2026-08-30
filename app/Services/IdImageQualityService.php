@@ -264,7 +264,7 @@ PS1;
         file_put_contents($scriptPath, $script);
 
         try {
-            $result = Process::timeout(45)->run([
+            $result = Process::timeout(8)->run([
                 $this->powershellPath(),
                 '-NoLogo',
                 '-NoProfile',
