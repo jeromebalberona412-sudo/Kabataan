@@ -874,12 +874,11 @@ class OCRService
             return true;
         }
 
-        // Different enough byte sizes → treat as different photos.
+        // Different enough byte sizes alone do not prove different photos (JPEG quality changes
+        // file size a lot). Use content hash / tight perceptual match instead.
         $larger = max($sizeA, $sizeB);
         $smaller = min($sizeA, $sizeB);
-        if ($larger > 0 && ($smaller / $larger) < 0.90) {
-            return false;
-        }
+        $sizeRatio = $smaller / $larger;
 
         $infoA = @getimagesize($pathA);
         $infoB = @getimagesize($pathB);
@@ -888,7 +887,6 @@ class OCRService
             $hA = (int) ($infoA[1] ?? 0);
             $wB = (int) ($infoB[0] ?? 0);
             $hB = (int) ($infoB[1] ?? 0);
-            // Different aspect / resolution strongly suggests different captures.
             if ($wA > 0 && $hA > 0 && $wB > 0 && $hB > 0) {
                 $ratioA = $wA / max(1, $hA);
                 $ratioB = $wB / max(1, $hB);
@@ -905,7 +903,6 @@ class OCRService
             return $this->frontAndBackLookStructurallyIdentical($pathA, $pathB, $sizeA, $sizeB);
         }
 
-        // Structural fingerprints only match when exact.
         if (str_starts_with($phashA, 'struct:') || str_starts_with($phashB, 'struct:')) {
             return hash_equals($phashA, $phashB);
         }
@@ -915,18 +912,13 @@ class OCRService
             return $this->frontAndBackLookStructurallyIdentical($pathA, $pathB, $sizeA, $sizeB);
         }
 
-        $sizeRatio = $smaller / $larger;
-
-        // distance 0 = essentially the same photo (incl. mild re-encode).
-        // distance 1 only when filesizes are also nearly identical.
-        // Higher distances are too noisy for PhilSys-style front vs back cards.
+        // Exact perceptual match = same photo (incl. re-encode). Do NOT use a loose threshold:
+        // PhilSys front vs back often score 2–5 under coarse aHash and were false-rejected.
         if ($distance === 0) {
-            return $sizeRatio >= 0.70;
+            return true;
         }
 
-        $threshold = max(0, min(2, (int) config('documents.front_back.phash_hamming_threshold', 1)));
-
-        return $distance <= $threshold && $sizeRatio >= 0.97;
+        return $distance === 1 && $sizeRatio >= 0.97;
     }
 
     private function frontAndBackLookStructurallyIdentical(string $pathA, string $pathB, int $sizeA, int $sizeB): bool

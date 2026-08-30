@@ -205,21 +205,22 @@ class IdVerificationAiService
         $sides = $analyzeBack ? 'FRONT then BACK images' : 'FRONT image only';
 
         return 'Philippine ID checker. Analyze the '.$sides.'. User selected: '.$expected.'. '
-            .'FAST REJECT: if the photo is not a clear physical ID card (selfie, random photo, screenshot UI, '
-            .'receipt, blank, blurry mess, or wrong document), immediately return '
+            .'FAST REJECT: if not a clear physical ID card, return '
             .'{"document_detected":false,"is_philippine_id":false,"id_type":"Unknown","full_name":null,'
-            .'"given_name":null,"middle_name":null,"surname":null,"date_of_birth":null,"id_number":null,'
-            .'"expiry_date":null,"image_quality":"unreadable","confidence":0,"front_is_id":false,'
-            .'"back_is_id":false,"unreadable":true} with no extra fields. '
+            .'"given_name":null,"middle_name":null,"surname":null,"date_of_birth":null,"sex":null,"id_number":null,'
+            .'"expiry_date":null,"address":null,"image_quality":"unreadable","confidence":0,'
+            .'"front_is_id":false,"back_is_id":false,"unreadable":true}. '
             .'If it IS an ID, return JSON only: '
             .'{"document_detected":true,"is_philippine_id":true,'
             .'"id_type":"national_id|philhealth_id|voters_id|school_id|drivers_license|passport|umid|sss_id|postal_id|prc_id|tin_id|senior_citizen_id|other_id|Unknown",'
             .'"full_name":null,"given_name":null,"middle_name":null,"surname":null,'
-            .'"date_of_birth":null,"id_number":null,"expiry_date":null,'
+            .'"date_of_birth":null,"sex":null,"id_number":null,"expiry_date":null,"address":null,'
             .'"image_quality":"good|acceptable|poor|unreadable","confidence":0,'
             .'"front_is_id":true,"back_is_id":true,"unreadable":false}. '
-            .'Name = cardholder person only (any print order: LAST, FIRST M. / FIRST MIDDLE LAST). '
-            .'Never use university/agency/Republic headers as names. DOB YYYY-MM-DD or null. confidence 0-100.';
+            .'Name = cardholder only (any print order). Never use university/agency headers as names. '
+            .'If an address is readable, put the full printed address in address (include barangay/municipality/province/region when shown); else null. '
+            .'If sex/gender is printed (M/F/Male/Female), put Male or Female in sex; else null. '
+            .'DOB YYYY-MM-DD or null. confidence 0-100.';
     }
 
     public function pairHash(string $frontPath, string $backPath, ?string $documentType = null): string
@@ -500,12 +501,24 @@ class IdVerificationAiService
             $isValid = false;
         }
 
+        // Also merge readable address into raw_text so locality checks can use OCR haystack.
+        $address = $this->nullableString($parsed['address'] ?? null);
+        if ($address !== null && $address !== '' && $rawText === '') {
+            $rawText = $address;
+        } elseif ($address !== null && $address !== '' && ! str_contains(strtoupper($rawText), strtoupper($address))) {
+            $rawText = trim($rawText."\n".$address);
+        }
+
+        $sex = $this->normalizeSex($parsed['sex'] ?? ($parsed['gender'] ?? null));
+
         $data = [
             'id_type' => $idType !== 'Unknown' ? $idType : null,
             'full_name' => $this->sanitizePersonName($parsed['full_name'] ?? null),
             'date_of_birth' => $this->nullableString($parsed['birthdate'] ?? null),
+            'sex' => $sex,
             'id_number' => $this->nullableString($parsed['id_number'] ?? null),
             'expiry_date' => $this->nullableString($parsed['expiry_date'] ?? ($parsed['expiration_date'] ?? null)),
+            'address' => $address,
             'image_quality' => $imageQuality,
             'confidence' => (int) round($confidence * 100),
         ];
@@ -541,7 +554,7 @@ class IdVerificationAiService
                 'confidence_band' => $confidence >= 0.7 ? 'medium' : 'low',
                 'full_name' => $data['full_name'],
                 'birthdate' => $data['date_of_birth'],
-                'sex' => null,
+                'sex' => $sex,
                 'address' => $this->nullableString($parsed['address'] ?? null),
                 'id_number' => $data['id_number'],
                 'expiry_date' => $data['expiry_date'],
@@ -573,7 +586,7 @@ class IdVerificationAiService
                 'middle_name' => $this->nullableString($parsed['middle_name'] ?? null),
                 'surname' => $this->nullableString($parsed['surname'] ?? null),
                 'birthdate' => $data['date_of_birth'],
-                'sex' => null,
+                'sex' => $sex,
                 'address' => $this->nullableString($parsed['address'] ?? null),
                 'id_number' => $data['id_number'],
                 'expiry_date' => $data['expiry_date'],
@@ -602,7 +615,7 @@ class IdVerificationAiService
                 'ocr_status' => 'ocr_low_confidence',
                 'full_name' => $data['full_name'],
                 'birthdate' => $data['date_of_birth'],
-                'sex' => null,
+                'sex' => $sex,
                 'address' => $this->nullableString($parsed['address'] ?? null),
                 'id_number' => $data['id_number'],
                 'expiry_date' => $data['expiry_date'],
@@ -654,7 +667,7 @@ class IdVerificationAiService
                 'middle_name' => $this->nullableString($parsed['middle_name'] ?? null),
                 'surname' => $this->nullableString($parsed['surname'] ?? null),
                 'birthdate' => $data['date_of_birth'],
-                'sex' => null,
+                'sex' => $sex,
                 'address' => $this->nullableString($parsed['address'] ?? null),
                 'id_number' => $data['id_number'],
                 'expiry_date' => $data['expiry_date'],
@@ -690,7 +703,7 @@ class IdVerificationAiService
             'middle_name' => $this->nullableString($parsed['middle_name'] ?? null),
             'surname' => $this->nullableString($parsed['surname'] ?? null),
             'birthdate' => $data['date_of_birth'],
-            'sex' => null,
+            'sex' => $sex,
             'address' => $this->nullableString($parsed['address'] ?? null),
             'id_number' => $data['id_number'],
             'expiry_date' => $data['expiry_date'],
@@ -920,6 +933,28 @@ class IdVerificationAiService
             'other_id' => 'Supporting ID',
             default => 'government or school ID',
         };
+    }
+
+    private function normalizeSex(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $raw = strtoupper(trim((string) $value));
+        if ($raw === '' || $raw === 'NULL' || $raw === 'UNKNOWN' || $raw === 'N/A') {
+            return null;
+        }
+
+        if (in_array($raw, ['M', 'MALE', 'LALAKE', 'LALAKI'], true)) {
+            return 'Male';
+        }
+
+        if (in_array($raw, ['F', 'FEMALE', 'BABAE'], true)) {
+            return 'Female';
+        }
+
+        return null;
     }
 
     private function nullableString(mixed $value): ?string

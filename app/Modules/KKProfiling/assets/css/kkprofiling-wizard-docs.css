@@ -876,6 +876,58 @@ p.kkp-doc-help-desktop {
     line-height: 1.45;
 }
 
+.kkp-wizard-upload-grid-wrap {
+    position: relative;
+}
+
+.kkp-id-verify-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(2px);
+}
+
+.kkp-id-verify-overlay[hidden] {
+    display: none !important;
+}
+
+.kkp-id-verify-overlay-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.55rem;
+    width: min(100%, 17rem);
+    padding: 1.1rem 1rem;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+    text-align: center;
+}
+
+.kkp-id-verify-overlay-title {
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.kkp-id-verify-overlay-sub {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+/* While verifying, keep the bottom OCR panel for results only (not the loading block). */
+.kkp-wizard-ocr-panel.is-loading {
+    display: none !important;
+}
+
 .kkp-wizard-id-progress {
     display: none !important;
 }

@@ -141,6 +141,7 @@ class KKProfilingWizardController extends Controller
 
         $validationRules = [
             'skip_documents' => ['sometimes', 'boolean'],
+            'use_stored_documents' => ['sometimes', 'boolean'],
             'document_type' => [
                 $skipDocuments ? 'nullable' : 'sometimes',
                 'nullable',
@@ -252,6 +253,10 @@ class KKProfilingWizardController extends Controller
                 $selfieEnabled = (bool) config('documents.selfie_verification_enabled', false);
                 $selfieRealPath = $selfieEnabled ? $request->file('selfie')?->getRealPath() : null;
                 $registrationFields = is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [];
+                $registrationFields['_barangay_name'] = (string) $barangayRecord->name;
+                $registrationFields['_municipality'] = 'Santa Cruz';
+                $registrationFields['_province'] = 'Laguna';
+                $registrationFields['_region'] = 'Region IV-A';
 
                 try {
                     [$ocrPayload, $formSuggestions] = $this->runStep2DocumentValidation(
@@ -311,6 +316,35 @@ class KKProfilingWizardController extends Controller
                         'error' => $exception->getMessage(),
                     ]);
                 }
+            }
+        } elseif (
+            ! $skipDocuments
+            && ! $hasAnyUpload
+            && $request->boolean('use_stored_documents')
+        ) {
+            if (! is_string($documentType) || $documentType === '') {
+                throw ValidationException::withMessages([
+                    'document_type' => ['Please select a document type.'],
+                ]);
+            }
+
+            if (! $this->draftService->hasStoredDocumentPair($wizard, (string) $documentType)) {
+                throw ValidationException::withMessages([
+                    'document_type' => ['Please upload both front and back images of your ID.'],
+                ]);
+            }
+
+            $hasAnyUpload = true;
+            $existingVerification = is_array($wizard['step2_data']['id_verification'] ?? null)
+                ? $wizard['step2_data']['id_verification']
+                : null;
+            $ocrPayload = $existingVerification;
+            $formSuggestions = is_array($existingVerification['form_suggestions'] ?? null)
+                ? $existingVerification['form_suggestions']
+                : null;
+
+            if (is_array($existingVerification)) {
+                $this->assertStep2DocumentAllowedToProceed((string) $documentType, $existingVerification);
             }
         }
 
@@ -871,11 +905,23 @@ class KKProfilingWizardController extends Controller
 
         $documentType = (string) $request->input('document_type');
         $registrationFields = is_array($wizard['step1_data'] ?? null) ? $wizard['step1_data'] : [];
+        $registrationFields['_barangay_name'] = (string) $barangayRecord->name;
+        $registrationFields['_municipality'] = 'Santa Cruz';
+        $registrationFields['_province'] = 'Laguna';
+        $registrationFields['_region'] = 'Region IV-A';
         $frontPath = $frontFile?->getRealPath();
         $backPath = $backFile?->getRealPath();
         $selfiePath = config('documents.selfie_verification_enabled')
             ? $request->file('selfie')?->getRealPath()
             : null;
+
+        // Persist uploads immediately so refresh (mobile / desktop site) keeps the images.
+        if ($frontFile instanceof UploadedFile && $backFile instanceof UploadedFile) {
+            $wizard = $this->draftService->saveStep2($wizard, $documentType, [
+                'front' => $frontFile,
+                'back' => $backFile,
+            ]);
+        }
 
         // Reuse AI extraction for the same images, but ALWAYS re-check against current Step 1 identity.
         if (is_string($frontPath) && is_string($backPath)) {
@@ -906,7 +952,7 @@ class KKProfilingWizardController extends Controller
                     'middle_name' => $existing['form_suggestions']['middle_name'] ?? null,
                     'surname' => $existing['form_suggestions']['last_name'] ?? null,
                     'birthdate' => $existing['detected_birthdate'] ?? null,
-                    'sex' => null,
+                    'sex' => $existing['detected_sex'] ?? null,
                     'address' => $existing['detected_address'] ?? null,
                     'id_number' => $existing['id_number'] ?? null,
                     'ocr_status' => $existing['ocr_status'] ?? null,
@@ -945,12 +991,13 @@ class KKProfilingWizardController extends Controller
                     'confidence' => $verification['confidence'] ?? 0,
                     'full_name' => $verification['detected_name'] ?? null,
                     'birthdate' => $verification['detected_birthdate'] ?? null,
-                    'sex' => null,
+                    'sex' => $verification['detected_sex'] ?? null,
                     'address' => $verification['detected_address'] ?? null,
                     'id_number' => $verification['id_number'] ?? null,
                     'message' => $this->sanitizePublicVerificationMessage($verification['message'] ?? null),
                     'name_match' => $verification['name_match'] ?? null,
                     'birthdate_match' => $verification['birthdate_match'] ?? null,
+                    'sex_match' => $verification['sex_match'] ?? null,
                     'address_match' => $verification['address_match'] ?? null,
                     'pair_hash' => $pairHash,
                     'from_cache' => true,
@@ -1103,13 +1150,14 @@ class KKProfilingWizardController extends Controller
             'confidence_band' => $verification['confidence_band'] ?? ($payload['confidence_band'] ?? null),
             'full_name' => $verification['detected_name'] ?? ($payload['full_name'] ?? null),
             'birthdate' => $verification['detected_birthdate'] ?? ($payload['birthdate'] ?? null),
-            'sex' => null,
+            'sex' => $verification['detected_sex'] ?? ($payload['sex'] ?? null),
             'address' => $verification['detected_address'] ?? ($payload['address'] ?? null),
             'id_number' => $verification['id_number'] ?? ($payload['id_number'] ?? null),
             'ocr_status' => $verification['ocr_status'] ?? ($payload['ocr_status'] ?? null),
             'message' => $this->sanitizePublicVerificationMessage($verification['message'] ?? ($payload['message'] ?? null)),
             'name_match' => $verification['name_match'] ?? null,
             'birthdate_match' => $verification['birthdate_match'] ?? null,
+            'sex_match' => $verification['sex_match'] ?? null,
             'address_match' => $verification['address_match'] ?? null,
             'face_match' => $payload['face_match'] ?? false,
             'face_verification' => $payload['face_verification'] ?? null,
@@ -1550,6 +1598,11 @@ class KKProfilingWizardController extends Controller
         $sanitized = str_ireplace("couldn't read any text from this ID", "couldn't verify this ID", $sanitized);
         $sanitized = str_ireplace('could not read any text from this ID', 'could not verify this ID', $sanitized);
         $sanitized = str_ireplace('No useful text detected', 'No usable ID details detected', $sanitized);
+
+        // Quiet success copy — mismatches still surface their error messages.
+        if (preg_match('/^ID verified\b/i', trim($sanitized))) {
+            return null;
+        }
 
         return $sanitized;
     }

@@ -139,6 +139,7 @@
             <p class="kkp-wizard-upload-panel-hint kkp-doc-help-mobile">
                 Use live camera or upload an existing photo. Front and back are stored separately.
             </p>
+            <div class="kkp-wizard-upload-grid-wrap">
             <div class="kkp-wizard-upload-grid">
                 @foreach(['front' => 'Front', 'back' => 'Back'] as $side => $sideLabel)
                 @php
@@ -198,6 +199,17 @@
                     </div>
                 </div>
                 @endforeach
+            </div>
+            <div class="kkp-id-verify-overlay" hidden aria-live="polite" aria-busy="true">
+                <div class="kkp-id-verify-overlay-card">
+                    <span class="kkp-wizard-ocr-spinner" aria-hidden="true"></span>
+                    <p class="kkp-id-verify-overlay-title">Verifying ID…</p>
+                    <p class="kkp-id-verify-overlay-sub">Checking photo and details</p>
+                    <div class="kkp-wizard-ocr-progress" aria-hidden="true">
+                        <span class="kkp-wizard-ocr-progress-bar"></span>
+                    </div>
+                </div>
+            </div>
             </div>
         </div>
         @endforeach

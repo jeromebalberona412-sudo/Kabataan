@@ -140,6 +140,13 @@ class PhilippineIdDetectionService
             $rawText,
         );
 
+        $detectedSex = $this->normalizeSexValue($payload['sex'] ?? ($payload['detected_sex'] ?? null));
+        $formSex = $this->normalizeSexValue($registrationFields['sex'] ?? null);
+        $sexMatch = null;
+        if ($detectedSex !== null && $formSex !== null) {
+            $sexMatch = $detectedSex === $formSex;
+        }
+
         $success = (bool) ($payload['success'] ?? false);
         $needsReview = (bool) ($payload['needs_review'] ?? false);
         $confidence = (float) ($payload['confidence'] ?? 0);
@@ -193,8 +200,7 @@ class PhilippineIdDetectionService
                 }
             }
         } elseif ($documentDetectedNormalized === true && $hasFormName && $requireNameSignal) {
-            // Authoritative Step 1 ↔ ID compare (name required; birthday/address when both sides have data).
-            // Sex/gender is intentionally never compared.
+            // Compare overlapping Step 1 ↔ ID fields only when both sides have data.
             if ($detectedName === '') {
                 $success = false;
                 $needsReview = false;
@@ -211,23 +217,27 @@ class PhilippineIdDetectionService
                 $needsReview = false;
                 $validationError = true;
                 $message = 'Birthday on the ID does not match your Step 1 birthday. Please upload your own ID or correct your profiling details.';
+            } elseif ($sexMatch === false) {
+                $success = false;
+                $needsReview = false;
+                $validationError = true;
+                $message = 'Sex on the ID does not match your Step 1 sex. Please upload your own ID or correct your profiling details.';
             } elseif ($addressMatch === false) {
                 $success = false;
                 $needsReview = false;
                 $validationError = true;
-                $message = 'Address/purok on the ID does not match your Step 1 address. Please upload your own ID or correct your profiling details.';
+                $message = 'Address on the ID does not match Santa Cruz, Laguna (or your Step 1 barangay/purok). Please upload your own local ID or correct your profiling details.';
             } else {
                 $acceptFloor = max(0.40, $minConfidence - 0.05);
                 $hasIdText = $rawText !== '' && $this->ocrService->looksLikeSupportingIdText($rawText);
                 $identityOk = $nameMatch && ($hasIdText || $confidence >= $acceptFloor || $detectedName !== '');
 
                 if ($identityOk) {
-                    $confidence = max($confidence, $birthdateMatch ? 0.78 : 0.72);
+                    $confidence = max($confidence, ($birthdateMatch || $sexMatch === true || $addressMatch === true) ? 0.78 : 0.72);
                     $success = true;
                     $needsReview = $confidence < 0.8;
-                    $message = $birthdateMatch
-                        ? 'ID verified. Name and birthday match your profiling details.'
-                        : 'ID verified. Name matches your profiling details.';
+                    // Keep success quiet in the UI — mismatches carry the messages.
+                    $message = null;
                 } else {
                     $success = false;
                     $needsReview = false;
@@ -273,10 +283,11 @@ class PhilippineIdDetectionService
             'detected_name' => $detectedName !== '' ? $detectedName : null,
             'detected_address' => $payload['address'] ?? null,
             'detected_birthdate' => $payload['birthdate'] ?? null,
-            'detected_sex' => null,
+            'detected_sex' => $detectedSex,
             'id_number' => $payload['id_number'] ?? null,
             'name_match' => $nameMatch,
             'birthdate_match' => $birthdateMatch,
+            'sex_match' => $sexMatch,
             'address_match' => $addressMatch,
             'form_suggestions' => $formSuggestions,
             'needs_review' => $validationError ? false : ($needsReview || ! $success),
@@ -425,60 +436,173 @@ class PhilippineIdDetectionService
     }
 
     /**
-     * Soft address/purok match when both Step 1 and ID have address data.
-     * Returns null when comparison should be skipped.
+     * Soft address match when the ID shows locality/purok text.
+     * Expected locality for Kabataan: barangay + Santa Cruz, Laguna (Region IV-A).
+     * Returns null when comparison should be skipped (no address signal on ID).
      */
     private function resolveAddressMatch(array $registrationFields, string $detectedAddress, string $rawText): ?bool
     {
-        $formPurok = strtoupper(trim((string) ($registrationFields['purok_zone'] ?? '')));
         $haystack = strtoupper(trim($detectedAddress.' '.$rawText));
-
-        if ($formPurok === '' || strlen($formPurok) < 3) {
-            return null;
-        }
-
         if ($haystack === '') {
             return null;
         }
 
-        $normalizedForm = preg_replace('/[^A-Z0-9\s]/', ' ', $formPurok) ?? $formPurok;
         $normalizedHay = preg_replace('/[^A-Z0-9\s]/', ' ', $haystack) ?? $haystack;
-        $normalizedForm = preg_replace('/\s+/', ' ', trim($normalizedForm)) ?? '';
         $normalizedHay = preg_replace('/\s+/', ' ', trim($normalizedHay)) ?? '';
-
-        if ($normalizedForm === '' || $normalizedHay === '') {
+        if ($normalizedHay === '') {
             return null;
         }
 
-        if (str_contains($normalizedHay, $normalizedForm)) {
-            return true;
-        }
+        $hasAddressSignal = (bool) preg_match(
+            '/\b(PUROK|ZONE|SITIO|BARANGAY|BRGY|STREET|CITY|MUNICIPALITY|PROVINCE|REGION|LAGUNA|CALABARZON)\b/',
+            $normalizedHay
+        );
 
-        $tokens = array_values(array_filter(
-            explode(' ', $normalizedForm),
-            static fn (string $token) => strlen($token) >= 3
-                && ! in_array($token, ['PUROK', 'ZONE', 'SITIO', 'BRGY', 'BARANGAY', 'STREET', 'ST', 'THE'], true)
-        ));
-
-        if ($tokens === []) {
+        if (! $hasAddressSignal && strlen($normalizedHay) < 24) {
             return null;
         }
 
-        $hits = 0;
-        foreach ($tokens as $token) {
-            if (str_contains($normalizedHay, $token)) {
-                $hits++;
+        // Locality expected for this portal (Santa Cruz, Laguna).
+        $barangay = strtoupper(trim((string) (
+            $registrationFields['_barangay_name']
+            ?? $registrationFields['barangay']
+            ?? $registrationFields['barangay_name']
+            ?? ''
+        )));
+        $municipality = strtoupper(trim((string) ($registrationFields['_municipality'] ?? 'SANTA CRUZ')));
+        $province = strtoupper(trim((string) ($registrationFields['_province'] ?? 'LAGUNA')));
+
+        $localityHits = 0;
+        $localityChecks = 0;
+
+        if ($province !== '') {
+            $localityChecks++;
+            if (
+                str_contains($normalizedHay, $province)
+                || str_contains($normalizedHay, 'LAGUNA')
+            ) {
+                $localityHits++;
             }
         }
 
-        $ratio = $hits / count($tokens);
-        if ($ratio >= 0.6) {
+        if ($municipality !== '') {
+            $localityChecks++;
+            $muniOk = str_contains($normalizedHay, $municipality)
+                || str_contains($normalizedHay, 'STA CRUZ')
+                || str_contains($normalizedHay, 'STA  CRUZ')
+                || str_contains($normalizedHay, 'SANTA CRUZ');
+            if ($muniOk) {
+                $localityHits++;
+            }
+        }
+
+        if ($barangay !== '' && strlen($barangay) >= 3) {
+            $localityChecks++;
+            $barangayNorm = preg_replace('/[^A-Z0-9\s]/', ' ', $barangay) ?? $barangay;
+            $barangayNorm = preg_replace('/\s+/', ' ', trim($barangayNorm)) ?? '';
+            if ($barangayNorm !== '' && str_contains($normalizedHay, $barangayNorm)) {
+                $localityHits++;
+            }
+        }
+
+        // Soft region check — never hard-fail alone.
+        $regionOk = str_contains($normalizedHay, 'REGION IV')
+            || str_contains($normalizedHay, 'REGION 4')
+            || str_contains($normalizedHay, 'CALABARZON')
+            || str_contains($normalizedHay, 'IVA');
+
+        // Hard fail: ID clearly shows a different province/city outside Santa Cruz, Laguna.
+        $otherProvince = (bool) preg_match(
+            '/\b(CAVITE|BATANGAS|RIZAL|QUEZON|MANILA|MAKATI|QUEZON CITY|BULACAN|PAMPANGA|CEBU|DAVAO)\b/',
+            $normalizedHay
+        );
+        $hasLaguna = str_contains($normalizedHay, 'LAGUNA');
+        $hasSantaCruz = str_contains($normalizedHay, 'SANTA CRUZ')
+            || str_contains($normalizedHay, 'STA CRUZ');
+
+        if ($hasAddressSignal && $otherProvince && ! $hasLaguna) {
+            return false;
+        }
+
+        if ($hasAddressSignal && $hasLaguna && ! $hasSantaCruz) {
+            // Laguna but different municipality (e.g. Calamba, San Pablo) → fail when that city appears.
+            if (preg_match('/\b(CALAMBA|SAN PABLO|BINAN|BI[NÑ]AN|CABUYAO|LOS BANOS|LOS BA[NÑ]OS|STA ROSA|SANTA ROSA)\b/', $normalizedHay)) {
+                return false;
+            }
+        }
+
+        if ($localityChecks > 0 && $localityHits === $localityChecks) {
             return true;
         }
 
-        // Only fail when ID clearly has an address block but no form tokens appear.
-        if (preg_match('/\b(PUROK|ZONE|SITIO|BARANGAY|BRGY|STREET|CITY)\b/', $normalizedHay) && $hits === 0) {
+        if ($hasLaguna && $hasSantaCruz) {
+            // Municipality+province match is enough when barangay text is missing/unreadable.
+            return true;
+        }
+
+        if ($regionOk && $hasLaguna && $localityHits >= 1) {
+            return true;
+        }
+
+        // Purok / zone tokens from Step 1.
+        $formPurok = strtoupper(trim((string) ($registrationFields['purok_zone'] ?? '')));
+        if ($formPurok !== '' && strlen($formPurok) >= 3) {
+            $normalizedForm = preg_replace('/[^A-Z0-9\s]/', ' ', $formPurok) ?? $formPurok;
+            $normalizedForm = preg_replace('/\s+/', ' ', trim($normalizedForm)) ?? '';
+
+            if ($normalizedForm !== '' && str_contains($normalizedHay, $normalizedForm)) {
+                return true;
+            }
+
+            $tokens = array_values(array_filter(
+                explode(' ', $normalizedForm),
+                static fn (string $token) => strlen($token) >= 3
+                    && ! in_array($token, ['PUROK', 'ZONE', 'SITIO', 'BRGY', 'BARANGAY', 'STREET', 'ST', 'THE'], true)
+            ));
+
+            if ($tokens !== []) {
+                $hits = 0;
+                foreach ($tokens as $token) {
+                    if (str_contains($normalizedHay, $token)) {
+                        $hits++;
+                    }
+                }
+
+                if (($hits / count($tokens)) >= 0.6) {
+                    return true;
+                }
+
+                if ($hasAddressSignal && $hits === 0 && $localityHits === 0) {
+                    return false;
+                }
+            }
+        }
+
+        // Address present but no locality/purok signal matched — fail when Step 1 expects Santa Cruz locality.
+        if ($hasAddressSignal && $localityHits === 0 && ! $hasLaguna && ! $hasSantaCruz) {
             return false;
+        }
+
+        return $localityHits > 0 ? true : null;
+    }
+
+    private function normalizeSexValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $raw = strtoupper(trim((string) $value));
+        if ($raw === '' || $raw === 'NULL' || $raw === 'UNKNOWN' || $raw === 'N/A') {
+            return null;
+        }
+
+        if (in_array($raw, ['M', 'MALE', 'LALAKE', 'LALAKI'], true)) {
+            return 'Male';
+        }
+
+        if (in_array($raw, ['F', 'FEMALE', 'BABAE'], true)) {
+            return 'Female';
         }
 
         return null;

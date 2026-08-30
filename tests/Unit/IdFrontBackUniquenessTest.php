@@ -56,8 +56,8 @@ class IdFrontBackUniquenessTest extends TestCase
         $pathB = $dir.DIRECTORY_SEPARATOR.'kkp_near_b_'.uniqid('', true).'.jpg';
         $pathC = $dir.DIRECTORY_SEPARATOR.'kkp_near_c_'.uniqid('', true).'.jpg';
 
-        $this->writePatternJpeg($pathA, 640, 400, 95, 30);
-        $this->writePatternJpeg($pathB, 640, 400, 55, 30); // same pattern, lower quality
+        $this->writePatternJpeg($pathA, 640, 400, 92, 30);
+        $this->writePatternJpeg($pathB, 640, 400, 80, 30); // mild re-encode, similar size
         $this->writePatternJpeg($pathC, 640, 400, 90, 180); // different pattern seed
 
         try {

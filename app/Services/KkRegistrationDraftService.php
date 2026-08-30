@@ -225,6 +225,7 @@ class KkRegistrationDraftService
             ];
         }
 
+        $existingStep2 = is_array($wizard['step2_data'] ?? null) ? $wizard['step2_data'] : [];
         $wizard['step2_data'] = [
             'documents' => [
                 $documentType => [
@@ -233,10 +234,27 @@ class KkRegistrationDraftService
                 ],
             ],
         ];
+        // Keep prior ID verification until a fresh scan overwrites it.
+        if (is_array($existingStep2['id_verification'] ?? null)) {
+            $wizard['step2_data']['id_verification'] = $existingStep2['id_verification'];
+        }
         $wizard['current_step'] = max((int) ($wizard['current_step'] ?? 1), 2);
         $wizard['expires_at'] = now()->addDays(7)->toIso8601String();
 
         return $this->persist($wizard);
+    }
+
+    /**
+     * Whether the draft already has both front and back files for a document type.
+     */
+    public function hasStoredDocumentPair(array $wizard, string $documentType): bool
+    {
+        $sides = $wizard['step2_data']['documents'][$documentType]['sides'] ?? null;
+        if (! is_array($sides)) {
+            return false;
+        }
+
+        return ! empty($sides['front']['path']) && ! empty($sides['back']['path']);
     }
 
     public function skipStep2(array $wizard): array

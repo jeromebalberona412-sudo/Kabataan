@@ -115,7 +115,7 @@
     let ocrLoadingPhaseIndex = 0;
     const OCR_LOADING_PHASES = [
         { title: 'Checking your ID…', sub: 'Reading the photo' },
-        { title: 'Verifying with AI…', sub: 'Wrong photos are rejected quickly' },
+        { title: 'Verifying with AI…', sub: 'Name and address check' },
         { title: 'Almost done…', sub: 'Finalizing result' },
     ];
     const docErrorEl = document.getElementById('kkpWizardDocError');
@@ -130,6 +130,8 @@
     let ocrScanInFlight = null;
     let ocrScanInFlightFingerprint = null;
     let lastStep1IdentityFingerprint = null;
+    /** Tracks server-persisted ID sides after refresh (File inputs are empty). */
+    let restoredDocumentSides = { documentType: '', front: false, back: false };
 
     const docTypeRadios = document.querySelectorAll('input[name="document_type"]');
     const schoolIdUploadPanel = document.getElementById('kkpSchoolIdUpload');
@@ -295,33 +297,50 @@
             ocrLoadingSubEl.hidden = false;
             ocrLoadingSubEl.textContent = phase?.sub || '';
         }
+
+        document.querySelectorAll('.kkp-id-verify-overlay:not([hidden])').forEach((overlay) => {
+            const title = overlay.querySelector('.kkp-id-verify-overlay-title');
+            const sub = overlay.querySelector('.kkp-id-verify-overlay-sub');
+            if (title) {
+                title.textContent = phase?.title || 'Verifying ID…';
+            }
+            if (sub) {
+                sub.textContent = phase?.sub || 'Checking photo and details';
+            }
+        });
+    }
+
+    function setIdVerifyOverlayVisible(visible) {
+        const activePanel = document.querySelector('.kkp-wizard-upload-panel:not([hidden])');
+        document.querySelectorAll('.kkp-id-verify-overlay').forEach((overlay) => {
+            const inActivePanel = Boolean(activePanel && activePanel.contains(overlay));
+            if (visible && inActivePanel) {
+                overlay.hidden = false;
+                overlay.removeAttribute('hidden');
+            } else {
+                overlay.hidden = true;
+                overlay.setAttribute('hidden', 'hidden');
+            }
+        });
     }
 
     function startOcrLoadingAnimation() {
         stopOcrLoadingAnimation();
         ocrLoadingPhaseIndex = 0;
 
-        if (ocrPanel) {
-            ocrPanel.hidden = false;
-            ocrPanel.setAttribute('aria-busy', 'true');
-            try {
-                ocrPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            } catch (_scrollError) {
-                // ignore
-            }
-        }
+        setIdVerifyOverlayVisible(true);
+        setLoadingPhase(OCR_LOADING_PHASES[0]);
 
-        if (ocrTitleEl) {
-            ocrTitleEl.textContent = 'ID verification';
-            ocrTitleEl.hidden = false;
+        // Results panel stays for post-verify messages; loading UI is the image overlay.
+        if (ocrPanel) {
+            ocrPanel.hidden = true;
+            ocrPanel.setAttribute('aria-busy', 'true');
         }
 
         if (ocrLoadingEl) {
-            ocrLoadingEl.hidden = false;
-            ocrLoadingEl.removeAttribute('hidden');
+            ocrLoadingEl.hidden = true;
+            ocrLoadingEl.setAttribute('hidden', 'hidden');
         }
-
-        setLoadingPhase(OCR_LOADING_PHASES[0]);
 
         if (ocrStatusEl) {
             ocrStatusEl.textContent = '';
@@ -344,7 +363,7 @@
         ocrLoadingTimer = window.setInterval(() => {
             ocrLoadingPhaseIndex = Math.min(ocrLoadingPhaseIndex + 1, OCR_LOADING_PHASES.length - 1);
             setLoadingPhase(OCR_LOADING_PHASES[ocrLoadingPhaseIndex]);
-        }, 1600);
+        }, 1400);
 
         updateNavButtons(currentStep);
     }
@@ -356,6 +375,9 @@
             window.clearInterval(ocrLoadingTimer);
             ocrLoadingTimer = null;
         }
+
+        setIdVerifyOverlayVisible(false);
+
         if (ocrLoadingEl) {
             ocrLoadingEl.hidden = true;
             ocrLoadingEl.setAttribute('hidden', 'hidden');
@@ -377,6 +399,12 @@
 
     function setOcrPanelState(state) {
         if (!ocrPanel) {
+            if (state === 'loading') {
+                startOcrLoadingAnimation();
+            } else {
+                stopOcrLoadingAnimation();
+            }
+            updateNavButtons(currentStep);
             return;
         }
 
@@ -384,9 +412,11 @@
 
         if (state === 'loading') {
             ocrPanel.classList.add('is-loading');
+            ocrPanel.hidden = true; // loading UI is the image overlay
             startOcrLoadingAnimation();
         } else {
             stopOcrLoadingAnimation();
+            ocrPanel.hidden = false;
             if (state === 'error') {
                 ocrPanel.classList.add('is-error');
             } else if (state === 'success') {
@@ -401,7 +431,8 @@
             return true;
         }
 
-        return Boolean(ocrPanel && !ocrPanel.hidden && ocrPanel.classList.contains('is-loading'));
+        const activeOverlay = document.querySelector('.kkp-wizard-upload-panel:not([hidden]) .kkp-id-verify-overlay:not([hidden])');
+        return Boolean(activeOverlay);
     }
 
     function formatIdTypeLabel(value) {
@@ -649,9 +680,18 @@
             const looksLikeNameMismatch = /name mismatch|step 1 profile|does not match your step 1/i.test(
                 String(mismatchMessage || ''),
             );
+            const looksLikeBirthdayMismatch = /birthday on the id does not match/i.test(String(mismatchMessage || ''));
+            const looksLikeSexMismatch = /sex on the id does not match/i.test(String(mismatchMessage || ''));
+            const looksLikeAddressMismatch = /address on the id does not match/i.test(String(mismatchMessage || ''));
             const title = looksLikeNameMismatch
                 ? 'Name does not match'
-                : (looksLikeTypeMismatch ? 'Wrong ID type' : 'ID verification');
+                : (looksLikeBirthdayMismatch
+                    ? 'Birthday does not match'
+                    : (looksLikeSexMismatch
+                        ? 'Sex does not match'
+                        : (looksLikeAddressMismatch
+                            ? 'Address does not match'
+                            : (looksLikeTypeMismatch ? 'Wrong ID type' : 'ID verification'))));
             showErrorState(title, mismatchMessage);
             return;
         }
@@ -668,21 +708,22 @@
 
             hideDocUploadError();
             showOcrRetryActions(false);
-            if (ocrTitleEl) {
-                ocrTitleEl.textContent = 'ID verified';
+            // Success is silent — no "ID verified / matches profiling" panel.
+            if (ocrPanel) {
+                ocrPanel.hidden = true;
+                ocrPanel.classList.remove('is-error', 'is-loading', 'is-success');
             }
-            setOcrPanelState('success');
-            const successMessage = sanitizeVerificationMessage(payload?.message)
-                || (payload?.needs_review
-                    ? 'ID verified. Please review your details, then continue.'
-                    : 'ID verified. Name matches your profiling details.');
-            streamOcrStatus(successMessage);
+            if (ocrStatusEl) {
+                ocrStatusEl.textContent = '';
+                ocrStatusEl.hidden = true;
+            }
+            stopOcrLoadingAnimation();
             if (selfieVerificationEnabled && PHILIPPINE_OCR_DOC_TYPES.includes(selectedType) && selfieUploadPanel) {
                 selfieUploadPanel.hidden = false;
             } else if (selfieUploadPanel) {
                 selfieUploadPanel.hidden = true;
             }
-            finishSoftContinueHint();
+            updateNavButtons(currentStep);
             return;
         }
 
@@ -835,6 +876,7 @@
             valueOf('middle_name'),
             valueOf('last_name'),
             valueOf('birthday'),
+            valueOf('sex'),
             valueOf('purok_zone'),
         ].join('|');
     }
@@ -891,7 +933,39 @@
             return;
         }
 
-        const files = getActiveDocumentFiles();
+        const liveFiles = getActiveDocumentFiles();
+
+        // After refresh, keep the saved verification result unless Step 1 identity changed / force retry.
+        if (
+            !force
+            && (!liveFiles.front || !liveFiles.back)
+            && hasRestoredDocumentSide('front')
+            && hasRestoredDocumentSide('back')
+            && isReusableClientOcrPayload(lastOcrPayload)
+        ) {
+            renderOcrFields(lastOcrPayload);
+            updateNavButtons(currentStep);
+            return;
+        }
+
+        let files = liveFiles;
+        if (!files.front || !files.back) {
+            try {
+                files = await resolveActiveDocumentFiles();
+            } catch (restoreError) {
+                lastOcrPayload = {
+                    success: false,
+                    validation_error: true,
+                    message: restoreError?.message
+                        || 'Unable to restore the saved ID photo. Please upload again.',
+                };
+                renderOcrFields(lastOcrPayload);
+                showDocUploadError(lastOcrPayload.message);
+                updateNavButtons(currentStep);
+                return;
+            }
+        }
+
         const fingerprint = buildDocumentScanFingerprint(documentType, files);
         const sameSideError = await validateDistinctFrontAndBack(files);
 
@@ -942,10 +1016,6 @@
         lastOcrBlockingError = null;
         if (force || fingerprint !== lastOcrScanFingerprint) {
             lastOcrPayload = null;
-        }
-
-        if (ocrPanel) {
-            ocrPanel.hidden = false;
         }
 
         if (ocrFieldsEl) {
@@ -1280,7 +1350,7 @@
         const inputs = getDocumentInputsForType(documentType);
         const frontInput = inputs[0] || null;
         const backInput = inputs[1] || null;
-        const current = getActiveDocumentFiles();
+        const current = await resolveActiveDocumentFiles();
 
         let front = current.front;
         let back = current.back;
@@ -1471,16 +1541,128 @@
         };
     }
 
+    function hasRestoredDocumentSide(side) {
+        const documentType = getSelectedDocumentType();
+        if (!documentType || restoredDocumentSides.documentType !== documentType) {
+            return false;
+        }
+        return Boolean(restoredDocumentSides[side]);
+    }
+
+    function clearRestoredDocumentSides(documentType = null) {
+        if (documentType && restoredDocumentSides.documentType && restoredDocumentSides.documentType !== documentType) {
+            return;
+        }
+        restoredDocumentSides = { documentType: '', front: false, back: false };
+    }
+
+    function markRestoredDocumentSide(documentType, side, present) {
+        if (!documentType || !side) {
+            return;
+        }
+
+        if (!present) {
+            if (restoredDocumentSides.documentType === documentType) {
+                restoredDocumentSides[side] = false;
+                if (!restoredDocumentSides.front && !restoredDocumentSides.back) {
+                    restoredDocumentSides.documentType = '';
+                }
+            }
+            return;
+        }
+
+        if (restoredDocumentSides.documentType && restoredDocumentSides.documentType !== documentType) {
+            restoredDocumentSides = { documentType, front: false, back: false };
+        }
+        restoredDocumentSides.documentType = documentType;
+        restoredDocumentSides[side] = true;
+    }
+
     function hasPartialDocumentUpload() {
         const files = getActiveDocumentFiles();
 
-        return Boolean(files.front || files.back);
+        return Boolean(
+            files.front
+            || files.back
+            || hasRestoredDocumentSide('front')
+            || hasRestoredDocumentSide('back')
+        );
     }
 
     function hasCompleteDocumentUpload() {
         const files = getActiveDocumentFiles();
 
-        return Boolean(files.front && files.back);
+        if (files.front && files.back) {
+            return true;
+        }
+
+        return hasRestoredDocumentSide('front') && hasRestoredDocumentSide('back');
+    }
+
+    async function fileFromPreviewUrl(url, filename) {
+        const response = await fetch(url, {
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!response.ok) {
+            throw new Error('Unable to restore the saved ID photo. Please upload again.');
+        }
+        const blob = await response.blob();
+        const mime = blob.type || 'image/jpeg';
+        const safeName = filename || 'id-photo.jpg';
+
+        return new File([blob], safeName, { type: mime, lastModified: Date.now() });
+    }
+
+    /**
+     * Prefer live File inputs; after refresh, rebuild Files from stored draft preview URLs.
+     */
+    async function resolveActiveDocumentFiles() {
+        const documentType = getSelectedDocumentType();
+        const live = getActiveDocumentFiles();
+        if (live.front && live.back) {
+            return live;
+        }
+
+        if (!documentType || !hasCompleteDocumentUpload()) {
+            return { front: live.front, back: live.back };
+        }
+
+        const inputIds = DOCUMENT_INPUT_IDS[documentType] || [];
+        const sides = ['front', 'back'];
+        const resolved = { front: live.front, back: live.back };
+
+        for (let index = 0; index < sides.length; index += 1) {
+            const side = sides[index];
+            if (resolved[side]) {
+                continue;
+            }
+            if (!hasRestoredDocumentSide(side)) {
+                continue;
+            }
+
+            const inputId = inputIds[index];
+            const config = previewConfig[inputId];
+            const previewUrl = config?.img?.getAttribute('src');
+            if (!previewUrl) {
+                continue;
+            }
+
+            const originalName = config?.fileName?.textContent?.trim() || `${documentType}-${side}.jpg`;
+            const file = await fileFromPreviewUrl(previewUrl, originalName);
+            resolved[side] = file;
+
+            const input = getDocumentInput(inputId);
+            if (input && typeof DataTransfer !== 'undefined') {
+                const transfer = new DataTransfer();
+                transfer.items.add(file);
+                input.files = transfer.files;
+            }
+            markRestoredDocumentSide(documentType, side, false);
+            setCaptureBadge(inputId, true);
+        }
+
+        return resolved;
     }
 
     function clearDocumentInputsForType(documentType) {
@@ -1488,6 +1670,7 @@
     }
 
     function clearAllDocumentInputs() {
+        clearRestoredDocumentSides();
         Object.keys(DOCUMENT_INPUT_IDS).forEach((documentType) => clearDocumentInputsForType(documentType));
     }
 
@@ -1538,7 +1721,7 @@
             if (!item) {
                 return;
             }
-            const hasFile = Boolean(files[side]);
+            const hasFile = Boolean(files[side] || hasRestoredDocumentSide(side));
             item.textContent = hasFile ? '✓ Captured' : 'Not captured';
         });
     }
@@ -1579,6 +1762,15 @@
         if (config.fileName) {
             config.fileName.textContent = '';
         }
+
+        Object.entries(DOCUMENT_INPUT_IDS).forEach(([documentType, ids]) => {
+            const sideIndex = ids.indexOf(inputId);
+            if (sideIndex === 0) {
+                markRestoredDocumentSide(documentType, 'front', false);
+            } else if (sideIndex === 1) {
+                markRestoredDocumentSide(documentType, 'back', false);
+            }
+        });
 
         setCaptureBadge(inputId, false);
         updateIdCaptureProgress();
@@ -2166,16 +2358,18 @@
 
         const sides = step2.sides || {};
         const inputIds = DOCUMENT_INPUT_IDS[documentType] || [];
+        clearRestoredDocumentSides();
 
         ['front', 'back'].forEach((side, index) => {
             const inputId = inputIds[index];
             const config = previewConfig[inputId];
 
             if (!config || !sides[side]) {
+                markRestoredDocumentSide(documentType, side, false);
                 return;
             }
 
-            const previewUrl = `${apiBase}/document/${documentType}/${side}`;
+            const previewUrl = `${apiBase}/document/${documentType}/${side}?t=${Date.now()}`;
 
             if (config.img) {
                 config.img.src = previewUrl;
@@ -2197,6 +2391,7 @@
                 config.dropzone.hidden = true;
             }
 
+            markRestoredDocumentSide(documentType, side, true);
             setCaptureBadge(inputId, true);
         });
 
@@ -2208,7 +2403,7 @@
                 confidence: step2.id_verification.confidence,
                 full_name: step2.id_verification.detected_name,
                 birthdate: step2.id_verification.detected_birthdate,
-                sex: null,
+                sex: step2.id_verification.detected_sex || null,
                 address: step2.id_verification.detected_address,
                 id_number: step2.id_verification.id_number,
                 success: step2.id_verification.success,
@@ -2218,13 +2413,20 @@
                 document_detected: step2.id_verification.document_detected ?? null,
                 message: step2.id_verification.message || null,
                 pair_hash: step2.id_verification.pair_hash || null,
+                name_match: step2.id_verification.name_match ?? null,
+                birthdate_match: step2.id_verification.birthdate_match ?? null,
+                sex_match: step2.id_verification.sex_match ?? null,
+                address_match: step2.id_verification.address_match ?? null,
                 from_cache: true,
             };
             lastOcrPayload = restored;
-            lastOcrScanFingerprint = buildDocumentScanFingerprint(
+            lastOcrScanFingerprint = [
                 documentType,
-                getActiveDocumentFiles(),
-            );
+                buildStep1IdentityFingerprint(),
+                'restored',
+                sides.front?.original_name || '',
+                sides.back?.original_name || '',
+            ].join('|');
             renderOcrFields(restored);
 
             if (step2.id_verification.form_suggestions) {
@@ -2648,7 +2850,82 @@
         }
 
         const documentType = getSelectedDocumentType();
-        const files = getActiveDocumentFiles();
+        const liveFiles = getActiveDocumentFiles();
+
+        if (!documentType) {
+            showDocUploadError('Please select a document type.');
+            return false;
+        }
+
+        // After refresh, prefer continuing with already-persisted draft images.
+        if (
+            (!liveFiles.front || !liveFiles.back)
+            && hasRestoredDocumentSide('front')
+            && hasRestoredDocumentSide('back')
+            && isReusableClientOcrPayload(lastOcrPayload)
+            && !lastOcrPayload?.validation_error
+        ) {
+            try {
+                const formData = new FormData();
+                formData.append('document_type', documentType);
+                formData.append('use_stored_documents', '1');
+                if (turnstileToken) {
+                    formData.append('cf-turnstile-response', turnstileToken);
+                }
+
+                const response = await postFormData(`${apiBase}/step-2`, formData);
+
+                if (response?.ocr) {
+                    lastOcrPayload = response.ocr;
+                    renderOcrFields(response.ocr);
+                }
+
+                if (response?.form_suggestions) {
+                    applyFormSuggestions(response.form_suggestions, { onlyEmpty: true });
+                }
+
+                if (response?.verification_sent) {
+                    verificationSent = true;
+                    root.dataset.verificationSent = '1';
+
+                    if (displayEmail && response.email) {
+                        displayEmail.textContent = response.email;
+                    }
+
+                    if (window.startResendTimer) {
+                        window.startResendTimer();
+                    }
+                }
+
+                const skipAutoSend = Boolean(response?.verification_sent);
+                await setStep(3, { skipAutoSend });
+
+                if (response?.email_error) {
+                    showEmailStatus(response.email_error, 'error');
+                    enableResendButton();
+                }
+
+                return true;
+            } catch (error) {
+                const message = friendlyUploadFailureMessage(
+                    error.errors?.document_type?.[0]
+                    || error.errors?.registration?.[0]
+                    || error.message
+                    || 'We couldn\'t continue with your saved ID photos. Please re-upload and try again.',
+                );
+                showDocUploadError(message);
+                updateNavButtons(currentStep);
+                return false;
+            }
+        }
+
+        let files = liveFiles;
+        try {
+            files = await resolveActiveDocumentFiles();
+        } catch (restoreError) {
+            showDocUploadError(restoreError?.message || 'Unable to restore the saved ID photo. Please upload again.');
+            return false;
+        }
 
         if (!documentType) {
             showDocUploadError('Please select a document type.');
