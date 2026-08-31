@@ -23,8 +23,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // 🔒 Force HTTPS for Render/Production SSL & fix missing asset styles
-        if ($this->app->environment('production') || request()->server('HTTP_X_FORWARDED_PROTO') === 'https') {
+        // Force HTTPS on Hostinger/production so asset() and redirects stay on https
+        $appUrl = (string) config('app.url');
+        $forwardedHttps = request()->server('HTTP_X_FORWARDED_PROTO') === 'https';
+        $isProdEnv = in_array(strtolower((string) $this->app->environment()), ['production', 'productions', 'prod'], true);
+
+        if ($isProdEnv || $forwardedHttps || str_starts_with($appUrl, 'https://')) {
             URL::forceScheme('https');
         }
 

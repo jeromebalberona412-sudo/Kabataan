@@ -3,7 +3,7 @@
         <div class="row g-4 kabataan-footer-grid">
             <div class="col-12 col-md-6 col-lg-4 kabataan-footer-col kabataan-footer-brand-col">
                 <a href="{{ route('homepage') }}" class="kabataan-footer-brand">
-                    <img src="/images/skoneportal_logo.webp" alt="SK OnePortal Kabataan logo" class="kabataan-footer-logo">
+                    <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal Kabataan logo" class="kabataan-footer-logo">
                     <span class="kabataan-footer-brand-text">
                         <strong>Kabataan</strong>
                         <small>SK OnePortal Santa Cruz</small>

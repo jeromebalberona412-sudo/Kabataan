@@ -25,7 +25,7 @@
 <body class="kkpu-page-body">
     <header class="kkpu-lock-bar" aria-label="Required KK Profiling update">
         <div class="kkpu-lock-bar__brand">
-            <img src="/images/skoneportal_logo.webp" alt="SK OnePortal" class="kkpu-lock-bar__logo">
+            <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal" class="kkpu-lock-bar__logo">
             <span class="kkpu-lock-bar__title">
                 Kabataan
                 <small>SK OnePortal Santa Cruz</small>

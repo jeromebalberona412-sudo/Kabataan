@@ -12,7 +12,7 @@
 <nav class="kabataan-header{{ $kabataanViewOnly ? ' kabataan-header--view-only' : '' }}" id="kabataanHeader" aria-label="Main navigation">
     <div class="kabataan-header__container">
         <a href="{{ route('dashboard') }}" class="kabataan-header__brand">
-            <img src="/images/skoneportal_logo.webp" alt="SK OnePortal" class="kabataan-header__logo">
+            <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal" class="kabataan-header__logo">
             <span class="kabataan-header__title">
                 Kabataan
                 <small>SK OnePortal Santa Cruz</small>

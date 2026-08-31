@@ -1,10 +1,20 @@
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # Block sensitive files and folders from web access
     RewriteRule ^\.env - [F,L]
     RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|tests|vendor)(/|$) - [F,L]
     RewriteRule ^(artisan|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|vite\.config\.js)$ - [F,L]
 
-    RewriteCond %{REQUEST_URI} !^/public/
+    # Already under /public/ — do not rewrite again
+    RewriteCond %{REQUEST_URI} ^/public/
+    RewriteRule ^ - [L]
+
+    # Root request must hit index.php (avoids Hostinger 403 on bare /public/ directory)
+    RewriteRule ^$ public/index.php [L]
+
+    # Everything else is served from the Laravel public folder
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
+
+DirectoryIndex index.php public/index.php

@@ -32,7 +32,7 @@
     <nav class="kabataan-nav" aria-label="Primary navigation">
         <div class="container kabataan-nav-inner">
             <a href="{{ route('homepage') }}" class="kabataan-brand">
-                <img src="/images/skoneportal_logo.webp" alt="SK OnePortal Kabataan logo" class="kabataan-brand-logo">
+                <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal Kabataan logo" class="kabataan-brand-logo">
                 <span class="kabataan-brand-copy">
                     <strong>Kabataan</strong>
                     <small>SK OnePortal Santa Cruz</small>

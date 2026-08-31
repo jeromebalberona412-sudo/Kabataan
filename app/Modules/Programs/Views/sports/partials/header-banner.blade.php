@@ -1,7 +1,7 @@
 <div class="sr-banner">
     <div class="sr-banner-brand">
         <div class="sr-logo-wrap">
-            <img src="/images/barangay_logo.png" alt="SK Logo" class="sr-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <img src="{{ asset('images/barangay_logo.png') }}" alt="SK Logo" class="sr-logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
             <span class="sr-logo-fallback" style="display:none;">SK</span>
         </div>
         <div>

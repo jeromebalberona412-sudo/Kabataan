@@ -31,7 +31,7 @@
         <div class="youth-branding-section">
             <div class="branding-content">
                 <div class="logo-wrapper">
-                    <img src="/images/skoneportal_logo.webp" alt="SK OnePortal Logo" class="youth-logo">
+                    <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal Logo" class="youth-logo">
                 </div>
                 <h1 class="youth-main-title">SK OnePortal</h1>
                 <p class="youth-tagline">Official Youth Portal – Santa Cruz, Laguna</p>
