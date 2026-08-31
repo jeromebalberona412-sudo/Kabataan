@@ -14,13 +14,13 @@ export default defineConfig({
                 'app/Modules/Authentication/assets/css/turnstile-gate.css',
                 'app/Modules/Authentication/assets/css/auth-legal.css',
                 'app/Modules/Authentication/assets/css/youth-fp-verify-email.css',
+                'app/Modules/Authentication/assets/css/youth-register.css',
+                'app/Modules/Authentication/assets/css/youth-email-verification.css',
                 'app/Modules/Authentication/assets/js/sign-in.js',
                 'app/Modules/Authentication/assets/js/auth-legal.js',
                 'app/Modules/Authentication/assets/js/youth-fp-verify-email.js',
                 'app/Modules/Authentication/assets/js/turnstile-gate.js',
-                'app/Modules/Authentication/assets/css/youth-register.css',
                 'app/Modules/Authentication/assets/js/youth-register.js',
-                'app/Modules/Authentication/assets/css/youth-email-verification.css',
                 'app/Modules/Authentication/assets/js/youth-email-verification.js',
 
                 // Layout (shared header & footer)
@@ -37,14 +37,16 @@ export default defineConfig({
                 // Dashboard
                 'app/Modules/Dashboard/assets/css/dashboard.css',
                 'app/Modules/Dashboard/assets/css/community-feed-comment-preview.css',
+                'app/Modules/Dashboard/assets/css/barangay-profile.css',
+                'app/Modules/Dashboard/assets/css/chatbot.css',
+                'app/Modules/Dashboard/assets/css/notif.css',
                 'app/Modules/Dashboard/assets/js/dashboard.js',
                 'app/Modules/Dashboard/assets/js/community-feed-comment-preview.js',
-                'app/Modules/Dashboard/assets/css/barangay-profile.css',
                 'app/Modules/Dashboard/assets/js/barangay-profile.js',
-                'app/Modules/Dashboard/assets/css/chatbot.css',
                 'app/Modules/Dashboard/assets/js/chatbot.js',
-                'app/Modules/Dashboard/assets/css/notif.css',
                 'app/Modules/Dashboard/assets/js/notif.js',
+
+                // Notifications
                 'app/Modules/Notifications/assets/css/notifications.css',
                 'app/Modules/Notifications/assets/js/notifications.js',
 
@@ -53,39 +55,38 @@ export default defineConfig({
                 'app/Modules/Programs/assets/css/scholarship_application_preview.css',
                 'app/Modules/Programs/assets/css/scholarship_application.css',
                 'app/Modules/Programs/assets/css/scholarship-quick-guidelines.css',
-                'app/Modules/Programs/assets/js/scholarship-quick-guidelines.js',
                 'app/Modules/Programs/assets/css/scholarship-data-privacy.css',
+                'app/Modules/Programs/assets/css/sports_landing.css',
+                'app/Modules/Programs/assets/css/sports-applications-history.css',
+                'app/Modules/Programs/assets/css/sports-registration.css',
+                'app/Modules/Programs/assets/css/programs-pre-survey.css',
+                'app/Modules/Programs/assets/js/scholarship-quick-guidelines.js',
                 'app/Modules/Programs/assets/js/scholarship-data-privacy.js',
                 'app/Modules/Programs/assets/js/scholarship-system-fields.js',
                 'app/Modules/Programs/assets/js/scholarship_application_preview.js',
                 'app/Modules/Programs/assets/js/scholarship_apply_wizard.js',
                 'app/Modules/Programs/assets/js/scholarship_landing.js',
-                'app/Modules/Programs/assets/css/sports_landing.css',
                 'app/Modules/Programs/assets/js/sports_landing.js',
-                'app/Modules/Programs/assets/css/sports-applications-history.css',
                 'app/Modules/Programs/assets/js/sports-applications-history.js',
-                'app/Modules/Programs/assets/css/scholarship_application.css',
-                'app/Modules/Programs/assets/css/sports-registration.css',
                 'app/Modules/Programs/assets/js/sports_apply_wizard.js',
                 'app/Modules/Programs/assets/js/programs.js',
-                'app/Modules/Programs/assets/css/scholarship-quick-guidelines.css',
-        'app/Modules/Programs/assets/js/scholarship-quick-guidelines.js',
-        'app/Modules/Programs/assets/js/kabataan-programs.js',
+                'app/Modules/Programs/assets/js/kabataan-programs.js',
                 'app/Modules/Programs/assets/js/program_survey_landing.js',
                 'app/Modules/Programs/assets/js/program_survey_form.js',
                 'app/Modules/Programs/assets/js/program_evaluation_form.js',
                 'app/Modules/Programs/assets/js/program-evaluation-prompt.js',
+                'app/Modules/Programs/assets/js/programs-pre-survey.js',
 
                 // Profile
                 'app/Modules/Profile/assets/css/profile.css',
                 'app/Modules/Profile/assets/css/profile-personal-info.css',
                 'app/Modules/Profile/assets/css/profile-personal-info-responsive.css',
+                'app/Modules/Profile/assets/css/change-email.css',
+                'app/Modules/Profile/assets/css/change-password.css',
                 'app/Modules/Profile/assets/js/profile.js',
                 'app/Modules/Profile/assets/js/profile-participation.js',
-                'app/Modules/Profile/assets/css/change-email.css',
                 'app/Modules/Profile/assets/js/change-email.js',
                 'app/Modules/Profile/assets/js/change-email-verify.js',
-                'app/Modules/Profile/assets/css/change-password.css',
                 'app/Modules/Profile/assets/js/change-password.js',
                 'app/Modules/Profile/assets/js/change-password-verify.js',
                 'app/Modules/Profile/assets/js/set-password.js',
@@ -113,20 +114,20 @@ export default defineConfig({
                 'app/Modules/Baranggay_ABYIP/assets/css/baranggay_abyip.css',
                 'app/Modules/Baranggay_ABYIP/assets/js/baranggay_abyip.js',
 
-                // KK Profiling (CSS split to stay under ~1k lines each)
+                // KK Profiling
                 'app/Modules/KKProfiling/assets/css/kkprofiling.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-form-body.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-signature.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-responsive.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-account.css',
-                'app/Modules/KKProfiling/assets/js/kkprofiling.js',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-signup.css',
-                'app/Modules/KKProfiling/assets/js/kkprofiling-signup.js',
                 'app/Modules/KKProfiling/assets/css/kk-profiling-update.css',
-                'app/Modules/KKProfiling/assets/js/kk-profiling-update.js',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-wizard.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
+                'app/Modules/KKProfiling/assets/js/kkprofiling.js',
+                'app/Modules/KKProfiling/assets/js/kkprofiling-signup.js',
+                'app/Modules/KKProfiling/assets/js/kk-profiling-update.js',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-id-camera.js',
             ],
@@ -139,11 +140,12 @@ export default defineConfig({
         rollupOptions: {
             output: {
                 assetFileNames: (assetInfo) => {
-                    let extType = assetInfo.name.split('.').at(1);
-                    if (/png|jpe?g|svg|gif|tiff|bmp|ico|webp/i.test(extType)) {
-                        extType = 'images';
+                    const name = assetInfo.name || '';
+                    const ext = name.includes('.') ? name.split('.').pop() : 'asset';
+                    if (/png|jpe?g|svg|gif|tiff|bmp|ico|webp/i.test(ext)) {
+                        return 'assets/images/[name]-[hash][extname]';
                     }
-                    return `assets/${extType}/[name]-[hash][extname]`;
+                    return `assets/${ext}/[name]-[hash][extname]`;
                 },
                 manualChunks(id) {
                     if (id.includes('node_modules/@vladmandic/face-api') || id.includes('node_modules/@tensorflow')) {
