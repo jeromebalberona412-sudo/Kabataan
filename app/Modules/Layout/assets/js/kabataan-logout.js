@@ -37,6 +37,11 @@
 
         closeKabataanLogoutModal();
 
+        // Clear dashboard cache on logout
+        if (typeof window.clearDashboardCache === 'function') {
+            window.clearDashboardCache();
+        }
+
         if (logoutForm) {
             logoutForm.submit();
             return;

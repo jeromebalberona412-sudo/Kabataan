@@ -1,4 +1,62 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Local Storage Caching for faster dashboard loading
+    const CACHE_VERSION = 'v1';
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+    
+    function getCacheKey(key) {
+        return `kabataan_dashboard_${CACHE_VERSION}_${key}`;
+    }
+    
+    function setCacheItem(key, data) {
+        try {
+            const item = {
+                data: data,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(getCacheKey(key), JSON.stringify(item));
+        } catch (e) {
+            console.warn('Failed to cache data:', e);
+        }
+    }
+    
+    function getCacheItem(key) {
+        try {
+            const cached = localStorage.getItem(getCacheKey(key));
+            if (!cached) return null;
+            
+            const item = JSON.parse(cached);
+            const isExpired = Date.now() - item.timestamp > CACHE_DURATION;
+            
+            if (isExpired) {
+                localStorage.removeItem(getCacheKey(key));
+                return null;
+            }
+            
+            return item.data;
+        } catch (e) {
+            console.warn('Failed to retrieve cached data:', e);
+            return null;
+        }
+    }
+    
+    function clearDashboardCache() {
+        const keys = Object.keys(localStorage);
+        keys.forEach(key => {
+            if (key.startsWith('kabataan_dashboard_')) {
+                localStorage.removeItem(key);
+            }
+        });
+    }
+    
+    // Clear cache on logout
+    window.clearDashboardCache = clearDashboardCache;
+    
+    // Cache barangay profiles data from server response
+    const barangayProfilesData = window.__BARANGAY_PROFILES__;
+    if (barangayProfilesData) {
+        setCacheItem('barangay_profiles', barangayProfilesData);
+    }
+    
     // Modal open/close functions for program categories
     window.openEducationModal = function() {
         const modal = document.getElementById('educationModal');

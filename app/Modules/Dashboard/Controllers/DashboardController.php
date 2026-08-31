@@ -34,20 +34,32 @@ class DashboardController extends Controller
         $barangayName = $registration?->barangay?->name ?? 'Santa Cruz';
 
         $tenantId = (int) ($user->tenant_id ?? $registration?->barangay?->tenant_id ?? 0);
-        $barangayProfiles = $this->barangaySkProfileService->listForTenant($tenantId);
+        
+        // Cache barangay profiles for faster loading
+        $barangayProfiles = Cache::remember(
+            "kabataan_brgy_profiles_tenant_{$tenantId}",
+            30, // 30 minutes cache
+            fn () => $this->barangaySkProfileService->listForTenant($tenantId)
+        );
+
+        // Cache user data for faster profile loading
+        $userAvatarUrl = Cache::remember(
+            "kabataan_user_avatar_{$user->id}",
+            60,
+            fn () => app(ProfileImageService::class)->resolveDisplayUrl($user)
+        );
 
         $viewData = [
             'user' => $user,
-            'userAvatarUrl' => app(ProfileImageService::class)->resolveDisplayUrl($user),
+            'userAvatarUrl' => $userAvatarUrl,
             'barangayName' => $barangayName,
             'barangayProfiles' => $barangayProfiles,
             'commentPreviewPost' => null,
         ];
 
         return view('dashboard::dashboard', $viewData)->withHeaders([
-            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma' => 'no-cache',
-            'Expires' => 'Sat, 01 Jan 2000 00:00:00 GMT',
+            'Cache-Control' => 'private, max-age=300', // Allow 5 minutes browser caching
+            'Pragma' => 'private',
         ]);
     }
 

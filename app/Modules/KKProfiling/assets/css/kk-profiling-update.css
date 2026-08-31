@@ -3,6 +3,8 @@
     background: #f0f1f5;
     min-height: 100vh;
     padding-top: 0;
+    overflow-x: hidden;
+    max-width: 100%;
 }
 
 .kkpu-lock-bar {
@@ -150,5 +152,39 @@
     .kkpu-lock-bar__logo {
         width: 28px;
         height: 28px;
+    }
+}
+
+/* Mobile zoom functionality for KK Profiling Update */
+@media (max-width: 768px) {
+    .kkpu-page .kkp-fs-scale-shell {
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .kkpu-page .kkp-fs-scale-inner {
+        width: 860px;
+        min-width: 860px;
+        max-width: none;
+        box-sizing: border-box;
+        transform-origin: top left;
+    }
+
+    .kkpu-page .kkp-fs-scale-inner > form,
+    .kkpu-page .kkp-fs-scale-inner #kkProfilingUpdateForm {
+        width: 860px !important;
+        min-width: 860px !important;
+        max-width: none !important;
+        box-sizing: border-box;
+    }
+
+    .kkpu-page .kkp-paper {
+        padding: 10px 4px 16px;
+    }
+
+    .kkpu-page .kkp-responsive-container {
+        padding: 0;
     }
 }
