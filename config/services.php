@@ -39,6 +39,14 @@ return [
         'profile_folder' => env('CLOUDINARY_PROFILE_FOLDER', 'kabataan_profile_images'),
         'supporting_docs_upload_preset' => env('CLOUDINARY_SUPPORTING_DOCS_UPLOAD_PRESET', 'Supporting_Documents'),
         'supporting_docs_folder' => env('CLOUDINARY_SUPPORTING_DOCS_FOLDER', 'Supporting_Documents'),
+        'communication_folder' => env('CLOUDINARY_COMMUNICATION_FOLDER', 'communication'),
+        'communication_upload_preset' => env('CLOUDINARY_COMMUNICATION_UPLOAD_PRESET', ''),
+    ],
+
+    'supabase' => [
+        'url' => env('SUPABASE_URL', env('VITE_SUPABASE_URL')),
+        'service_role_key' => env('SUPABASE_SERVICE_ROLE_KEY'),
+        'communication_bucket' => env('SUPABASE_COMMUNICATION_BUCKET', 'communication'),
     ],
 
     'slack' => [

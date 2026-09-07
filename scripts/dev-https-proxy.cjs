@@ -98,6 +98,14 @@ function main() {
         changeOrigin: true,
         ws: true,
         secure: false,
+        xfwd: true,
+    });
+
+    proxy.on('proxyReq', (proxyReq, req) => {
+        proxyReq.setHeader('X-Forwarded-Proto', 'https');
+        if (req.headers.host) {
+            proxyReq.setHeader('X-Forwarded-Host', req.headers.host);
+        }
     });
 
     proxy.on('error', (err, req, res) => {

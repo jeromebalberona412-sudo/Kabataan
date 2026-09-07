@@ -10,6 +10,7 @@ return [
     App\Modules\Programs\Providers\ProgramServiceProvider::class,
     App\Modules\Layout\Providers\LayoutServiceProvider::class,
     App\Modules\Notifications\Providers\NotificationsServiceProvider::class,
+    App\Modules\Communications\Providers\CommunicationsServiceProvider::class,
     App\Modules\Program_Accomplishments\Providers\ProgramAccomplishmentsServiceProvider::class,
     App\Modules\Baranggay_ABYIP\Providers\Baranggay_ABYIPServiceProvider::class,
 ];

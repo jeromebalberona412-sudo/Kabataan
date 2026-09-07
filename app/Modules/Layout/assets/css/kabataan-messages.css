@@ -1,0 +1,90 @@
+/* Kabataan chat theme — blue brand, no CSS imports. */
+
+:root {
+    --comms-bg: #f0f7ff;
+    --comms-accent: #0450a8;
+    --comms-accent-soft: #e8f1fb;
+    --comms-mine: #0450a8;
+}
+
+.comms-app {
+    --comms-bg: #f0f7ff;
+    --comms-accent: #0450a8;
+    --comms-accent-soft: #e8f1fb;
+    --comms-mine: #0450a8;
+}
+
+.comms-chat-modal-header {
+    background: linear-gradient(135deg, #011e3c 0%, #0450a8 70%, #1a6fd4 100%);
+    border-bottom-color: rgba(255, 255, 255, 0.14);
+    color: #fff;
+}
+
+.comms-chat-modal-peer-text h3,
+.comms-chat-modal-avatar {
+    color: #fff;
+}
+
+.comms-chat-modal-avatar {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.comms-chat-modal-action-btn,
+.comms-chat-modal-open-full,
+.comms-chat-modal-close {
+    color: #fff;
+}
+
+.comms-chat-modal-action-btn:hover,
+.comms-chat-modal-open-full:hover,
+.comms-chat-modal-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.16) !important;
+    opacity: 1;
+}
+
+.comms-chat-modal-close-btn:hover {
+    color: #fecaca;
+    background: rgba(255, 255, 255, 0.16) !important;
+}
+
+.comms-chat-fs-back {
+    color: #fff;
+}
+
+.comms-chat-bubble.is-mine {
+    background: #0450a8;
+    color: #fff;
+}
+
+.comms-chat-modal-send,
+.comms-chat-edit-save,
+.comms-chat-edit-actions [data-edit-save] {
+    background: #0450a8;
+    color: #fff;
+}
+
+.comms-chat-modal-send:hover,
+.comms-chat-modal-send:focus-visible {
+    background: #011e3c;
+}
+
+.comms-chat-fs-filter.is-active {
+    background: #0450a8;
+    color: #fff;
+}
+
+.comms-chat-react-btn:hover,
+.comms-chat-react-btn:focus-visible,
+.comms-chat-bubble-wrap.is-picker-open .comms-chat-react-btn,
+.comms-chat-msg-more:hover,
+.comms-chat-msg-more:focus-visible,
+.comms-chat-bubble-wrap.is-menu-open .comms-chat-msg-more,
+.comms-chat-attach-btn,
+.comms-chat-attachment-dl {
+    color: #0450a8;
+}
+
+.comms-chat-bubble.is-mine .comms-chat-attachment-dl {
+    color: #c4dfff;
+}

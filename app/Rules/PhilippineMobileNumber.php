@@ -10,7 +10,7 @@ class PhilippineMobileNumber implements ValidationRule
 {
     public function __construct(
         protected ?int $ignoreRegistrationId = null,
-        protected bool $checkDuplicate = true,
+        protected bool $checkDuplicate = false,
     ) {}
 
     public function validate(string $attribute, mixed $value, Closure $fail): void

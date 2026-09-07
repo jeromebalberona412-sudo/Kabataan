@@ -1,0 +1,493 @@
+/* Kabataan voice/video call UI — self-contained, no CSS imports. */
+
+.comms-modal[hidden],
+.comms-call-overlay[hidden] {
+    display: none !important;
+}
+
+.comms-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10060;
+    background: rgba(1, 30, 60, 0.58);
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+}
+
+.comms-modal-card {
+    width: min(100%, 380px);
+    background: #fff;
+    border-radius: 16px;
+    padding: 1.35rem 1.25rem 1.25rem;
+    text-align: center;
+    box-shadow: 0 16px 40px rgba(1, 30, 60, 0.28);
+    color: #12263a;
+}
+
+.comms-modal-card h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+}
+
+.comms-modal-card--ended {
+    position: relative;
+    padding-top: 1.5rem;
+}
+
+.comms-modal-x {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.65rem;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 999px;
+    background: #e8f1fb;
+    color: #0450a8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.comms-modal-x:hover,
+.comms-modal-x:focus-visible {
+    background: #d7e8fa;
+    outline: none;
+}
+
+.comms-ended-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 0.75rem;
+    border-radius: 50%;
+    background: #fee2e2;
+    color: #b42318;
+    display: grid;
+    place-items: center;
+}
+
+.comms-modal-card--call {
+    position: relative;
+    overflow: hidden;
+}
+
+.comms-modal-peer {
+    margin: 0.35rem 0 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #12263a;
+    word-break: break-word;
+}
+
+.comms-modal-type,
+.comms-modal-hint {
+    margin: 0.25rem 0 0;
+    color: #5b6b7c;
+}
+
+.comms-call-pulse {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 0.75rem;
+    border-radius: 50%;
+    background: #0450a8;
+    box-shadow: 0 0 0 0 rgba(4, 80, 168, 0.55);
+    animation: kab-call-pulse 1.6s ease-out infinite;
+}
+
+@keyframes kab-call-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(4, 80, 168, 0.55); }
+    70% { box-shadow: 0 0 0 18px rgba(4, 80, 168, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(4, 80, 168, 0); }
+}
+
+.comms-modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 1.1rem;
+}
+
+.comms-modal .comms-btn {
+    border: 1px solid transparent;
+    border-radius: 10px;
+    min-width: 118px;
+    min-height: 44px;
+    padding: 0.65rem 1.1rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.comms-modal .comms-btn--danger {
+    background: #b42318;
+    border-color: #b42318;
+    color: #fff;
+}
+
+.comms-modal .comms-btn--danger:hover,
+.comms-modal .comms-btn--danger:focus-visible {
+    background: #912018;
+    border-color: #912018;
+    color: #fff;
+    outline: none;
+}
+
+.comms-modal .comms-btn--success {
+    background: #067647;
+    border-color: #067647;
+    color: #fff;
+}
+
+.comms-modal .comms-btn--success:hover,
+.comms-modal .comms-btn--success:focus-visible {
+    background: #05603a;
+    border-color: #05603a;
+    color: #fff;
+    outline: none;
+}
+
+.comms-modal-actions--ended {
+    align-items: center;
+}
+
+.comms-btn--ghost-x {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #e8f1fb;
+    border: 1px solid #d7e8fa;
+    color: #0450a8;
+    cursor: pointer;
+}
+
+.comms-btn--ghost-x:hover,
+.comms-btn--ghost-x:focus-visible {
+    background: #d7e8fa;
+    color: #011e3c;
+    outline: none;
+}
+
+.comms-call-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10070;
+    background: #0b0b0b;
+    color: #fff;
+}
+
+.comms-call-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+}
+
+.comms-remote-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #0b0b0b;
+}
+
+.comms-local-video {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    width: min(28vw, 180px);
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    background: #011e3c;
+    z-index: 3;
+    bottom: auto;
+}
+
+.comms-call-center {
+    position: absolute;
+    left: 50%;
+    top: 42%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 2;
+    width: min(92vw, 420px);
+}
+
+.comms-call-avatar {
+    width: 112px;
+    height: 112px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: #fff;
+    color: #0450a8;
+    font-size: 2.4rem;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.12);
+}
+
+.comms-call-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.comms-call-peer-name {
+    font-size: clamp(1.35rem, 3vw, 1.85rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.35rem;
+}
+
+.comms-call-status {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.78);
+    letter-spacing: 0;
+}
+
+.comms-call-timer {
+    margin-top: 0.35rem;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-variant-numeric: tabular-nums;
+}
+
+.comms-call-overlay .comms-call-controls {
+    position: absolute;
+    left: 50%;
+    bottom: max(2.75rem, calc(env(safe-area-inset-bottom, 0px) + 1.5rem));
+    transform: translateX(-50%);
+    display: flex;
+    gap: 1.15rem;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    justify-content: center;
+    z-index: 4;
+    max-width: calc(100vw - 1.5rem);
+    overflow: visible;
+}
+
+.comms-call-overlay .comms-call-ctrl {
+    position: relative;
+    box-sizing: border-box;
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    min-height: 56px;
+    margin: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, 0.16) !important;
+    color: #fff !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+    cursor: pointer;
+    flex: 0 0 56px;
+    appearance: none;
+    -webkit-appearance: none;
+    overflow: visible;
+    line-height: 1;
+    font-size: inherit;
+    font-family: inherit;
+    box-shadow: none;
+    text-indent: 0;
+}
+
+.comms-call-overlay .comms-call-ctrl:hover,
+.comms-call-overlay .comms-call-ctrl:focus-visible {
+    background: rgba(255, 255, 255, 0.26) !important;
+    outline: none;
+    color: #fff !important;
+}
+
+.comms-call-overlay .comms-call-ctrl.is-off {
+    background: rgba(255, 255, 255, 0.92) !important;
+    color: #0f172a !important;
+}
+
+.comms-call-overlay .comms-call-ctrl--end,
+.comms-call-overlay .comms-call-ctrl--end.is-off,
+.comms-call-overlay .comms-call-ctrl--end:hover,
+.comms-call-overlay .comms-call-ctrl--end:focus-visible {
+    background: #ef4444 !important;
+    color: #fff !important;
+}
+
+.comms-call-overlay .comms-call-ctrl--end:hover,
+.comms-call-overlay .comms-call-ctrl--end:focus-visible {
+    background: #dc2626 !important;
+}
+
+.comms-call-overlay .comms-call-ctrl-icon,
+.comms-call-overlay .comms-call-ctrl svg {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    pointer-events: none;
+    opacity: 1;
+    visibility: visible;
+}
+
+.comms-call-overlay .comms-end-phone-icon {
+    transform: rotate(135deg);
+}
+
+.comms-call-overlay .comms-call-ctrl-label {
+    position: absolute !important;
+    left: 50%;
+    bottom: calc(100% + 10px);
+    top: auto;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 650;
+    line-height: 1.2;
+    padding: 0.28rem 0.55rem;
+    border-radius: 8px;
+    background: rgba(15, 23, 42, 0.92);
+    color: #fff;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.comms-call-overlay .comms-call-ctrl:hover .comms-call-ctrl-label,
+.comms-call-overlay .comms-call-ctrl:focus-visible .comms-call-ctrl-label {
+    opacity: 1;
+    visibility: visible;
+}
+
+@media (hover: none) {
+    .comms-call-overlay .comms-call-ctrl-label {
+        opacity: 1;
+        visibility: visible;
+        bottom: auto;
+        top: calc(100% + 8px);
+        background: transparent;
+        padding: 0;
+        font-size: 0.68rem;
+        color: rgba(255, 255, 255, 0.92);
+    }
+}
+
+.comms-modal .comms-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+}
+
+.comms-modal .comms-btn svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.comms-modal .comms-btn--danger svg {
+    transform: rotate(135deg);
+}
+
+.comms-thread-actions {
+    overflow: visible;
+    position: relative;
+    z-index: 6;
+}
+
+.comms-call-action-btn {
+    position: relative;
+    overflow: visible;
+    flex: 0 0 auto;
+}
+
+.comms-call-action-label {
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 8px);
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 650;
+    padding: 0.28rem 0.55rem;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #fff;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: 60;
+}
+
+.comms-call-action-btn:hover .comms-call-action-label,
+.comms-call-action-btn:focus-visible .comms-call-action-label {
+    opacity: 1;
+    visibility: visible;
+}
+
+.comms-chat-modal-header .comms-call-action-label {
+    display: none;
+}
+
+@media (hover: none) {
+    .comms-call-action-label {
+        display: none;
+    }
+}
+
+@media (max-width: 414px) {
+    .comms-call-overlay .comms-call-ctrl {
+        width: 52px;
+        height: 52px;
+        min-width: 52px;
+        min-height: 52px;
+        flex-basis: 52px;
+    }
+
+    .comms-call-overlay .comms-call-controls {
+        gap: 0.9rem;
+        bottom: max(3rem, calc(env(safe-area-inset-bottom, 0px) + 1.75rem));
+    }
+
+    .comms-local-video {
+        width: min(34vw, 132px);
+        right: 0.75rem;
+        top: 0.75rem;
+    }
+
+    .comms-call-avatar {
+        width: 96px;
+        height: 96px;
+        font-size: 2rem;
+    }
+}
+
+@media (max-width: 320px) {
+    .comms-modal .comms-btn {
+        min-width: 0;
+        flex: 1 1 120px;
+    }
+}

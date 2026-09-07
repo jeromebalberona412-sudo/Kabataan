@@ -23,12 +23,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Force HTTPS on Hostinger/production so asset() and redirects stay on https
-        $appUrl = (string) config('app.url');
+        // Force HTTPS only when the request is already HTTPS (or behind an HTTPS proxy),
+        // or in production on a non-loopback host. Never force HTTPS on plain
+        // http://127.0.0.1:8002 — that breaks CSS/JS (Unsupported SSL request).
         $forwardedHttps = request()->server('HTTP_X_FORWARDED_PROTO') === 'https';
         $isProdEnv = in_array(strtolower((string) $this->app->environment()), ['production', 'productions', 'prod'], true);
+        $requestIsHttps = request()->secure() || $forwardedHttps;
+        $host = strtolower((string) request()->getHost());
+        $isLoopbackHost = in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
 
-        if ($isProdEnv || $forwardedHttps || str_starts_with($appUrl, 'https://')) {
+        if ($requestIsHttps || ($isProdEnv && ! $isLoopbackHost)) {
             URL::forceScheme('https');
         }
 

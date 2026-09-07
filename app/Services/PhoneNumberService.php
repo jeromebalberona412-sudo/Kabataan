@@ -63,7 +63,7 @@ class PhoneNumberService
     public function validatePhilippineMobile(
         ?string $input,
         ?int $ignoreRegistrationId = null,
-        bool $checkDuplicate = true,
+        bool $checkDuplicate = false,
     ): array {
         $raw = trim((string) $input);
 
@@ -96,6 +96,7 @@ class PhoneNumberService
 
         $canonical = $this->phoneUtil->format($parsed, PhoneNumberFormat::E164);
 
+        // Duplicate contact numbers are allowed across registrations.
         if ($checkDuplicate && $this->isDuplicate($canonical, $ignoreRegistrationId)) {
             return ['ok' => false, 'canonical' => null, 'error' => self::MSG_DUPLICATE];
         }

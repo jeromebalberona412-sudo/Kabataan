@@ -40,6 +40,34 @@
                 <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
             </a>
 
+            @php
+                $unreadMsgCount = (int) ($unreadMessagesCount ?? 0);
+                $unreadMsgLabel = $unreadMsgCount > 99 ? '99+' : (string) $unreadMsgCount;
+            @endphp
+            <div class="comms-header-msg notif-menu" id="commsMsgMenu">
+                <button
+                    type="button"
+                    class="comms-header-msg-btn"
+                    id="commsMsgBtn"
+                    title="Messages"
+                    aria-label="Messages"
+                    aria-expanded="false"
+                    aria-haspopup="true"
+                    aria-controls="commsMsgPopover"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span
+                        class="comms-header-msg-badge"
+                        id="commsMsgBadge"
+                        data-unread-total="{{ $unreadMsgCount }}"
+                        style="{{ $unreadMsgCount > 0 ? '' : 'display: none;' }}"
+                    >{{ $unreadMsgLabel }}</span>
+                </button>
+                @include('layout::messages-dropdown')
+            </div>
+
             @include('dashboard::notification')
             @include('dashboard::chatbot')
 
@@ -100,3 +128,48 @@
 
 @include('layout::kabataan-logout-modal')
 @include('layout::kabataan-session-timeout')
+
+@auth
+@include('layout::chat-modal')
+@include('communications::partials.incoming-call-modal')
+@include('communications::partials.in-call-ui')
+<div
+    id="commsRealtimeBoot"
+    hidden
+    data-current-user-id="{{ auth()->id() }}"
+    data-portal-user-type="{{ config('communications.portal_user_type', 'kabataan') }}"
+    data-unread-count-url="{{ url('/api/communications/unread-count') }}"
+></div>
+<script>
+    window.CommsChat = window.CommsChat || {
+        routes: {
+            conversations: @json(url('/api/communications/conversations')),
+            storeConversation: @json(url('/api/communications/conversations')),
+            messages: @json(url('/api/communications/conversations/__ID__/messages')),
+            react: @json(url('/api/communications/messages/__ID__/reactions')),
+            updateMessage: @json(url('/api/communications/messages/__ID__')),
+            deleteMessage: @json(url('/api/communications/messages/__ID__')),
+            read: @json(url('/api/communications/conversations/__ID__/read')),
+            showConversation: @json(url('/api/communications/conversations/__ID__')),
+            searchUsers: @json(url('/api/communications/users/search')),
+            unreadCount: @json(url('/api/communications/unread-count')),
+            startCall: @json(url('/api/communications/conversations/__ID__/calls')),
+            callStatus: @json(url('/api/communications/calls/__ID__/status')),
+            calls: @json(url('/api/communications/calls')),
+            presence: @json(url('/api/communications/presence'))
+        },
+        getActiveId: function () {
+            return (window.__COMMS_HEADER_ACTIVE_ID__ != null) ? window.__COMMS_HEADER_ACTIVE_ID__ : null;
+        },
+        reloadActiveMessages: function () {},
+        reloadConversations: function () {
+            if (typeof window.refreshMessagesPopover === 'function') {
+                window.refreshMessagesPopover();
+            }
+        },
+        onReactionChange: function () {},
+        appendMessage: function () {},
+        setTyping: function () {}
+    };
+</script>
+@endauth

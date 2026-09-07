@@ -25,6 +25,10 @@ export default defineConfig({
 
                 // Layout (shared header & footer)
                 'app/Modules/Layout/assets/css/kabataan-header.css',
+                'app/Modules/Layout/assets/css/kabataan-header-messages.css',
+                'app/Modules/Layout/assets/css/chat-modal.css',
+                'app/Modules/Layout/assets/css/kabataan-messages.css',
+                'app/Modules/Layout/assets/css/kabataan-call.css',
                 'app/Modules/Layout/assets/css/programs-drawer.css',
                 'app/Modules/Layout/assets/css/kabataan-bootstrap.css',
                 'app/Modules/Layout/assets/css/kabataan-responsive.css',
@@ -49,6 +53,13 @@ export default defineConfig({
                 // Notifications
                 'app/Modules/Notifications/assets/css/notifications.css',
                 'app/Modules/Notifications/assets/js/notifications.js',
+
+                // Communications
+                'app/Modules/Communications/assets/css/communication.css',
+                'app/Modules/Communications/assets/js/communication.js',
+                'app/Modules/Communications/assets/js/chat.js',
+                'app/Modules/Communications/assets/js/realtime.js',
+                'app/Modules/Communications/assets/js/webrtc.js',
 
                 // Programs
                 'app/Modules/Programs/assets/css/scholarship_landing.css',

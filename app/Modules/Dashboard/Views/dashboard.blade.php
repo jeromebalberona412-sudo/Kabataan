@@ -15,6 +15,9 @@
         'app/Modules/Layout/assets/css/kabataan-bootstrap.css',
         'app/Modules/Layout/assets/css/kabataan-responsive.css',
         'app/Modules/Layout/assets/css/kabataan-header.css',
+        'app/Modules/Layout/assets/css/kabataan-header-messages.css',
+        'app/Modules/Layout/assets/css/chat-modal.css',
+        'app/Modules/Layout/assets/css/kabataan-call.css',
         'app/Modules/Layout/assets/css/programs-drawer.css',
         'app/Modules/Layout/assets/css/kabataan-logout.css',
         'app/Modules/Layout/assets/js/kabataan-header.js',
@@ -53,13 +56,16 @@
             top: 0;
             z-index: 90;
             background: var(--bg, #f8fafc);
-            overflow: hidden;
-            max-height: 160px;
+            overflow: visible;
             flex-shrink: 0;
-            transition: max-height 0.18s ease, opacity 0.16s ease, transform 0.18s ease;
+            transform: translate3d(0, 0, 0);
+            opacity: 1;
+            pointer-events: auto;
+            transition: transform 0.22s ease, opacity 0.18s ease;
+            will-change: transform;
         }
         .youth-dashboard .feed-sticky-toolbar.is-hidden {
-            max-height: 0;
+            transform: translate3d(0, calc(-100% - 2px), 0);
             opacity: 0;
             pointer-events: none;
         }
@@ -78,23 +84,11 @@
                 overflow-x: visible;
             }
             .youth-dashboard .feed-sticky-toolbar {
-                position: fixed;
-                top: var(--kab-nav-h, var(--nav-h, 68px));
-                left: 0;
-                right: 0;
-                width: 100%;
-                max-height: none;
-                opacity: 1;
-                transform: translateY(0);
                 box-shadow: 0 8px 16px -10px rgba(15, 23, 42, 0.25);
             }
-            .youth-dashboard .feed-sticky-toolbar.is-hidden {
-                max-height: none;
-                opacity: 1;
-                transform: translateY(-110%);
-                pointer-events: none;
-                box-shadow: none;
-            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .youth-dashboard .feed-sticky-toolbar { transition: none; }
         }
         .lightbox-nav {
             display: none;
@@ -1189,33 +1183,21 @@
     function bindFilterBarScrollHide() {
         const toolbar = document.querySelector('.feed-sticky-toolbar');
         const bar = document.querySelector('.feed-filter-bar');
-        const anchor = document.querySelector('.feed-filter-anchor');
         const feedSection = document.querySelector('.feed-section');
         if (!toolbar || !bar) return;
 
-        const DOWN_THRESHOLD = 8;
-        const UP_THRESHOLD = 4;
-        const TOP_SHOW = 12;
+        const DOWN_THRESHOLD = 14;
+        const UP_THRESHOLD = 8;
+        const TOP_SHOW = 24;
         let lastY = 0;
         let ticking = false;
-        let barHeight = 64;
-
-        function headerHeight() {
-            const header = document.querySelector('.kabataan-header');
-            return Math.round(header?.getBoundingClientRect().height || 68);
-        }
+        let hidden = false;
 
         function scrollRoot() {
             if (!feedSection) return window;
             const overflowY = getComputedStyle(feedSection).overflowY;
-            if (overflowY === 'auto' || overflowY === 'scroll') {
-                return feedSection;
-            }
+            if (overflowY === 'auto' || overflowY === 'scroll') return feedSection;
             return window;
-        }
-
-        function isOverlay() {
-            return scrollRoot() === window;
         }
 
         function currentY() {
@@ -1225,41 +1207,18 @@
                 : root.scrollTop;
         }
 
-        function measureBar() {
-            const height = toolbar.scrollHeight || bar.offsetHeight;
-            if (height > 8) barHeight = height;
-            return barHeight;
-        }
-
-        function updateAnchor() {
-            if (!anchor) return;
-            if (!isOverlay()) {
-                anchor.style.height = '0px';
-                return;
-            }
-            anchor.style.height = toolbar.classList.contains('is-hidden') ? '0px' : (measureBar() + 'px');
-        }
-
-        function syncStickyTop() {
-            toolbar.style.top = isOverlay() ? (headerHeight() + 'px') : '0px';
-            updateAnchor();
-        }
-
         function showBar() {
+            if (!hidden && !toolbar.classList.contains('is-hidden')) return;
+            hidden = false;
             toolbar.classList.remove('is-hidden');
             bar.classList.remove('is-hidden');
-            updateAnchor();
         }
 
         function hideBar() {
-            measureBar();
+            if (hidden && toolbar.classList.contains('is-hidden')) return;
+            hidden = true;
             toolbar.classList.add('is-hidden');
-            updateAnchor();
         }
-
-        lastY = currentY();
-        showBar();
-        syncStickyTop();
 
         function apply() {
             ticking = false;
@@ -1286,12 +1245,13 @@
             requestAnimationFrame(apply);
         }
 
+        lastY = currentY();
+        showBar();
+
         window.addEventListener('scroll', onScroll, { passive: true });
-        document.addEventListener('scroll', onScroll, { passive: true });
         feedSection?.addEventListener('scroll', onScroll, { passive: true });
         window.addEventListener('resize', function () {
             lastY = currentY();
-            syncStickyTop();
             if (currentY() <= TOP_SHOW) showBar();
         });
         bar.addEventListener('focusin', showBar);

@@ -408,14 +408,17 @@ body.youth-dashboard {
     background: var(--bg);
     padding: 0;
     margin: 0;
-    overflow: hidden;
-    max-height: 160px;
+    overflow: visible;
     flex-shrink: 0;
-    transition: max-height 0.18s ease, opacity 0.16s ease;
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+    pointer-events: auto;
+    transition: transform 0.22s ease, opacity 0.18s ease;
+    will-change: transform;
 }
 
 .feed-sticky-toolbar.is-hidden {
-    max-height: 0;
+    transform: translate3d(0, calc(-100% - 2px), 0);
     opacity: 0;
     pointer-events: none;
 }
@@ -1986,23 +1989,7 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
 
 @media (max-width: 1200px) {
     .feed-sticky-toolbar {
-        position: fixed;
-        top: var(--kab-nav-h, var(--nav-h, 68px));
-        left: 0;
-        right: 0;
-        width: 100%;
-        z-index: 90;
-        max-height: none;
-        transform: translateY(0);
         box-shadow: 0 8px 16px -10px rgba(15, 23, 42, 0.22);
-    }
-
-    .feed-sticky-toolbar.is-hidden {
-        max-height: none;
-        opacity: 1;
-        transform: translateY(-110%);
-        pointer-events: none;
-        box-shadow: none;
     }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2083,7 +2070,7 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
 
 @media (max-width: 768px) {
     .feed-sticky-toolbar {
-        top: var(--kab-nav-h, var(--nav-h, 68px));
+        top: 0;
     }
 
     .feed-filter-bar {
