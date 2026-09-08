@@ -24,8 +24,6 @@
         'app/Modules/Profile/assets/css/profile-personal-info-responsive.css',
         'app/Modules/Profile/assets/js/profile.js',
         'app/Modules/Profile/assets/js/profile-participation.js',
-        'app/Modules/Dashboard/assets/css/chatbot.css',
-        'app/Modules/Dashboard/assets/js/chatbot.js',
         'app/Modules/Dashboard/assets/css/notif.css',
         'app/Modules/Dashboard/assets/js/notif.js',
     ])

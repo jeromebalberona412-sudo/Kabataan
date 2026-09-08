@@ -42,12 +42,10 @@ export default defineConfig({
                 'app/Modules/Dashboard/assets/css/dashboard.css',
                 'app/Modules/Dashboard/assets/css/community-feed-comment-preview.css',
                 'app/Modules/Dashboard/assets/css/barangay-profile.css',
-                'app/Modules/Dashboard/assets/css/chatbot.css',
                 'app/Modules/Dashboard/assets/css/notif.css',
                 'app/Modules/Dashboard/assets/js/dashboard.js',
                 'app/Modules/Dashboard/assets/js/community-feed-comment-preview.js',
                 'app/Modules/Dashboard/assets/js/barangay-profile.js',
-                'app/Modules/Dashboard/assets/js/chatbot.js',
                 'app/Modules/Dashboard/assets/js/notif.js',
 
                 // Notifications

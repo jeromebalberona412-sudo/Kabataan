@@ -40,7 +40,8 @@ class KkRegistrationDraftService
     public const DRAFT_COOKIE_NAME = 'kk_wizard_draft_token';
 
     public function __construct(
-        protected CloudinaryService $cloudinary
+        protected CloudinaryService $cloudinary,
+        protected InvalidEmailService $invalidEmails,
     ) {}
 
     public function resolveWizard(): ?array
@@ -318,6 +319,25 @@ class KkRegistrationDraftService
     public function assertEmailAvailable(string $email, int $barangayId): void
     {
         $email = strtolower(trim($email));
+
+        $formatValidator = \Illuminate\Support\Facades\Validator::make(
+            ['email' => $email],
+            ['email' => \App\Rules\ValidEmailAddress::profilingRules()],
+            \App\Rules\ValidEmailAddress::profilingMessages()
+        );
+
+        if ($formatValidator->fails()) {
+            throw ValidationException::withMessages([
+                'email' => $formatValidator->errors()->get('email'),
+            ]);
+        }
+
+        $invalidCheck = $this->invalidEmails->checkBeforeSending($email);
+        if (! $invalidCheck['allowed']) {
+            throw ValidationException::withMessages([
+                'email' => [$invalidCheck['message'] ?? 'This email address cannot be used.'],
+            ]);
+        }
 
         $activePendingRegistration = KabataanRegistration::where('email', $email)
             ->where('barangay_id', $barangayId)

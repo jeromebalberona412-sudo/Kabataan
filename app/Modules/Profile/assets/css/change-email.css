@@ -2,11 +2,20 @@
    Kabataan — Change Email Page
    ============================================================ */
 
+.ce-email-input,
+input[type="email"],
+input[name="email"],
+input[name="new_email"],
+input[name="current_email"] {
+    text-transform: lowercase;
+}
+
 .ce-verify-content {
     width: 100%;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    min-width: 0;
 }
 
 .ce-sent-header,
@@ -22,6 +31,17 @@
     display: none !important;
 }
 
+/* Hidden alerts must not show (youth-alert sets display:flex) */
+.youth-alert.ce-live-alert[hidden],
+#ceVerifyLiveError[hidden],
+#ceClientFlashError[hidden] {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    min-height: 0 !important;
+}
+
 /* ── Info box ────────────────────────────────────────────── */
 .ce-info-box {
     width: 100%;
@@ -33,6 +53,9 @@
     color: #92400e;
     line-height: 1.55;
     margin-bottom: 0;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 /* ── Status table ────────────────────────────────────────── */
@@ -42,6 +65,7 @@
     border: 1.5px solid #e5e7eb;
     overflow: hidden;
     margin-bottom: 0;
+    box-sizing: border-box;
 }
 
 .ce-status-row {
@@ -50,6 +74,7 @@
     padding: 10px 14px;
     gap: 10px;
     border-bottom: 1px solid #f3f4f6;
+    min-width: 0;
 }
 
 .ce-status-row:last-child { border-bottom: none; }
@@ -70,7 +95,9 @@
     font-size: 13px;
     color: #111827;
     font-weight: 500;
-    word-break: break-all;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    min-width: 0;
 }
 
 .ce-badge-awaiting {
@@ -83,6 +110,7 @@
     padding: 3px 10px;
     font-size: 12px;
     font-weight: 700;
+    max-width: 100%;
 }
 
 .ce-badge-awaiting::before {
@@ -111,6 +139,11 @@
     margin-bottom: 0;
 }
 
+.ce-actions form {
+    width: 100%;
+    margin: 0;
+}
+
 .ce-btn-resend {
     width: 100%;
     display: flex;
@@ -128,6 +161,7 @@
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+    box-sizing: border-box;
 }
 
 .ce-btn-resend:hover:not(:disabled) {
@@ -157,6 +191,7 @@
     font-family: inherit;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-sizing: border-box;
 }
 
 .ce-btn-cancel:hover {
@@ -215,6 +250,9 @@ body.youth-signin-page {
     height: auto !important;
     min-height: 100vh;
     overflow: visible !important;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .youth-signin-section {
@@ -223,11 +261,15 @@ body.youth-signin-page {
     align-items: flex-start;
     padding-top: 2rem;
     padding-bottom: 2rem;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .youth-signin-card {
     max-width: 500px;
+    width: 100%;
     overflow: visible;
+    box-sizing: border-box;
 }
 
 .ce-card-header {
@@ -247,70 +289,34 @@ body.youth-signin-page {
     text-align: center;
 }
 
-.cp-listening-badge {
-    width: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 14px;
-    border-radius: 999px;
-    background: #eff6ff;
-    border: 1.5px solid #93c5fd;
-    color: #1d4ed8;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-}
-
-.cp-listening-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #3b82f6;
-    flex-shrink: 0;
-    animation: cpPulse 1.4s ease-in-out infinite;
-}
-
-@keyframes cpPulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.45; transform: scale(0.85); }
-}
-
-.cp-listening-badge.is-confirmed {
-    background: #f0fdf4;
-    border-color: #22c55e;
-    color: #166534;
-}
-
-.cp-listening-badge.is-confirmed .cp-listening-dot {
-    background: #22c55e;
-    animation: none;
-}
-
-/* ── Back to Profile on mobile — below submit, full width ─── */
-@media (max-width: 480px) {
-    .ce-back-section {
-        margin-top: 1.25rem;
-    }
-
-    .ce-back-section .register-text {
-        margin: 0;
-    }
-
-    .ce-back-section .register-link {
-        display: inline-flex;
+/* ── Mobile / tablet responsive ──────────────────────────── */
+@media (max-width: 1024px) {
+    .youth-signin-section {
         width: 100%;
-        text-align: center;
-        font-size: 0.875rem;
-        padding: 10px 0;
+        max-width: 580px;
+        margin-left: auto;
+        margin-right: auto;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+    }
+
+    .youth-signin-card {
+        max-width: 100%;
     }
 }
 
 @media (max-width: 768px) {
+    .youth-signin-section {
+        padding-top: 1.25rem;
+        padding-bottom: 2rem;
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+
     .youth-signin-card {
         max-width: 100%;
         padding: 1.5rem 1.25rem;
+        border-radius: 20px;
     }
 
     .youth-signin-card .card-title {
@@ -327,14 +333,14 @@ body.youth-signin-page {
         flex-direction: column;
         align-items: flex-start;
         gap: 4px;
+        padding: 12px;
     }
 
     .ce-status-key {
         min-width: 0;
     }
 
-    .ce-info-box,
-    .cp-listening-badge {
+    .ce-info-box {
         font-size: 12px;
         padding: 10px 12px;
     }
@@ -347,5 +353,66 @@ body.youth-signin-page {
     .ce-btn-cancel {
         padding: 11px 16px;
         font-size: 13px;
+        min-height: 44px;
+    }
+
+    .youth-alert {
+        font-size: 0.85rem;
+        padding: 0.75rem 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .youth-signin-section {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        padding-bottom: 1.75rem;
+    }
+
+    .youth-signin-card {
+        padding: 1.25rem 1rem;
+        border-radius: 16px;
+    }
+
+    .ce-back-section {
+        margin-top: 1.25rem;
+    }
+
+    .ce-back-section .register-text {
+        margin: 0;
+    }
+
+    .ce-back-section .register-link {
+        display: inline-flex;
+        width: 100%;
+        text-align: center;
+        font-size: 0.875rem;
+        padding: 10px 0;
+        min-height: 44px;
+    }
+
+    .ce-status-key {
+        font-size: 10px;
+    }
+
+    .ce-status-val {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 375px) {
+    .youth-signin-section {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    .youth-signin-card {
+        padding: 1.1rem 0.85rem;
+    }
+
+    .ce-btn-resend,
+    .ce-btn-cancel {
+        font-size: 12.5px;
+        padding: 10px 12px;
     }
 }

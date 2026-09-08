@@ -20,6 +20,7 @@ use App\Services\KabataanProfilingHistoryService;
 use App\Services\KkProfilingScheduleService;
 use App\Services\KkRegistrationDraftService;
 use App\Services\KkSurveyResponseService;
+use App\Services\InvalidEmailService;
 use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
 use App\Services\TurnstileAttemptGuard;
@@ -32,6 +33,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Validation\ValidationException;
 
 class KKProfilingController extends Controller
 {
@@ -40,6 +42,7 @@ class KKProfilingController extends Controller
         protected BarangayZoneService $barangayZoneService,
         protected TurnstileService $turnstileService,
         protected TurnstileAttemptGuard $turnstileGuard,
+        protected InvalidEmailService $invalidEmails,
     ) {}
 
     /**
@@ -519,6 +522,17 @@ class KKProfilingController extends Controller
         $newEmail = strtolower(trim((string) $pending['new_email']));
         $profilingYear = (int) ($pending['profiling_year'] ?? now()->year);
 
+        $invalidCheck = $this->invalidEmails->checkBeforeSending($newEmail);
+        if (! $invalidCheck['allowed']) {
+            return response()->json([
+                'success' => false,
+                'message' => $invalidCheck['message'] ?? 'This email address is invalid and cannot receive mail.',
+                'errors' => [
+                    'email' => [$invalidCheck['message'] ?? 'This email address is invalid and cannot receive mail.'],
+                ],
+            ], 422);
+        }
+
         $retryAfter = $this->resendVerificationCooldownSeconds($registration->id);
         if ($retryAfter > 0) {
             return response()->json([
@@ -537,8 +551,18 @@ class KKProfilingController extends Controller
             ],
         );
 
-        Notification::route('mail', $newEmail)
-            ->notify(new KabataanProfilingEmailChangeVerify($verificationUrl, $profilingYear));
+        try {
+            $this->invalidEmails->attemptMailDelivery($newEmail, function () use ($newEmail, $verificationUrl, $profilingYear) {
+                Notification::route('mail', $newEmail)
+                    ->notify(new KabataanProfilingEmailChangeVerify($verificationUrl, $profilingYear));
+            }, 'email');
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->errors()['email'][0] ?? 'This email address is invalid and cannot receive mail.',
+                'errors' => $e->errors(),
+            ], 422);
+        }
 
         $this->markResendVerificationCooldown($registration->id);
 
@@ -704,6 +728,7 @@ class KKProfilingController extends Controller
                     $barangayName,
                 ));
         } catch (\Throwable $e) {
+            $this->invalidEmails->recordFailureFromException($email, $e);
             report($e);
         }
     }
@@ -905,6 +930,13 @@ class KKProfilingController extends Controller
 
         $email = strtolower(trim($validated['email']));
 
+        $invalidCheck = $this->invalidEmails->checkBeforeSending($email);
+        if (! $invalidCheck['allowed']) {
+            return $this->submitErrorResponse($request, [
+                'email' => $invalidCheck['message'] ?? 'This email address is invalid and cannot receive mail.',
+            ]);
+        }
+
         // Check for active pending registration
         $activePendingRegistration = KabataanRegistration::where('email', $email)
             ->where('barangay_id', $barangayRecord->id)
@@ -977,6 +1009,8 @@ class KKProfilingController extends Controller
         // Send verification email
         try {
             $this->sendVerificationEmail($registration);
+        } catch (ValidationException $e) {
+            return $this->submitErrorResponse($request, $e->errors());
         } catch (\Exception $e) {
             \Log::error('Failed to send verification email', [
                 'error' => $e->getMessage(),
@@ -1146,6 +1180,15 @@ class KKProfilingController extends Controller
                 'message' => 'Verification email has been resent. Please check your inbox.',
                 'turnstile_required' => (bool) $attempt['turnstile_required'],
             ]);
+        } catch (ValidationException $e) {
+            $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY, $request);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->errors()['email'][0] ?? 'This email address is invalid and cannot receive mail.',
+                'errors' => $e->errors(),
+                'turnstile_required' => (bool) $attempt['turnstile_required'],
+            ], 422);
         } catch (\Exception $e) {
             \Log::error('Failed to resend verification email', [
                 'email' => $registration->email,
@@ -1287,8 +1330,10 @@ class KKProfilingController extends Controller
             'url' => $verificationUrl,
         ]);
 
-        Notification::route('mail', $registration->email)
-            ->notify(new KabataanVerifyEmail($verificationUrl));
+        $this->invalidEmails->attemptMailDelivery((string) $registration->email, function () use ($registration, $verificationUrl) {
+            Notification::route('mail', $registration->email)
+                ->notify(new KabataanVerifyEmail($verificationUrl));
+        }, 'email');
     }
 
     private function getBarangaySlug(string $name): string

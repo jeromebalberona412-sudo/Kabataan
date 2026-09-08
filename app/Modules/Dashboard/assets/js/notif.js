@@ -88,8 +88,6 @@ window.toggleNotifPopover = function (event) {
     if (typeof window.kabataanCloseHeaderOverlays === 'function') {
         window.kabataanCloseHeaderOverlays('notif');
     } else {
-        document.getElementById('chatbotPopover')?.classList.remove('open');
-        document.getElementById('chatbotNavBtn')?.setAttribute('aria-expanded', 'false');
         document.getElementById('kabataanHeaderUser')?.classList.remove('is-open');
         document.querySelector('.kabataan-header__avatar-btn')?.setAttribute('aria-expanded', 'false');
     }

@@ -8,7 +8,6 @@
 }
 
 /* Keep header popovers hidden until opened (safety if assets fail) */
-.youth-notifications-page .chatbot-popover:not(.open),
 .youth-notifications-page .notif-popover:not(.open) {
     opacity: 0;
     pointer-events: none;

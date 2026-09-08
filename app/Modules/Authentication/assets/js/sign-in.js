@@ -261,9 +261,24 @@
         if (!signInForm || !emailInput || !passwordInput) return;
 
         emailInput.addEventListener('input', function () {
+            var start = emailInput.selectionStart;
+            var end = emailInput.selectionEnd;
+            var lower = emailInput.value.toLowerCase();
+            if (emailInput.value !== lower) {
+                emailInput.value = lower;
+                if (typeof start === 'number' && typeof end === 'number') {
+                    emailInput.setSelectionRange(start, end);
+                }
+            }
             clearErr(emailInput, emailError);
             onFieldEdit();
         });
+        emailInput.addEventListener('blur', function () {
+            emailInput.value = emailInput.value.trim().toLowerCase();
+        });
+        if (emailInput.value) {
+            emailInput.value = emailInput.value.toLowerCase();
+        }
         passwordInput.addEventListener('input', function () {
             clearErr(passwordInput, passwordError);
             onFieldEdit();

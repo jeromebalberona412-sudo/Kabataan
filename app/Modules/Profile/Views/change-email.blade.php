@@ -55,18 +55,30 @@
                         <p class="card-helper-text">Enter your current email, new email address, and current password to request a change.</p>
                     </div>
 
-                    @if ($errors->any())
-                        <div class="youth-alert youth-alert-error">
+                    @php
+                        $nonNewEmailErrors = collect($errors->messages())
+                            ->except(['new_email'])
+                            ->flatten()
+                            ->filter()
+                            ->values();
+                        $topError = null;
+                        if (session('error') && ! $errors->has('new_email')) {
+                            $topError = session('error');
+                        } elseif ($nonNewEmailErrors->isNotEmpty()) {
+                            $topError = $nonNewEmailErrors->first();
+                        }
+                    @endphp
+
+                    @if ($topError)
+                        <div class="youth-alert youth-alert-error" role="alert" id="ceFlashError">
                             <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
                             </svg>
-                            <div>
-                                @foreach ($errors->all() as $error)
-                                    <div>{{ $error }}</div>
-                                @endforeach
-                            </div>
+                            <span>{{ $topError }}</span>
                         </div>
                     @endif
+
+                    <div class="youth-alert youth-alert-error ce-live-alert" role="alert" id="ceClientFlashError" hidden></div>
 
                     <!-- Form -->
                     <form class="youth-signin-form" id="ceForm" action="{{ route('change-email.request') }}" method="POST" novalidate>
@@ -85,11 +97,14 @@
                                 type="email"
                                 id="ceCurrentEmail"
                                 name="current_email"
-                                class="youth-input"
+                                class="youth-input ce-email-input"
                                 placeholder="Enter your current email"
                                 autocomplete="email"
+                                autocapitalize="none"
+                                autocorrect="off"
+                                spellcheck="false"
                                 maxlength="100"
-                                value="{{ old('current_email', $user->email) }}"
+                                value="{{ old('current_email', strtolower((string) $user->email)) }}"
                                 autofocus
                                 required
                             >
@@ -109,13 +124,17 @@
                                 type="email"
                                 id="ceNewEmail"
                                 name="new_email"
-                                class="youth-input"
+                                class="youth-input ce-email-input{{ $errors->has('new_email') ? ' error' : '' }}"
                                 placeholder="Enter your new email address"
                                 autocomplete="off"
+                                autocapitalize="none"
+                                autocorrect="off"
+                                spellcheck="false"
                                 maxlength="100"
+                                value="{{ old('new_email') ? strtolower((string) old('new_email')) : '' }}"
                                 required
                             >
-                            <div class="youth-field-error" id="ceNewEmailError" hidden></div>
+                            <div class="youth-field-error" id="ceNewEmailError" @if (! $errors->has('new_email')) hidden @endif>@error('new_email'){{ $message }}@enderror</div>
                         </div>
 
                         {{-- Current Password --}}
@@ -159,7 +178,7 @@
 
                     <div class="youth-register-section ce-back-section">
                         <p class="register-text">
-                            <a href="{{ route('profile') }}" class="register-link">← Back to Profile</a>
+                            <a href="{{ route('profile') }}" class="register-link">Back to Profile</a>
                         </p>
                     </div>
                 </div>

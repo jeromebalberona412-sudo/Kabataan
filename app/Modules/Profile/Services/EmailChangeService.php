@@ -3,7 +3,10 @@
 namespace App\Modules\Profile\Services;
 
 use App\Models\User;
+use App\Modules\Authentication\Services\TrustedDeviceService;
 use App\Modules\Profile\Notifications\EmailChangeVerificationNotification;
+use App\Services\EmailValidationService;
+use App\Services\InvalidEmailService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -21,6 +24,11 @@ class EmailChangeService
 
     private const COMPLETED_CACHE_TTL_MINUTES = 30;
 
+    public function __construct(
+        private readonly EmailValidationService $emailValidation,
+        private readonly InvalidEmailService $invalidEmails,
+    ) {}
+
     public function hasPendingChange(User $user): bool
     {
         return filled($user->pending_email)
@@ -30,10 +38,10 @@ class EmailChangeService
 
     public function requestChange(User $user, string $currentEmail, string $newEmail, string $password): void
     {
-        $currentEmail = strtolower(trim($currentEmail));
-        $newEmail = strtolower(trim($newEmail));
+        $currentEmail = $this->emailValidation->normalize($currentEmail);
+        $newEmail = $this->emailValidation->assertCanSend($newEmail, true, $user, 'new_email');
 
-        if (strtolower((string) $user->email) !== $currentEmail) {
+        if ($this->emailValidation->normalize((string) $user->email) !== $currentEmail) {
             throw ValidationException::withMessages([
                 'current_email' => ['Current email does not match your account.'],
             ]);
@@ -51,18 +59,6 @@ class EmailChangeService
             ]);
         }
 
-        if (User::query()->whereRaw('LOWER(email) = ?', [$newEmail])->whereKeyNot($user->id)->exists()) {
-            throw ValidationException::withMessages([
-                'new_email' => ['This email address is already in use.'],
-            ]);
-        }
-
-        if (User::query()->whereRaw('LOWER(pending_email) = ?', [$newEmail])->whereKeyNot($user->id)->exists()) {
-            throw ValidationException::withMessages([
-                'new_email' => ['This email address is already pending verification on another account.'],
-            ]);
-        }
-
         $this->forgetRecentlyCompleted($user->getKey());
 
         $plainToken = Str::random(64);
@@ -75,8 +71,7 @@ class EmailChangeService
             'email_change_last_sent_at' => now(),
         ])->save();
 
-        Notification::route('mail', $user->pending_email)
-            ->notify(new EmailChangeVerificationNotification($user, $plainToken));
+        $this->sendVerificationMail($user, $plainToken);
     }
 
     public function resend(User $user): void
@@ -86,6 +81,13 @@ class EmailChangeService
                 'email' => ['No pending email change request found.'],
             ]);
         }
+
+        $pendingEmail = $this->emailValidation->assertCanSend(
+            (string) $user->pending_email,
+            true,
+            $user,
+            'email'
+        );
 
         if ($user->email_change_last_sent_at?->isAfter(now()->subSeconds(self::RESEND_COOLDOWN_SECONDS))) {
             $seconds = max(1, self::RESEND_COOLDOWN_SECONDS - (int) $user->email_change_last_sent_at->diffInSeconds(now()));
@@ -97,13 +99,13 @@ class EmailChangeService
         $plainToken = Str::random(64);
 
         $user->forceFill([
+            'pending_email' => $pendingEmail,
             'email_change_token' => hash('sha256', $plainToken),
             'email_change_token_expires_at' => now()->addMinutes(self::TOKEN_TTL_MINUTES),
             'email_change_last_sent_at' => now(),
         ])->save();
 
-        Notification::route('mail', $user->pending_email)
-            ->notify(new EmailChangeVerificationNotification($user, $plainToken));
+        $this->sendVerificationMail($user, $plainToken);
     }
 
     public function cancel(User $user): void
@@ -148,12 +150,13 @@ class EmailChangeService
             ]);
         }
 
-        $newEmail = strtolower((string) $user->pending_email);
+        $newEmail = $this->emailValidation->normalize((string) $user->pending_email);
 
-        if (User::query()->whereRaw('LOWER(email) = ?', [$newEmail])->whereKeyNot($user->id)->exists()) {
-            throw ValidationException::withMessages([
-                'email' => ['This email address is no longer available. Please start a new request.'],
-            ]);
+        try {
+            $this->emailValidation->assertCanSend($newEmail, true, $user, 'email');
+        } catch (ValidationException $exception) {
+            $this->cancel($user);
+            throw $exception;
         }
 
         $setPasswordToken = Str::random(64);
@@ -234,7 +237,7 @@ class EmailChangeService
 
     public function completePasswordSet(User $user, string $plainPassword): void
     {
-        $newEmail = strtolower((string) $user->pending_email);
+        $newEmail = $this->emailValidation->normalize((string) $user->pending_email);
 
         if (blank($newEmail)) {
             throw ValidationException::withMessages([
@@ -242,10 +245,11 @@ class EmailChangeService
             ]);
         }
 
-        if (User::query()->whereRaw('LOWER(email) = ?', [$newEmail])->whereKeyNot($user->id)->exists()) {
-            throw ValidationException::withMessages([
-                'password' => ['This email address is no longer available. Please start a new request.'],
-            ]);
+        try {
+            $this->emailValidation->assertCanSend($newEmail, true, $user, 'password');
+        } catch (ValidationException $exception) {
+            $this->cancel($user);
+            throw $exception;
         }
 
         $user->forceFill([
@@ -260,7 +264,9 @@ class EmailChangeService
             'email_change_last_sent_at' => null,
         ])->save();
 
-        app(\App\Modules\Authentication\Services\TrustedDeviceService::class)
+        $this->invalidEmails->markVerified($newEmail);
+
+        app(TrustedDeviceService::class)
             ->revokeAllForUser($user);
 
         User::query()
@@ -275,5 +281,42 @@ class EmailChangeService
         }
 
         return max(0, self::RESEND_COOLDOWN_SECONDS - (int) $user->email_change_last_sent_at->diffInSeconds(now()));
+    }
+
+    protected function sendVerificationMail(User $user, string $plainToken): void
+    {
+        $recipient = $this->emailValidation->normalize((string) $user->pending_email);
+
+        try {
+            $this->invalidEmails->attemptMailDelivery($recipient, function () use ($user, $plainToken, $recipient) {
+                Notification::route('mail', $recipient)
+                    ->notify(new EmailChangeVerificationNotification($user, $plainToken));
+            }, 'new_email');
+        } catch (ValidationException $exception) {
+            $this->cancel($user);
+
+            $message = collect($exception->errors())->flatten()->first();
+            if (is_string($message) && $message !== '') {
+                Cache::put(
+                    $this->deliveryFailedCacheKey((int) $user->id),
+                    $message,
+                    now()->addMinutes(10)
+                );
+            }
+
+            throw $exception;
+        }
+    }
+
+    public function pullDeliveryFailedMessage(int $userId): ?string
+    {
+        $message = Cache::pull($this->deliveryFailedCacheKey($userId));
+
+        return is_string($message) && $message !== '' ? $message : null;
+    }
+
+    private function deliveryFailedCacheKey(int $userId): string
+    {
+        return 'email_change_delivery_failed:'.$userId;
     }
 }

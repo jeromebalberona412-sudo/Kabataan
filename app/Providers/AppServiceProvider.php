@@ -24,15 +24,21 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Force HTTPS only when the request is already HTTPS (or behind an HTTPS proxy),
-        // or in production on a non-loopback host. Never force HTTPS on plain
-        // http://127.0.0.1:8002 — that breaks CSS/JS (Unsupported SSL request).
+        // or in production on a public host. Never force HTTPS on plain local/LAN
+        // artisan serve (http://127.0.0.1 / http://192.168.x.x) — that causes
+        // "Invalid request (Unsupported SSL request)" for CSS/JS.
         $forwardedHttps = request()->server('HTTP_X_FORWARDED_PROTO') === 'https';
         $isProdEnv = in_array(strtolower((string) $this->app->environment()), ['production', 'productions', 'prod'], true);
         $requestIsHttps = request()->secure() || $forwardedHttps;
         $host = strtolower((string) request()->getHost());
-        $isLoopbackHost = in_array($host, ['127.0.0.1', 'localhost', '::1'], true);
+        $isLocalDevHost = $host === 'localhost'
+            || $host === '::1'
+            || $host === '127.0.0.1'
+            || str_starts_with($host, '192.168.')
+            || str_starts_with($host, '10.')
+            || (bool) preg_match('/^172\.(1[6-9]|2\d|3[0-1])\./', $host);
 
-        if ($requestIsHttps || ($isProdEnv && ! $isLoopbackHost)) {
+        if ($requestIsHttps || ($isProdEnv && ! $isLocalDevHost)) {
             URL::forceScheme('https');
         }
 

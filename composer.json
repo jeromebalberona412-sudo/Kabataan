@@ -17,6 +17,7 @@
         "google/cloud-vision": "*",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
+        "propaganistas/laravel-disposable-email": "^2.5",
         "smalot/pdfparser": "*"
     },
     "require-dev": {

@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const timerCountElement = document.getElementById('ceTimerCount');
     const resendBtn = document.getElementById('ceResendBtn');
     const resendForm = document.getElementById('ceResendForm');
-    const listeningBadge = document.getElementById('ceListeningBadge');
     const statusTitle = document.getElementById('ceStatusTitle');
     const statusSub = document.getElementById('ceStatusSub');
     const statusBadge = document.getElementById('ceStatusBadge');
@@ -102,10 +101,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function markAwaitingPasswordUI(message, pendingEmail) {
-        if (listeningBadge) {
-            listeningBadge.classList.add('is-confirmed');
-            listeningBadge.innerHTML = '<span class="cp-listening-dot"></span> Waiting for new password';
-        }
         if (statusTitle) statusTitle.textContent = 'Email Verified!';
         if (statusSub) {
             statusSub.textContent = message || 'Set your new password on the other tab to finish the email change.';
@@ -123,10 +118,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function markCompletedUI(message) {
         confirmationHandled = true;
-        if (listeningBadge) {
-            listeningBadge.classList.add('is-confirmed');
-            listeningBadge.innerHTML = '<span class="cp-listening-dot"></span> Email change complete';
-        }
         if (statusTitle) statusTitle.textContent = 'All Done!';
         if (statusSub) statusSub.textContent = message || 'Signing you out so you can log in with your new credentials.';
         if (statusBadge) {
@@ -143,6 +134,43 @@ document.addEventListener('DOMContentLoaded', function () {
         setTimeout(function () {
             window.location.replace(redirectUrl || '/login');
         }, 900);
+    }
+
+    function showLiveError(message) {
+        const liveError = document.getElementById('ceVerifyLiveError');
+        if (!liveError || !message) return;
+
+        liveError.innerHTML = `
+            <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <span></span>
+        `;
+        const span = liveError.querySelector('span');
+        if (span) span.textContent = message;
+        liveError.hidden = false;
+        liveError.style.display = 'flex';
+        liveError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function redirectToChangeEmail(message, redirectUrl, isInvalidEmail) {
+        clearCooldown();
+        if (timerInterval) clearInterval(timerInterval);
+
+        if (message && isInvalidEmail) {
+            try {
+                sessionStorage.setItem('kabataan_change_email_error', message);
+            } catch (e) {
+                // ignore
+            }
+            showLiveError(message);
+            setTimeout(function () {
+                window.location.replace(redirectUrl || '/change-email');
+            }, 1600);
+            return;
+        }
+
+        window.location.replace(redirectUrl || '/change-email');
     }
 
     async function checkConfirmationStatus() {
@@ -193,8 +221,12 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (payload.state === 'cancelled') {
-                clearCooldown();
-                window.location.replace(payload.redirect || '/change-email');
+                confirmationHandled = true;
+                redirectToChangeEmail(
+                    payload.message || 'Email change request is no longer active.',
+                    payload.redirect || '/change-email',
+                    Boolean(payload.invalid_email),
+                );
             }
         } catch (error) {
             setTimeout(checkConfirmationStatus, POLL_INTERVAL_MS + 2000);

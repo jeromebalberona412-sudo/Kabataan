@@ -48,21 +48,35 @@
                     </div>
 
                     <div class="ce-verify-content">
-                        <div class="cp-listening-badge {{ $awaitingPassword ? 'is-confirmed' : '' }}" id="ceListeningBadge">
-                            <span class="cp-listening-dot"></span>
-                            {{ $awaitingPassword ? 'Waiting for new password…' : 'Listening for email confirmation…' }}
-                        </div>
-
-                        @if ($errors->any())
-                            <div class="youth-alert youth-alert-error">
-                                @foreach ($errors->all() as $error)
-                                    <div>{{ $error }}</div>
-                                @endforeach
+                        @if (session('error'))
+                            <div class="youth-alert youth-alert-error" role="alert" id="ceVerifyFlashError">
+                                <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>{{ session('error') }}</span>
+                            </div>
+                        @elseif ($errors->any())
+                            <div class="youth-alert youth-alert-error" role="alert">
+                                <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                <div>
+                                    @foreach ($errors->all() as $error)
+                                        <div>{{ $error }}</div>
+                                    @endforeach
+                                </div>
                             </div>
                         @endif
 
+                        <div class="youth-alert youth-alert-error ce-live-alert" role="alert" id="ceVerifyLiveError" hidden></div>
+
                         @if (session('status'))
-                            <div class="ce-info-box">{{ session('status') }}</div>
+                            <div class="youth-alert youth-alert-success" role="status">
+                                <svg class="alert-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                                <span>{{ session('status') }}</span>
+                            </div>
                         @endif
 
                         <div class="ce-info-box">
@@ -113,7 +127,7 @@
 
                         <div class="youth-register-section ce-back-section">
                             <p class="register-text">
-                                <a href="{{ route('profile') }}" class="register-link">← Back to Profile</a>
+                                <a href="{{ route('profile') }}" class="register-link">Back to Profile</a>
                             </p>
                         </div>
                     </div>

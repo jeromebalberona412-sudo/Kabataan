@@ -69,7 +69,6 @@
             </div>
 
             @include('dashboard::notification')
-            @include('dashboard::chatbot')
 
             <div class="kabataan-header__user" id="kabataanHeaderUser">
                 <button type="button" class="kabataan-header__avatar-btn user-avatar-btn" aria-expanded="false" aria-haspopup="true">

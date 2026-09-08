@@ -52,6 +52,40 @@
     const clearAllButtons = [formClearAllBtn].filter(Boolean);
     const STEP_STORAGE_KEY = `kkp_wizard_step_${slug}`;
 
+    function bindEmailLowercase(input) {
+        if (!input) return;
+        const applyLower = () => {
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const lower = String(input.value || '').toLowerCase();
+            if (input.value !== lower) {
+                input.value = lower;
+                if (typeof start === 'number' && typeof end === 'number' && document.activeElement === input) {
+                    input.setSelectionRange(start, end);
+                }
+            }
+        };
+        const onType = () => {
+            applyLower();
+            showEmailStatus('');
+            const fieldErr = input.closest('.kkp-form-group, .kkp-inline-pair--email, .form-group')
+                ?.querySelector('.kkp-field-error');
+            if (fieldErr) fieldErr.remove();
+            input.classList.remove('is-invalid', 'error');
+        };
+        input.addEventListener('input', onType);
+        input.addEventListener('blur', () => {
+            input.value = String(input.value || '').trim().toLowerCase();
+        });
+        applyLower();
+    }
+
+    function bindEmailInputsWhenReady() {
+        document.querySelectorAll(
+            'input[type="email"], input[name="email"], input.kkp-email-input'
+        ).forEach(bindEmailLowercase);
+    }
+
     function readStoredWizardStep() {
         try {
             const stored = parseInt(sessionStorage.getItem(STEP_STORAGE_KEY) || '0', 10);
@@ -3623,6 +3657,7 @@
     async function initWizard() {
         bindDocumentTypeControls();
         bindStep1DraftAutosave();
+        bindEmailInputsWhenReady();
         bindClearAllDataControls();
         bindMobileFormScale();
 

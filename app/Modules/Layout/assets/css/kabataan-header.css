@@ -274,8 +274,7 @@ body.kabataan-has-view-only-banner {
     object-fit: cover;
 }
 
-.kabataan-header .notif-nav-wrapper,
-.kabataan-header .chatbot-nav-wrapper {
+.kabataan-header .notif-nav-wrapper {
     position: static;
 }
 
@@ -519,8 +518,7 @@ body.kabataan-has-view-only-banner {
     }
 
     .kabataan-header__icon-btn svg,
-    .kabataan-header .nav-icon-btn svg,
-    .kabataan-header .kab-ai-assistant-btn svg {
+    .kabataan-header .nav-icon-btn svg {
         width: 18px !important;
         height: 18px !important;
     }
@@ -691,8 +689,7 @@ body.kabataan-has-view-only-banner {
     }
 
     .kabataan-header__icon-btn svg,
-    .kabataan-header .nav-icon-btn svg,
-    .kabataan-header .kab-ai-assistant-btn svg {
+    .kabataan-header .nav-icon-btn svg {
         width: 17px !important;
         height: 17px !important;
     }
@@ -715,8 +712,7 @@ body.kabataan-has-view-only-banner {
     }
 
     .kabataan-header__icon-btn svg,
-    .kabataan-header .nav-icon-btn svg,
-    .kabataan-header .kab-ai-assistant-btn svg {
+    .kabataan-header .nav-icon-btn svg {
         width: 16px !important;
         height: 16px !important;
     }
@@ -739,8 +735,7 @@ body.kabataan-has-view-only-banner {
     }
 
     .kabataan-header__icon-btn svg,
-    .kabataan-header .nav-icon-btn svg,
-    .kabataan-header .kab-ai-assistant-btn svg {
+    .kabataan-header .nav-icon-btn svg {
         width: 15px !important;
         height: 15px !important;
     }

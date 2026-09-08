@@ -33,8 +33,6 @@
         'app/Modules/Programs/assets/js/scholarship-data-privacy.js',
         'app/Modules/Programs/assets/js/kabataan-programs.js',
         'app/Modules/Programs/assets/js/program-evaluation-prompt.js',
-        'app/Modules/Dashboard/assets/css/chatbot.css',
-        'app/Modules/Dashboard/assets/js/chatbot.js',
         'app/Modules/Dashboard/assets/css/notif.css',
         'app/Modules/Dashboard/assets/js/notif.js',
     ])

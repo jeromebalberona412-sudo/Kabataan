@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('documents:cleanup')->daily();
+Schedule::command('disposable:update')->weekly();

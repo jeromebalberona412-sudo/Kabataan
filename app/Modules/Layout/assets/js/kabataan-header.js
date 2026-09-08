@@ -10,6 +10,45 @@ import './chat-modal.js';
 (function () {
     'use strict';
 
+    function forceEmailLowercase(input) {
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        const apply = () => {
+            const start = input.selectionStart;
+            const end = input.selectionEnd;
+            const lower = input.value.toLowerCase();
+            if (input.value !== lower) {
+                input.value = lower;
+                if (typeof start === 'number' && typeof end === 'number' && document.activeElement === input) {
+                    input.setSelectionRange(start, end);
+                }
+            }
+        };
+
+        input.addEventListener('input', apply);
+        input.addEventListener('blur', () => {
+            input.value = input.value.trim().toLowerCase();
+        });
+        apply();
+    }
+
+    function bindEmailLowercase(root) {
+        const scope = root || document;
+        scope.querySelectorAll(
+            'input[type="email"], input[name="email"], input[name="new_email"], input[name="current_email"], input[name="pending_email"]'
+        ).forEach(forceEmailLowercase);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => bindEmailLowercase(document));
+    } else {
+        bindEmailLowercase(document);
+    }
+
+    window.kabataanBindEmailLowercase = bindEmailLowercase;
+
     const userWrap = document.getElementById('kabataanHeaderUser');
     const avatarBtn = userWrap?.querySelector('.kabataan-header__avatar-btn');
 
@@ -40,10 +79,6 @@ import './chat-modal.js';
 
         if (except !== 'messages') {
             closeMessagesPopover();
-        }
-
-        if (except !== 'chatbot' && typeof window.closeChatbotPopover === 'function') {
-            window.closeChatbotPopover();
         }
 
         if (except !== 'notif' && typeof window.closeNotifPopover === 'function') {

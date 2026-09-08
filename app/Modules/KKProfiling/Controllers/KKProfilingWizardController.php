@@ -22,6 +22,7 @@ use App\Services\PhilippineIdPipelineService;
 use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
 use App\Services\SupportingDocumentVerificationRecorder;
+use App\Services\InvalidEmailService;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
@@ -47,6 +48,7 @@ class KKProfilingWizardController extends Controller
         protected PhilippineIdPipelineService $philippineIdPipeline,
         protected TurnstileService $turnstileService,
         protected TurnstileAttemptGuard $turnstileGuard,
+        protected InvalidEmailService $invalidEmails,
         protected SupportingDocumentVerificationRecorder $documentVerificationRecorder,
         protected KkProfilingIdentityValidator $identityValidator,
         protected IdImageQualityService $idImageQuality,
@@ -358,7 +360,12 @@ class KKProfilingWizardController extends Controller
             $wizard = $this->dispatchWizardSetPasswordEmail($wizard, $barangayRecord);
             $verificationSent = true;
         } catch (ValidationException $e) {
-            throw $e;
+            $emailError = $e->errors()['email'][0] ?? 'This email address is invalid and cannot receive mail.';
+            Log::warning('KK wizard set-password email rejected', [
+                'email' => $email,
+                'barangay_id' => $barangayRecord->id,
+                'error' => $emailError,
+            ]);
         } catch (\Throwable $e) {
             report($e);
             $emailError = 'Unable to send set password email. Please tap Resend set password link.';
@@ -1652,8 +1659,10 @@ class KKProfilingWizardController extends Controller
             'token' => $wizard['token'] ?? null,
         ]);
 
-        Notification::route('mail', $email)
-            ->notify(new KabataanSetPasswordEmail($setPasswordUrl));
+        $this->invalidEmails->attemptMailDelivery($email, function () use ($email, $setPasswordUrl) {
+            Notification::route('mail', $email)
+                ->notify(new KabataanSetPasswordEmail($setPasswordUrl));
+        }, 'email');
 
         return $this->draftService->markVerificationSent($wizard);
     }

@@ -21,8 +21,6 @@
         'app/Modules/Dashboard/assets/css/barangay-profile.css',
         'app/Modules/Dashboard/assets/css/notif.css',
         'app/Modules/Dashboard/assets/js/notif.js',
-        'app/Modules/Dashboard/assets/css/chatbot.css',
-        'app/Modules/Dashboard/assets/js/chatbot.js',
     ])
     <link rel="preload" href="{{ url('/sounds/reactions_ux.mp3') }}" as="audio" type="audio/mpeg">
     <style>

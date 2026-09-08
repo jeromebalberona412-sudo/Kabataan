@@ -86,7 +86,7 @@ class ProfileController extends Controller
     {
         $validated = $request->validate([
             'current_email' => ['required', 'email', 'max:255'],
-            'new_email' => ['required', 'email', 'max:255', 'different:current_email'],
+            'new_email' => ['required', 'string', 'max:'.\App\Rules\ValidEmailAddress::MAX_LENGTH, 'different:current_email', new \App\Rules\ValidEmailAddress],
             'password' => ['required', 'string', 'max:64'],
         ]);
 
@@ -115,7 +115,17 @@ class ProfileController extends Controller
         $user = $request->user()->fresh();
 
         if (! $this->emailChangeService->hasPendingChange($user) && ! $this->emailChangeService->hasPendingPasswordSet($user)) {
-            return redirect()->route('change-email');
+            $redirect = redirect()->route('change-email');
+
+            if ($request->session()->has('error')) {
+                $redirect->with('error', $request->session()->get('error'));
+            }
+
+            if ($request->session()->has('errors')) {
+                $redirect->withErrors($request->session()->get('errors'));
+            }
+
+            return $redirect;
         }
 
         return view('profile::change-email-verify', [
@@ -158,10 +168,14 @@ class ProfileController extends Controller
             ]);
         }
 
+        $deliveryFailedMessage = $this->emailChangeService->pullDeliveryFailedMessage((int) $user->id);
+
         return response()->json([
             'state' => 'cancelled',
             'redirect' => route('change-email'),
-            'message' => 'Email change request is no longer active.',
+            'invalid_email' => $deliveryFailedMessage !== null,
+            'message' => $deliveryFailedMessage
+                ?? 'Email change request is no longer active.',
         ]);
     }
 
@@ -170,6 +184,17 @@ class ProfileController extends Controller
         try {
             $this->emailChangeService->resend($request->user()->fresh());
         } catch (ValidationException $exception) {
+            $user = $request->user()->fresh();
+
+            if (
+                ! $this->emailChangeService->hasPendingChange($user)
+                && ! $this->emailChangeService->hasPendingPasswordSet($user)
+            ) {
+                return redirect()
+                    ->route('change-email')
+                    ->withErrors($exception->errors());
+            }
+
             return back()->withErrors($exception->errors());
         }
 
