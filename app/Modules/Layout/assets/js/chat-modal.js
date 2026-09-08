@@ -916,6 +916,8 @@ function openHeaderChatModal(conversationId, name, avatarUrl) {
     clearHeaderChatFullscreenUi();
     setHeaderChatEmptyThread(false);
     syncHeaderComposerEndControls();
+    // Pin to newest messages after the dock is visible (cache paint may have scrolled while hidden).
+    jumpHeaderChatToLatest();
 
     // Subscribe immediately so new messages appear while history loads.
     if (window.CommsRealtime && typeof window.CommsRealtime.subscribeConversation === 'function') {
@@ -927,6 +929,7 @@ function openHeaderChatModal(conversationId, name, avatarUrl) {
     startHeaderPeerRefresh(conversationId);
     markHeaderConversationRead(conversationId);
     window.setTimeout(function () {
+        jumpHeaderChatToLatest();
         if (input) {
             input.focus();
             syncHeaderComposerLineLimit();
@@ -1483,7 +1486,7 @@ function renderHeaderChatMessages(messages, opts) {
     var body = document.getElementById('commsChatModalBody');
     if (!body) return;
     var prevScroll = body.scrollTop;
-    var items = Array.isArray(messages) ? messages.slice() : [];
+    var items = sortHeaderMessagesAscending(messages);
     headerChatState.messages = items;
     if (!items.length) {
         hideHeaderReactionPicker();
@@ -1493,12 +1496,19 @@ function renderHeaderChatMessages(messages, opts) {
     var parts = [];
     var skipUntil = -1;
     var prevCreatedAt = null;
+    var latestIndex = items.length - 1;
     items.forEach(function (msg, index) {
         if (index <= skipUntil) return;
 
         var sepAt = msg.created_at;
+        var insertedSep = false;
         if (shouldInsertCommsDateSeparator(prevCreatedAt, sepAt)) {
             parts.push(renderCommsDateSeparator(sepAt));
+            insertedSep = true;
+        }
+        // Always show the newest chat date near the bottom (latest message / batch).
+        if (index === latestIndex && !insertedSep) {
+            parts.push(renderCommsDateSeparator(sepAt || prevCreatedAt));
         }
 
         if (msg.message_type === 'call' || msg.message_type === 'system') {
@@ -1532,6 +1542,9 @@ function renderHeaderChatMessages(messages, opts) {
             var group = items.slice(index, batchEnd + 1);
             var batchImages = collectHeaderImageAttachments(group);
             if (batchImages.length >= 2) {
+                if (batchEnd === latestIndex && !insertedSep) {
+                    parts.push(renderCommsDateSeparator(sepAt || prevCreatedAt));
+                }
                 parts.push(renderHeaderImageBatchBubble(group));
                 skipUntil = batchEnd;
                 prevCreatedAt = (group[group.length - 1] && group[group.length - 1].created_at) || msg.created_at;
@@ -1613,10 +1626,10 @@ function renderHeaderChatMessages(messages, opts) {
     body.innerHTML = parts.join('');
     if (opts.preserveScroll) {
         body.scrollTop = prevScroll;
+        syncHeaderScrollBottomBtn();
     } else {
-        body.scrollTop = body.scrollHeight;
+        jumpHeaderChatToLatest();
     }
-    syncHeaderScrollBottomBtn();
     if (headerChatState.openReactionPickerId) {
         var pickerBtn = body.querySelector('[data-react-toggle="' + headerChatState.openReactionPickerId + '"]');
         if (pickerBtn) {
@@ -1638,8 +1651,32 @@ function syncHeaderScrollBottomBtn() {
 function jumpHeaderChatToLatest() {
     var body = document.getElementById('commsChatModalBody');
     if (!body) return;
-    body.scrollTop = body.scrollHeight;
-    syncHeaderScrollBottomBtn();
+    var pin = function () {
+        body.scrollTop = body.scrollHeight;
+        syncHeaderScrollBottomBtn();
+    };
+    pin();
+    window.requestAnimationFrame(function () {
+        pin();
+        window.requestAnimationFrame(pin);
+    });
+    window.setTimeout(pin, 50);
+    window.setTimeout(pin, 200);
+}
+
+function sortHeaderMessagesAscending(messages) {
+    var items = Array.isArray(messages) ? messages.slice() : [];
+    items.sort(function (a, b) {
+        var idA = Number(a && a.id) || 0;
+        var idB = Number(b && b.id) || 0;
+        if (idA && idB && String(a.id).indexOf('local-') !== 0 && String(b.id).indexOf('local-') !== 0) {
+            return idA - idB;
+        }
+        var tA = Date.parse((a && a.created_at) || '') || 0;
+        var tB = Date.parse((b && b.created_at) || '') || 0;
+        return tA - tB;
+    });
+    return items;
 }
 
 function cloneHeaderReactions(reactions) {
@@ -2299,6 +2336,9 @@ function loadHeaderChatMessages(conversationId) {
         }));
         if (!same) {
             renderHeaderChatMessages(messages);
+        } else {
+            // Same payload as cache — still pin to newest (modal may have opened while scrolled wrong).
+            jumpHeaderChatToLatest();
         }
         writeHeaderChatCache(conversationId, {
             messages: same ? headerChatState.messages : messages,
@@ -2311,6 +2351,7 @@ function loadHeaderChatMessages(conversationId) {
         }
     }).finally(function () {
         headerChatState.loading = false;
+        jumpHeaderChatToLatest();
     });
 }
 

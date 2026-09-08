@@ -901,15 +901,23 @@ import './communication.js';
         } else if (els.messages && opts.stickBottom !== false && !opts.preserveScroll) {
             stickBottom = els.messages.scrollTop + els.messages.clientHeight >= els.messages.scrollHeight - 48;
         }
-        var items = state.messages || [];
+        var items = sortMessagesAscending(state.messages || []);
+        state.messages = items;
         var parts = [];
         var skipUntil = -1;
         var prevCreatedAt = null;
+        var latestIndex = items.length - 1;
         items.forEach(function (m, index) {
             if (index <= skipUntil) return;
 
+            var insertedSep = false;
             if (shouldInsertDateSeparator(prevCreatedAt, m.created_at)) {
                 parts.push(renderDateSeparator(m.created_at));
+                insertedSep = true;
+            }
+            // Keep newest chat date visible at the bottom when opening latest messages.
+            if (index === latestIndex && !insertedSep) {
+                parts.push(renderDateSeparator(m.created_at || prevCreatedAt));
             }
 
             if (m.message_type === 'call' || m.message_type === 'system') {
@@ -945,6 +953,9 @@ import './communication.js';
                 var batchEnd = imageBatchEndIndex(items, index);
                 var group = items.slice(index, batchEnd + 1);
                 if (collectImageAttachments(group).length >= 2) {
+                    if (batchEnd === latestIndex && !insertedSep) {
+                        parts.push(renderDateSeparator(m.created_at || prevCreatedAt));
+                    }
                     parts.push(renderImageBatchBubble(group));
                     skipUntil = batchEnd;
                     prevCreatedAt = (group[group.length - 1] && group[group.length - 1].created_at) || m.created_at;
@@ -1017,12 +1028,13 @@ import './communication.js';
         if (!els.messages) return;
         if (opts.preserveScroll) {
             els.messages.scrollTop = prevScroll;
+            syncScrollBottomBtn();
         } else if (stickBottom || opts.stickBottom === true) {
-            els.messages.scrollTop = els.messages.scrollHeight;
+            jumpToLatestMessages();
         } else {
             els.messages.scrollTop = prevScroll;
+            syncScrollBottomBtn();
         }
-        syncScrollBottomBtn();
         if (state.editingId) {
             var activeEdit = els.messages.querySelector('[data-edit-input="' + state.editingId + '"]');
             if (activeEdit) {
@@ -1072,8 +1084,32 @@ import './communication.js';
 
     function jumpToLatestMessages() {
         if (!els.messages) return;
-        els.messages.scrollTop = els.messages.scrollHeight;
-        syncScrollBottomBtn();
+        var pin = function () {
+            els.messages.scrollTop = els.messages.scrollHeight;
+            syncScrollBottomBtn();
+        };
+        pin();
+        window.requestAnimationFrame(function () {
+            pin();
+            window.requestAnimationFrame(pin);
+        });
+        window.setTimeout(pin, 50);
+        window.setTimeout(pin, 200);
+    }
+
+    function sortMessagesAscending(messages) {
+        var items = Array.isArray(messages) ? messages.slice() : [];
+        items.sort(function (a, b) {
+            var idA = Number(a && a.id) || 0;
+            var idB = Number(b && b.id) || 0;
+            if (idA && idB && String(a.id).indexOf('local-') !== 0 && String(b.id).indexOf('local-') !== 0) {
+                return idA - idB;
+            }
+            var tA = Date.parse((a && a.created_at) || '') || 0;
+            var tB = Date.parse((b && b.created_at) || '') || 0;
+            return tA - tB;
+        });
+        return items;
     }
 
     function cloneReactions(reactions) {
@@ -1891,6 +1927,9 @@ import './communication.js';
                 if (changed || !hadCache) {
                     state.messages = freshMessages;
                     renderMessages({ stickBottom: true });
+                } else {
+                    // Unchanged cache — still pin to newest messages at the bottom.
+                    jumpToLatestMessages();
                 }
             }
             saveMsgCache(id, Number(state.activeId) === Number(id) ? state.messages : freshMessages, freshEmojis.length ? freshEmojis : state.reactionEmojis);
@@ -1898,6 +1937,7 @@ import './communication.js';
             if (!opts.skipReloadList) {
                 scheduleReloadConversations();
             }
+            jumpToLatestMessages();
         }).catch(function (err) {
             if (!hadCache) {
                 Comms.showToast(err.message || 'Unable to open conversation.', 'error');
