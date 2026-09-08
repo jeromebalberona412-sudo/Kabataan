@@ -56,6 +56,40 @@ class KKProfilingWizardController extends Controller
         protected IdVerificationAiService $idVerificationAi,
     ) {}
 
+    /**
+     * Step 2 Gemini / Groq AI ID verification switch.
+     * Keep false so AI is unused but the existing code paths remain available.
+     * Set to true to re-enable Gemini/Groq verification on Supporting Documents.
+     */
+    private function step2AiIdVerificationEnabled(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Upload-only verification stub used while Gemini/Groq AI is disabled.
+     *
+     * @return array<string, mixed>
+     */
+    private function step2AiDisabledVerificationPayload(string $documentType): array
+    {
+        return [
+            'success' => true,
+            'validation_error' => false,
+            'needs_review' => true,
+            'verification_status' => 'manual_review',
+            'document_detected' => true,
+            'id_type' => SupportingDocumentTypes::label($documentType),
+            'detected_id_type' => $documentType,
+            'expected_id_type' => $documentType,
+            'confidence' => 0,
+            'ocr_status' => 'ai_disabled',
+            'message' => 'Supporting document uploaded. SK officials will review your ID manually.',
+            'ai_verification_disabled' => true,
+            'source' => 'ai_disabled',
+        ];
+    }
+
     public function saveStep1(Request $request, string $barangay)
     {
         $barangayRecord = $this->resolveBarangay($barangay);
@@ -260,31 +294,39 @@ class KKProfilingWizardController extends Controller
                 $registrationFields['_province'] = 'Laguna';
                 $registrationFields['_region'] = 'Region IV-A';
 
-                try {
-                    [$ocrPayload, $formSuggestions] = $this->runStep2DocumentValidation(
-                        (string) $documentType,
-                        $sides,
-                        (int) $barangayRecord->id,
-                        $registrationFields,
-                        is_string($selfieRealPath) ? $selfieRealPath : null,
-                    );
-                } catch (ValidationException $exception) {
-                    throw $exception;
-                } catch (\Throwable $exception) {
-                    report($exception);
-                    Log::warning('KK wizard Step 2 document validation failed', [
-                        'document_type' => $documentType,
-                        'error' => $exception->getMessage(),
-                    ]);
+                // Gemini / Groq AI ID verification is disabled for Step 2.
+                // Existing AI call is kept below for later re-enable via step2AiIdVerificationEnabled().
+                if (! $this->step2AiIdVerificationEnabled()) {
+                    $ocrPayload = $this->step2AiDisabledVerificationPayload((string) $documentType);
+                    $formSuggestions = null;
+                    $wizard = $this->draftService->storeIdVerification($wizard, $ocrPayload);
+                } else {
+                    try {
+                        [$ocrPayload, $formSuggestions] = $this->runStep2DocumentValidation(
+                            (string) $documentType,
+                            $sides,
+                            (int) $barangayRecord->id,
+                            $registrationFields,
+                            is_string($selfieRealPath) ? $selfieRealPath : null,
+                        );
+                    } catch (ValidationException $exception) {
+                        throw $exception;
+                    } catch (\Throwable $exception) {
+                        report($exception);
+                        Log::warning('KK wizard Step 2 document validation failed', [
+                            'document_type' => $documentType,
+                            'error' => $exception->getMessage(),
+                        ]);
 
-                    throw ValidationException::withMessages([
-                        'document_type' => ['We couldn\'t process this document. Please try uploading a clearer photo of your ID.'],
-                    ]);
+                        throw ValidationException::withMessages([
+                            'document_type' => ['We couldn\'t process this document. Please try uploading a clearer photo of your ID.'],
+                        ]);
+                    }
+
+                    $wizard = $this->draftService->storeIdVerification($wizard, is_array($ocrPayload) ? $ocrPayload : []);
+
+                    $this->assertStep2DocumentAllowedToProceed((string) $documentType, is_array($ocrPayload) ? $ocrPayload : []);
                 }
-
-                $wizard = $this->draftService->storeIdVerification($wizard, is_array($ocrPayload) ? $ocrPayload : []);
-
-                $this->assertStep2DocumentAllowedToProceed((string) $documentType, is_array($ocrPayload) ? $ocrPayload : []);
 
                 try {
                     $privacyVerification = $this->documentVerificationRecorder->record(
@@ -930,6 +972,20 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
+        // Gemini / Groq AI detect-id is disabled — keep the AI implementation below unused.
+        if (! $this->step2AiIdVerificationEnabled()) {
+            $stub = $this->step2AiDisabledVerificationPayload($documentType);
+            $this->draftService->storeIdVerification($wizard, $stub);
+
+            return response()->json([
+                'success' => true,
+                'message' => $stub['message'],
+                'ocr' => $stub,
+                'form_suggestions' => [],
+                'ai_verification_disabled' => true,
+            ]);
+        }
+
         // Reuse AI extraction for the same images, but ALWAYS re-check against current Step 1 identity.
         if (is_string($frontPath) && is_string($backPath)) {
             $pairHash = $this->idVerificationAi->pairHash($frontPath, $backPath, $documentType);
@@ -1308,6 +1364,11 @@ class KKProfilingWizardController extends Controller
         array $registrationFields,
         ?string $selfieRealPath = null,
     ): array {
+        // Gemini / Groq AI path kept below but unused while Step 2 AI is disabled.
+        if (! $this->step2AiIdVerificationEnabled()) {
+            return [$this->step2AiDisabledVerificationPayload($documentType), null];
+        }
+
         $front = $sides['front'] ?? null;
         $back = $sides['back'] ?? null;
         $frontPath = $front instanceof UploadedFile ? $front->getRealPath() : null;

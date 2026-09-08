@@ -18,15 +18,25 @@
             </div>
         </div>
 
+        <div class="kkp-wizard-info-callout kkp-wizard-info-callout--warning" role="note">
+            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l6.518 11.59c.75 1.335-.213 2.986-1.742 2.986H3.48c-1.53 0-2.493-1.651-1.743-2.986L8.257 3.1zM11 13a1 1 0 10-2 0 1 1 0 002 0zm-1-8a1 1 0 00-1 1v4a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            <p>
+                <strong>Important:</strong> Upload a clear, correct photo of your selected ID (front and back).
+                If you upload the wrong image, an unclear photo, or a document that does not match your
+                profiling details, your KK Profiling application may be rejected during review by SK officials.
+            </p>
+        </div>
+
         <div class="kkp-wizard-info-callout" role="note">
             <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
             </svg>
             <p>
                 <strong>Privacy notice:</strong> Upload one valid supporting ID/document if available.
-                Your document will be processed only for verification purposes. Only necessary verification
-                information will be retained. Original files are stored privately and deleted according to
-                the retention policy. Document appearance checks do not prove legal authenticity.
+                Your document will be reviewed by authorized SK officials only for verification purposes.
+                Original files are stored privately and deleted according to the retention policy.
             </p>
         </div>
 
@@ -37,8 +47,8 @@
         <fieldset class="kkp-wizard-doc-type-fieldset" id="kkpDocTypeFieldset">
             <legend class="kkp-wizard-doc-type-legend">Select document type to upload</legend>
             <p class="kkp-wizard-doc-type-help" id="kkpDocTypeHelp">
-                <span class="kkp-doc-help-desktop">Choose an ID type first, then upload clear front and back photos. Verification checks that the image is a real ID (random photos are rejected).</span>
-                <span class="kkp-doc-help-mobile">Choose an ID type first. Then use live camera or upload front and back photos — verification checks that the image is a real ID (random photos are rejected).</span>
+                <span class="kkp-doc-help-desktop">Choose an ID type first, then upload clear front and back photos. Wrong or fake-looking uploads may lead to rejection of your KK Profiling.</span>
+                <span class="kkp-doc-help-mobile">Choose an ID type first. Then use live camera or upload front and back photos. Wrong or fake-looking uploads may lead to rejection of your KK Profiling.</span>
             </p>
             <div class="kkp-wizard-doc-type-options" role="radiogroup" aria-label="Document type">
                 <label class="kkp-wizard-doc-type-option">
@@ -53,7 +63,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">School ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · upload clear photos</span>
                         </span>
                     </span>
                 </label>
@@ -69,7 +79,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">PhilSys / National ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · upload clear photos</span>
                         </span>
                     </span>
                 </label>
@@ -85,7 +95,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">Voter's ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · upload clear photos</span>
                         </span>
                     </span>
                 </label>
@@ -101,7 +111,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">PhilHealth ID</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · upload clear photos</span>
                         </span>
                     </span>
                 </label>
@@ -117,7 +127,7 @@
                         </span>
                         <span class="kkp-wizard-doc-type-text">
                             <span class="kkp-wizard-doc-type-name">Other valid proof of identity or residency</span>
-                            <span class="kkp-wizard-doc-type-desc">Front and back · required to validate</span>
+                            <span class="kkp-wizard-doc-type-desc">Front and back · upload clear photos</span>
                         </span>
                     </span>
                 </label>
@@ -200,7 +210,8 @@
                 </div>
                 @endforeach
             </div>
-            <div class="kkp-id-verify-overlay" hidden aria-live="polite" aria-busy="true">
+            {{-- Gemini/Groq AI verify overlay kept in markup but always hidden while AI is disabled --}}
+            <div class="kkp-id-verify-overlay" hidden aria-hidden="true" data-ai-verify-disabled="1">
                 <div class="kkp-id-verify-overlay-card">
                     <span class="kkp-wizard-ocr-spinner" aria-hidden="true"></span>
                     <p class="kkp-id-verify-overlay-title">Verifying ID…</p>
@@ -281,7 +292,8 @@
 
         <div class="kkp-wizard-doc-error-panel" id="kkpWizardDocError" role="alert" hidden></div>
 
-        <div class="kkp-wizard-ocr-panel" id="kkpWizardOcrPanel" hidden aria-live="polite">
+        {{-- Gemini/Groq AI OCR results panel kept but unused/hidden while AI ID verification is disabled --}}
+        <div class="kkp-wizard-ocr-panel" id="kkpWizardOcrPanel" hidden aria-hidden="true" data-ai-verify-disabled="1">
             <p class="kkp-wizard-ocr-title" id="kkpWizardOcrTitle">ID verification</p>
             <div class="kkp-wizard-ocr-loading" id="kkpWizardOcrLoading" hidden>
                 <span class="kkp-wizard-ocr-spinner" aria-hidden="true"></span>
@@ -293,7 +305,7 @@
                     <span class="kkp-wizard-ocr-progress-bar" id="kkpWizardOcrProgressBar"></span>
                 </div>
             </div>
-            <p class="kkp-wizard-ocr-status" id="kkpWizardOcrStatus">Upload front and back to verify your ID.</p>
+            <p class="kkp-wizard-ocr-status" id="kkpWizardOcrStatus">Upload front and back of your ID.</p>
             <dl class="kkp-wizard-ocr-fields" id="kkpWizardOcrFields" hidden></dl>
             <p class="kkp-wizard-ocr-note" id="kkpWizardOcrNote" hidden>
                 Supporting ID upload is optional. You can continue to the next step anytime.

@@ -14,6 +14,10 @@
 
     const apiBase = `/api/kkprofiling/${slug}/wizard`;
 
+    // Gemini / Groq AI ID verification on Step 2 — keep false so detect-id / OCR UI stay unused.
+    // Set to true to re-enable the existing AI scan flow below.
+    const STEP2_AI_ID_VERIFICATION_ENABLED = false;
+
     const STEP_META = {
         1: {
             title: 'Profiling Form',
@@ -21,7 +25,7 @@
         },
         2: {
             title: 'Supporting Documents',
-            desc: 'Optional: upload your Voter\'s ID, PhilHealth ID, or other valid proof of identity now, or skip and continue to email verification.',
+            desc: 'Optional: upload a clear ID photo now, or skip and continue. Wrong or unclear ID uploads may lead to rejection.',
         },
         3: {
             title: 'Check Your Email',
@@ -956,6 +960,13 @@
         const retryCount = Number(options.retryCount || 0);
         const force = Boolean(options.force);
         const documentType = getSelectedDocumentType();
+
+        // Gemini / Groq AI verification disabled — skip detect-id / OCR scan UI.
+        if (!STEP2_AI_ID_VERIFICATION_ENABLED) {
+            clearOcrUiState({ hidePanel: true });
+            updateNavButtons(currentStep);
+            return;
+        }
 
         if (!documentType) {
             clearOcrUiState({ hidePanel: true });
@@ -2432,6 +2443,9 @@
         updateIdCaptureProgress();
 
         if (PHILIPPINE_OCR_DOC_TYPES.includes(documentType) && step2.id_verification) {
+            if (!STEP2_AI_ID_VERIFICATION_ENABLED) {
+                clearOcrUiState({ hidePanel: true });
+            } else {
             const restored = {
                 id_type: step2.id_verification.id_type,
                 confidence: step2.id_verification.confidence,
@@ -2465,6 +2479,7 @@
 
             if (step2.id_verification.form_suggestions) {
                 applyFormSuggestions(step2.id_verification.form_suggestions, { onlyEmpty: true });
+            }
             }
         }
 

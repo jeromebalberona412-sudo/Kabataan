@@ -469,6 +469,22 @@
     line-height: 1.45;
 }
 
+.kkp-wizard-info-callout--warning {
+    background: #fffbeb;
+    border-color: #fcd34d;
+    color: #92400e;
+}
+
+.kkp-wizard-info-callout--warning p {
+    color: #92400e;
+}
+
+/* Hide unused Gemini/Groq AI verify UI while AI ID verification is disabled */
+.kkp-id-verify-overlay[data-ai-verify-disabled="1"],
+.kkp-wizard-ocr-panel[data-ai-verify-disabled="1"] {
+    display: none !important;
+}
+
 .kkp-wizard-nav {
     display: flex;
     justify-content: space-between;
