@@ -2,6 +2,7 @@
 
 namespace App\Modules\Communications\Services;
 
+use App\Models\User;
 use App\Modules\Communications\Models\Conversation;
 use App\Modules\Communications\Models\Message;
 use App\Modules\Communications\Models\MessageAttachment;
@@ -46,9 +47,10 @@ class MessageService
         $userId = (int) $user->id;
         $userType = $this->types->portalType();
 
-        $messageWith = ['sender', 'reactions', 'attachments'];
+        $messageWith = ['sender', 'reactions.user', 'attachments'];
         if (Schema::hasTable('barangays')) {
             $messageWith[] = 'sender.barangay';
+            $messageWith[] = 'reactions.user.barangay';
         }
         if (Schema::hasTable('official_profiles')) {
             $messageWith[] = 'sender.officialProfile';
@@ -101,7 +103,7 @@ class MessageService
         $this->conversations->assertCanMessagePeer($conversation, $user);
 
         $body = trim($body);
-        $max = (int) config('communications.message_max_length', 5000);
+        $max = (int) config('communications.message_max_length', 1000);
 
         if (mb_strlen($body) > $max) {
             abort(422, 'Message is too long.');
@@ -137,16 +139,23 @@ class MessageService
                 ]);
 
                 if ($attachmentMeta !== null) {
-                    MessageAttachment::query()->create(array_merge(
+                    $fileContents = $attachmentMeta['_file_contents'] ?? null;
+                    unset($attachmentMeta['_file_contents']);
+
+                    $attachment = MessageAttachment::query()->create(array_merge(
                         ['message_id' => $message->id],
                         $attachmentMeta
                     ));
+
+                    if ($fileContents !== null && ($attachmentMeta['storage_provider'] ?? '') === 'database') {
+                        $this->attachmentStorage->writeBytea((int) $attachment->id, $fileContents);
+                    }
                 }
 
                 return $message;
             });
         } catch (\Throwable $e) {
-            if ($attachmentMeta !== null) {
+            if ($attachmentMeta !== null && ($attachmentMeta['storage_provider'] ?? '') !== 'database') {
                 $this->attachmentStorage->deleteStored(
                     $attachmentMeta['storage_provider'],
                     $attachmentMeta['public_id'] ?? null,
@@ -159,7 +168,7 @@ class MessageService
         $conversation->touch();
         $this->conversations->markRead($conversation, $user);
 
-        return $message->load(['sender', 'reactions', 'attachments']);
+        return $message->load(['sender', 'reactions.user', 'attachments']);
     }
 
     /**
@@ -203,7 +212,11 @@ class MessageService
         }
 
         $message->unsetRelation('reactions');
-        $message->load('reactions');
+        $reactionWith = ['reactions.user'];
+        if (Schema::hasTable('barangays')) {
+            $reactionWith[] = 'reactions.user.barangay';
+        }
+        $message->load($reactionWith);
 
         return [
             'message_id' => (int) $message->id,
@@ -216,10 +229,10 @@ class MessageService
         $this->assertCanViewMessage($message, $user);
         $this->assertOwnMessage($message, $user);
         abort_if($message->deleted_for_all_at !== null, 422, 'Deleted messages cannot be edited.');
-        abort_if($message->message_type !== 'text', 422, 'Only text messages can be edited.');
+        abort_if((string) $message->message_type !== 'text', 422, 'Only text messages can be edited.');
 
         $body = trim($body);
-        $max = (int) config('communications.message_max_length', 5000);
+        $max = (int) config('communications.message_max_length', 1000);
         if ($body === '') {
             abort(422, 'Message body is required.');
         }
@@ -231,7 +244,7 @@ class MessageService
         $message->edited_at = now();
         $message->save();
 
-        return $message->load(['sender', 'reactions', 'attachments']);
+        return $message->load(['sender', 'reactions.user', 'attachments']);
     }
 
     public function deleteForMe(Message $message, Authenticatable $user): void
@@ -254,7 +267,7 @@ class MessageService
         $message->deleted_for_all_at = now();
         $message->save();
 
-        return $message->load(['sender', 'reactions', 'attachments']);
+        return $message->load(['sender', 'reactions.user', 'attachments']);
     }
 
     protected function assertCanViewMessage(Message $message, Authenticatable $user): void
@@ -361,12 +374,19 @@ class MessageService
     }
 
     /**
-     * @return list<array{emoji: string, count: int, mine: bool}>
+     * @return list<array{emoji: string, count: int, mine: bool, users: list<array{id: int, user_type: string, name: string, mine: bool}>}>
      */
     public function serializeReactions(Message $message, Authenticatable $viewer): array
     {
         $portalType = $this->types->portalType();
         $viewerId = (int) $viewer->id;
+        $viewerName = 'You';
+        if ($viewer instanceof User) {
+            $viewerName = $this->conversations->resolveDisplayName($viewer, $portalType);
+            if ($viewerName === '') {
+                $viewerName = 'You';
+            }
+        }
         $grouped = [];
 
         foreach ($message->reactions as $reaction) {
@@ -375,14 +395,60 @@ class MessageService
                 continue;
             }
             if (! isset($grouped[$emoji])) {
-                $grouped[$emoji] = ['emoji' => $emoji, 'count' => 0, 'mine' => false];
+                $grouped[$emoji] = ['emoji' => $emoji, 'count' => 0, 'mine' => false, 'users' => []];
             }
+
+            $isMine = (int) $reaction->user_id === $viewerId && $reaction->user_type === $portalType;
+            $name = $this->reactionDisplayName($reaction, $isMine, $viewerName);
+
             $grouped[$emoji]['count']++;
-            if ((int) $reaction->user_id === $viewerId && $reaction->user_type === $portalType) {
+            if ($isMine) {
                 $grouped[$emoji]['mine'] = true;
             }
+            $grouped[$emoji]['users'][] = [
+                'id' => (int) $reaction->user_id,
+                'user_type' => (string) $reaction->user_type,
+                'name' => $name,
+                'mine' => $isMine,
+                'profile_image_url' => $this->reactionAvatarUrl($reaction, $isMine, $viewer),
+            ];
         }
 
         return array_values($grouped);
+    }
+
+    protected function reactionDisplayName(MessageReaction $reaction, bool $isMine, string $viewerName): string
+    {
+        if ($isMine) {
+            return $viewerName !== '' ? $viewerName : 'You';
+        }
+
+        $user = $reaction->user;
+        if ($user instanceof User) {
+            $name = trim($this->conversations->resolveDisplayName($user, (string) $reaction->user_type));
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        $name = trim((string) ($reaction->user?->name ?? ''));
+
+        return $name !== '' ? $name : 'Someone';
+    }
+
+    protected function reactionAvatarUrl(MessageReaction $reaction, bool $isMine, Authenticatable $viewer): ?string
+    {
+        if ($isMine && $viewer instanceof User) {
+            return ($this->conversations->serializeUser($viewer, $this->types->portalType()) ?? [])['profile_image_url'] ?? null;
+        }
+
+        $user = $reaction->user;
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $type = (string) ($reaction->user_type ?: $this->types->fromUser($user));
+
+        return ($this->conversations->serializeUser($user, $type) ?? [])['profile_image_url'] ?? null;
     }
 }

@@ -137,6 +137,8 @@
     hidden
     data-current-user-id="{{ auth()->id() }}"
     data-portal-user-type="{{ config('communications.portal_user_type', 'kabataan') }}"
+    data-current-user-name="{{ auth()->user()->name ?? '' }}"
+    data-current-user-avatar="{{ $avatarUrl }}"
     data-unread-count-url="{{ url('/api/communications/unread-count') }}"
 ></div>
 <script>
@@ -155,7 +157,8 @@
             startCall: @json(url('/api/communications/conversations/__ID__/calls')),
             callStatus: @json(url('/api/communications/calls/__ID__/status')),
             calls: @json(url('/api/communications/calls')),
-            presence: @json(url('/api/communications/presence'))
+            presence: @json(url('/api/communications/presence')),
+            faqSuggestions: @json(url('/api/communications/conversations/__ID__/faq-suggestions'))
         },
         getActiveId: function () {
             return (window.__COMMS_HEADER_ACTIVE_ID__ != null) ? window.__COMMS_HEADER_ACTIVE_ID__ : null;
@@ -168,7 +171,23 @@
         },
         onReactionChange: function () {},
         appendMessage: function () {},
-        setTyping: function () {}
+        setTyping: function (visible, meta) {
+            var el = document.getElementById('commsChatModalTyping');
+            if (!el) return;
+            if (window.Comms && typeof window.Comms.paintTypingEl === 'function') {
+                window.Comms.paintTypingEl(el, !!visible, meta || null);
+                return;
+            }
+            if (!visible) {
+                el.hidden = true;
+                el.textContent = '';
+                return;
+            }
+            var who = meta && meta.name ? String(meta.name).trim() : '';
+            el.textContent = who ? (who + ' is typing...') : 'Typing...';
+            el.hidden = false;
+        }
     };
+    window.CommsChat.messageMaxLength = {{ (int) config('communications.message_max_length', 1000) }};
 </script>
 @endauth

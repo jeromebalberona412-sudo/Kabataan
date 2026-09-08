@@ -18,11 +18,15 @@ class MessageAttachment extends Model
         'mime_type',
         'file_size',
         'storage_provider',
+        // file_data is written via raw DB statement; not mass-assignable.
     ];
 
     protected $casts = [
         'file_size' => 'integer',
     ];
+
+    // Never include raw binary in JSON serialization / API responses.
+    protected $hidden = ['file_data'];
 
     public function message(): BelongsTo
     {

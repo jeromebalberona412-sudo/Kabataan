@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Communications\Controllers\CallController;
+use App\Modules\Communications\Controllers\ChatFaqSuggestionController;
 use App\Modules\Communications\Controllers\CommunicationsPageController;
 use App\Modules\Communications\Controllers\ConversationController;
 use App\Modules\Communications\Controllers\MessageAttachmentController;
@@ -33,6 +34,8 @@ Route::middleware(['auth'])->group(function (): void {
     Route::post('/api/communications/conversations/{conversation}/messages', [MessageController::class, 'store'])
         ->middleware('throttle:60,1')
         ->name('api.communications.messages.store');
+    Route::get('/api/communications/conversations/{conversation}/faq-suggestions', ChatFaqSuggestionController::class)
+        ->name('api.communications.faq-suggestions');
     Route::post('/api/communications/messages/{message}/reactions', [MessageController::class, 'toggleReaction'])
         ->middleware('throttle:60,1')
         ->name('api.communications.messages.react');

@@ -17,7 +17,10 @@ class CommunicationsPageController extends Controller
         return view('communications::index', [
             'initialConversationId' => $conversationId,
             'currentUserId' => (int) Auth::id(),
-            'portalUserType' => config('communications.portal_user_type', 'sk_fed'),
+            'portalUserType' => config('communications.portal_user_type', 'kabataan'),
+            'currentUserAvatar' => Auth::user()
+                ? app(\App\Modules\Profile\Services\ProfileImageService::class)->resolveDisplayUrl(Auth::user())
+                : null,
         ]);
     }
 

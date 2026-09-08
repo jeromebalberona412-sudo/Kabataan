@@ -4,6 +4,7 @@ namespace App\Modules\Communications\Controllers;
 
 use App\Modules\Communications\Models\Conversation;
 use App\Modules\Communications\Models\Message;
+use App\Modules\Communications\Services\FaqAutomationResponder;
 use App\Modules\Communications\Services\MessageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ use Illuminate\Support\Facades\Gate;
 class MessageController extends Controller
 {
     public function __construct(
-        protected MessageService $messages
+        protected MessageService $messages,
+        protected FaqAutomationResponder $faqResponder
     ) {}
 
     public function index(Request $request, Conversation $conversation): JsonResponse
@@ -35,7 +37,7 @@ class MessageController extends Controller
     {
         Gate::authorize('send', $conversation);
 
-        $max = (int) config('communications.message_max_length', 5000);
+        $max = (int) config('communications.message_max_length', 1000);
         $file = $this->uploadedAttachment($request);
         $hasFile = $file instanceof UploadedFile;
 
@@ -44,17 +46,29 @@ class MessageController extends Controller
             'attachment' => ['nullable', 'file'],
             'attachments' => ['nullable', 'array'],
             'attachments.*' => ['nullable', 'file'],
+            'faq_id' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $body = (string) ($validated['body'] ?? '');
 
+        $user = Auth::user();
         $message = $file
-            ? $this->messages->sendWithAttachment($conversation, Auth::user(), $body, $file)
-            : $this->messages->send($conversation, Auth::user(), $body);
+            ? $this->messages->sendWithAttachment($conversation, $user, $body, $file)
+            : $this->messages->send($conversation, $user, $body);
 
-        return response()->json([
-            'message' => $this->messages->serialize($message, Auth::user()),
-        ], 201);
+        $payload = [
+            'message' => $this->messages->serialize($message, $user),
+        ];
+
+        if (! $file) {
+            $faqId = isset($validated['faq_id']) ? (int) $validated['faq_id'] : null;
+            $automated = $this->faqResponder->maybeRespond($conversation, $user, $message, $faqId);
+            if ($automated !== null) {
+                $payload['automated_message'] = $this->messages->serialize($automated, $user);
+            }
+        }
+
+        return response()->json($payload, 201);
     }
 
     public function toggleReaction(Request $request, Message $message): JsonResponse
@@ -78,7 +92,7 @@ class MessageController extends Controller
         abort_if($conversation === null, 404);
         Gate::authorize('send', $conversation);
 
-        $max = (int) config('communications.message_max_length', 5000);
+        $max = (int) config('communications.message_max_length', 1000);
         $validated = $request->validate([
             'body' => ['required', 'string', 'max:'.$max],
         ]);

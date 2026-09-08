@@ -90,6 +90,7 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'profile_image_uploaded_at' => 'datetime',
             'profile_image_change_available_at' => 'datetime',
+            'last_seen' => 'datetime',
         ];
     }
 

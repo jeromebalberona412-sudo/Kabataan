@@ -15,6 +15,29 @@ function escapeCommsHtml(value) {
     });
 }
 
+function stopHeaderLocalTyping(conversationId) {
+    var cid = conversationId != null ? conversationId : headerChatState.conversationId;
+    if (!cid || !window.CommsRealtime) return;
+    if (typeof window.CommsRealtime.stopTyping === 'function') {
+        window.CommsRealtime.stopTyping(cid);
+    } else if (typeof window.CommsRealtime.broadcastTyping === 'function') {
+        window.CommsRealtime.broadcastTyping(cid, { stop: true });
+    }
+}
+
+function notifyHeaderComposerTyping(rawValue) {
+    var cid = headerChatState.conversationId;
+    if (!cid || !window.CommsRealtime || typeof window.CommsRealtime.broadcastTyping !== 'function') {
+        return;
+    }
+    var hasText = !!String(rawValue == null ? '' : rawValue).replace(/\s/g, '');
+    if (!hasText) {
+        stopHeaderLocalTyping(cid);
+        return;
+    }
+    window.CommsRealtime.broadcastTyping(cid);
+}
+
 function formatCommsRelativeTime(iso) {
     if (!iso) return '';
     var d = new Date(iso);
@@ -24,6 +47,71 @@ function formatCommsRelativeTime(iso) {
     if (diffSec < 3600) return Math.floor(diffSec / 60) + 'm';
     if (diffSec < 86400) return Math.floor(diffSec / 3600) + 'h';
     return Math.floor(diffSec / 86400) + 'd';
+}
+
+function formatCommsClockTime(iso) {
+    if (window.Comms && typeof window.Comms.formatTime === 'function') {
+        return window.Comms.formatTime(iso);
+    }
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function formatCommsFullDateTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString([], {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
+function formatCommsDaySeparator(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    var now = new Date();
+    var time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    var yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    if (d.toDateString() === now.toDateString()) {
+        return time;
+    }
+    if (d.toDateString() === yesterday.toDateString()) {
+        return 'Yesterday ' + time;
+    }
+    var weekAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    if (d >= weekAgo) {
+        return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + time;
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ', ' + time;
+}
+
+function shouldInsertCommsDateSeparator(prevIso, currIso) {
+    if (!currIso) return false;
+    if (!prevIso) return true;
+    var prev = new Date(prevIso);
+    var curr = new Date(currIso);
+    if (Number.isNaN(prev.getTime()) || Number.isNaN(curr.getTime())) return true;
+    if (prev.toDateString() !== curr.toDateString()) return true;
+    return Math.abs(curr.getTime() - prev.getTime()) >= 45 * 60 * 1000;
+}
+
+function renderCommsDateSeparator(iso) {
+    var label = formatCommsDaySeparator(iso);
+    if (!label) return '';
+    return '<div class="comms-chat-date-sep" role="separator">' +
+        '<span class="comms-chat-date-sep-text">' + escapeCommsHtml(label) + '</span>' +
+        '</div>';
 }
 
 function defaultCommsAvatar(name) {
@@ -45,23 +133,117 @@ var headerChatState = {
     reactInFlight: {},
     reactSkipRealtime: {},
     reactSeq: {},
+    reactLocalUntil: {},
     pendingAttachments: [],
-    pendingPreviewUrls: []
+    pendingPreviewUrls: [],
+    faqSuggestions: [],
+    faqLoading: false,
+    faqKnownEmpty: false,
+    faqCooldownUntil: {},
+    faqCooldownTimer: null,
+    peerRefreshTimer: null
 };
+
+function truncateCommsName(name, maxChars) {
+    if (window.Comms && typeof window.Comms.truncateText === 'function') {
+        return window.Comms.truncateText(name, maxChars || 34);
+    }
+    var text = String(name || '').trim();
+    var max = maxChars || 34;
+    if (text.length <= max) return text;
+    return text.slice(0, max - 1) + '…';
+}
+
+function isCommsPeerOnline(peer) {
+    if (window.Comms && typeof window.Comms.isUserOnline === 'function') {
+        return window.Comms.isUserOnline(peer);
+    }
+    return String((peer && peer.online_status) || '').toLowerCase() === 'online';
+}
+
+function applyHeaderPeerHeader(peer, fallbackName) {
+    peer = peer || {};
+    var title = document.getElementById('commsChatModalTitle');
+    var sub = document.getElementById('commsChatModalSub');
+    var fullName = String(peer.name || fallbackName || 'Chat').trim() || 'Chat';
+    if (title) {
+        title.textContent = truncateCommsName(fullName, 34);
+        title.setAttribute('title', fullName);
+    }
+    if (sub) {
+        var online = isCommsPeerOnline(peer);
+        var roleBits = [];
+        if (peer.position) roleBits.push(String(peer.position).trim());
+        if (peer.barangay_name) roleBits.push('Brgy. ' + String(peer.barangay_name).trim());
+        var presence = online ? 'Online' : 'Offline';
+        var line = roleBits.length ? (roleBits.join(' · ') + ' · ' + presence) : presence;
+        sub.textContent = truncateCommsName(line, 48);
+        sub.setAttribute('title', roleBits.length ? (roleBits.join(' · ') + ' · ' + presence) : presence);
+        sub.classList.toggle('is-online', online);
+        sub.classList.toggle('is-offline', !online);
+    }
+    if (peer.profile_image_url || fullName) {
+        setHeaderChatAvatar(fullName, peer.profile_image_url || '');
+    }
+}
+
+function findCachedHeaderPeer(conversationId) {
+    var lists = [
+        window.__COMMS_HEADER_CONVERSATIONS__,
+        (window.Comms && window.Comms.readInboxCache) ? window.Comms.readInboxCache() : null
+    ];
+    for (var i = 0; i < lists.length; i++) {
+        var list = lists[i];
+        if (!Array.isArray(list)) continue;
+        for (var j = 0; j < list.length; j++) {
+            if (Number(list[j].id) === Number(conversationId)) {
+                return list[j].other_user || null;
+            }
+        }
+    }
+    var cached = readHeaderChatCache(conversationId);
+    if (cached && cached.conversation && cached.conversation.other_user) {
+        return cached.conversation.other_user;
+    }
+    return null;
+}
+
+function stopHeaderPeerRefresh() {
+    if (headerChatState.peerRefreshTimer) {
+        window.clearInterval(headerChatState.peerRefreshTimer);
+        headerChatState.peerRefreshTimer = null;
+    }
+}
+
+function startHeaderPeerRefresh(conversationId) {
+    stopHeaderPeerRefresh();
+    if (!conversationId) return;
+    headerChatState.peerRefreshTimer = window.setInterval(function () {
+        if (Number(headerChatState.conversationId) !== Number(conversationId)) {
+            stopHeaderPeerRefresh();
+            return;
+        }
+        loadHeaderConversationPeer(conversationId);
+    }, 15000);
+}
 
 function getCommsCsrfToken() {
     var csrf = document.querySelector('meta[name="csrf-token"]');
     return csrf ? csrf.getAttribute('content') : '';
 }
 
-function clearHeaderChatAttachments() {
-    headerChatState.pendingPreviewUrls.forEach(function (u) { if (u) URL.revokeObjectURL(u); });
+function clearHeaderChatAttachments(opts) {
+    opts = opts || {};
+    if (!opts.keepObjectUrls) {
+        headerChatState.pendingPreviewUrls.forEach(function (u) { if (u) URL.revokeObjectURL(u); });
+    }
     headerChatState.pendingAttachments = [];
     headerChatState.pendingPreviewUrls = [];
     var preview = document.getElementById('commsChatAttachPreview');
     if (preview) preview.hidden = true;
     var inner = document.getElementById('commsChatAttachPreviewInner');
     if (inner) inner.innerHTML = '';
+    syncHeaderComposerEndControls();
 }
 
 function isHeaderImageFile(f) {
@@ -76,34 +258,79 @@ function renderHeaderAttachPreview() {
     wrap.hidden = false;
     inner.innerHTML = headerChatState.pendingAttachments.map(function (f, i) {
         if (isHeaderImageFile(f) && headerChatState.pendingPreviewUrls[i]) {
-            return '<div class="comms-chat-attach-preview-item"><img src="' + headerChatState.pendingPreviewUrls[i] + '" alt="preview"></div>';
+            var src = headerChatState.pendingPreviewUrls[i];
+            return '<button type="button" class="comms-chat-attach-preview-item is-image" data-comms-lightbox-src="' +
+                escapeCommsHtml(src) + '" aria-label="Zoom preview image">' +
+                '<img src="' + escapeCommsHtml(src) + '" alt="preview"></button>';
         }
         return '<div class="comms-chat-attach-preview-item"><span class="file-icon"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span><span>' + escapeCommsHtml(f.name) + '</span></div>';
     }).join('');
+    if (wrap.dataset.zoomWired !== 'true') {
+        wrap.addEventListener('click', function (e) {
+            var thumb = e.target.closest('[data-comms-lightbox-src]');
+            if (!thumb || !wrap.contains(thumb)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var images = Array.prototype.slice.call(wrap.querySelectorAll('[data-comms-lightbox-src]')).map(function (node) {
+                return node.getAttribute('data-comms-lightbox-src') || '';
+            }).filter(Boolean);
+            var start = thumb.getAttribute('data-comms-lightbox-src') || '';
+            if (start && window.Comms && typeof window.Comms.openImageLightbox === 'function') {
+                window.Comms.openImageLightbox(start, images);
+            }
+        });
+        wrap.dataset.zoomWired = 'true';
+    }
 }
 
 function pushHeaderFiles(files, kind) {
-    var maxImg = 100, maxFile = 10, maxBytes = 25 * 1024 * 1024;
-    var imgCount = 0, fileCount = 0, totalBytes = 0;
-    headerChatState.pendingAttachments.forEach(function (f) {
-        totalBytes += f.size || 0;
-        if (isHeaderImageFile(f)) imgCount++; else fileCount++;
+    var maxImg = 50, maxFile = 10, maxBytes = 25 * 1024 * 1024;
+    var list = Array.prototype.slice.call(files || []);
+    if (!list.length) return;
+
+    var selectBytes = 0;
+    var selectImg = 0;
+    var selectFile = 0;
+    list.forEach(function (f) {
+        selectBytes += f.size || 0;
+        if (isHeaderImageFile(f)) selectImg++;
+        else selectFile++;
     });
-    for (var i = 0; i < files.length; i++) {
-        var f = files[i];
-        totalBytes += f.size || 0;
-        if (totalBytes > maxBytes) { alert('Total size exceeds 25 MB.'); break; }
-        if (kind === 'image') {
-            imgCount++;
-            if (imgCount > maxImg) { alert('Max ' + maxImg + ' images.'); break; }
-        } else {
-            fileCount++;
-            if (fileCount > maxFile) { alert('Max ' + maxFile + ' files.'); break; }
-        }
+
+    var pendingBytes = 0;
+    var imgCount = 0;
+    var fileCount = 0;
+    headerChatState.pendingAttachments.forEach(function (f) {
+        pendingBytes += f.size || 0;
+        if (isHeaderImageFile(f)) imgCount++;
+        else fileCount++;
+    });
+
+    if (selectBytes > maxBytes || (pendingBytes + selectBytes) > maxBytes) {
+        var overMsg = 'Total attachment size cannot exceed 25 MB. Selection was not added.';
+        if (window.Comms && typeof window.Comms.showToast === 'function') window.Comms.showToast(overMsg, 'error');
+        else alert(overMsg);
+        return;
+    }
+    if (kind === 'image' && (imgCount + selectImg) > maxImg) {
+        var imgMsg = 'Max ' + maxImg + ' images (still within 25 MB). Selection was not added.';
+        if (window.Comms && typeof window.Comms.showToast === 'function') window.Comms.showToast(imgMsg, 'error');
+        else alert(imgMsg);
+        return;
+    }
+    if (kind !== 'image' && (fileCount + selectFile) > maxFile) {
+        var fileMsg = 'Max ' + maxFile + ' files. Selection was not added.';
+        if (window.Comms && typeof window.Comms.showToast === 'function') window.Comms.showToast(fileMsg, 'error');
+        else alert(fileMsg);
+        return;
+    }
+
+    list.forEach(function (f) {
         headerChatState.pendingAttachments.push(f);
         headerChatState.pendingPreviewUrls.push(isHeaderImageFile(f) ? URL.createObjectURL(f) : null);
-    }
+    });
     renderHeaderAttachPreview();
+    syncHeaderComposerEndControls();
 }
 
 function headerFileKindClass(a) {
@@ -114,34 +341,262 @@ function headerFileKindClass(a) {
     return '';
 }
 
-function renderHeaderAttachmentBubbles(attachments) {
-    if (!attachments || !attachments.length) return '';
-    var html = '<div class="comms-chat-attachment-grid">';
-    attachments.forEach(function (a) {
-        if (a.file_type === 'image' || a.storage_provider === 'cloudinary') {
+function formatHeaderFileBytes(n) {
+    n = Number(n || 0);
+    if (!n) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(2) + ' KB';
+    return (n / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function isHeaderImageAttachment(a) {
+    if (!a) return false;
+    return a.file_type === 'image'
+        || a.storage_provider === 'cloudinary'
+        || (a.url && /^image\//i.test(String(a.mime_type || '')))
+        || /\.(jpe?g|png|gif|webp|bmp|heic)$/i.test(String(a.file_name || ''));
+}
+
+function isHeaderImageOnlyMessage(msg) {
+    if (!isHeaderAttachmentOnlyMessage(msg)) return false;
+    var atts = msg.attachments || [];
+    if (!atts.length) return false;
+    return atts.every(isHeaderImageAttachment);
+}
+
+function headerSameImageBatch(a, b) {
+    if (!isHeaderImageOnlyMessage(a) || !isHeaderImageOnlyMessage(b)) return false;
+    if (!!a.mine !== !!b.mine) return false;
+    if (a.batch_id && b.batch_id) return String(a.batch_id) === String(b.batch_id);
+    if (a.batch_id || b.batch_id) return false;
+    var t1 = Date.parse(a.created_at || '') || 0;
+    var t2 = Date.parse(b.created_at || '') || 0;
+    return !!(t1 && t2 && Math.abs(t2 - t1) <= 4000);
+}
+
+function headerImageBatchEndIndex(items, start) {
+    var end = start;
+    while (end + 1 < items.length && headerSameImageBatch(items[start], items[end + 1])) {
+        end += 1;
+    }
+    return end;
+}
+
+function collectHeaderImageAttachments(messages) {
+    var out = [];
+    (messages || []).forEach(function (m) {
+        (m.attachments || []).forEach(function (a) {
+            if (!isHeaderImageAttachment(a)) return;
             var src = a.url || a.file_path || a.download_url || '';
-            html += '<img src="' + escapeCommsHtml(src) + '" alt="' + escapeCommsHtml(a.file_name || 'image') + '" loading="lazy">';
-        } else {
-            var dlUrl = a.download_url || '#';
-            html += '<a href="' + escapeCommsHtml(dlUrl) + '" class="comms-chat-attachment-file' + headerFileKindClass(a) + '" download="' + escapeCommsHtml(a.file_name || 'document') + '"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span>' + escapeCommsHtml(a.file_name || 'file') + '</span></a>';
-        }
+            if (!src) return;
+            out.push({ src: src, file_name: a.file_name || 'image', message: m, attachment: a });
+        });
     });
-    html += '</div>';
+    return out;
+}
+
+function renderHeaderAttachmentBubbles(attachments, opts) {
+    opts = opts || {};
+    if (!attachments || !attachments.length) return '';
+    var images = [];
+    var files = [];
+    attachments.forEach(function (a) {
+        if (isHeaderImageAttachment(a)) images.push(a);
+        else files.push(a);
+    });
+
+    var html = '';
+    if (images.length) {
+        var countAttr = Math.min(images.length, 9);
+        html += '<div class="comms-chat-attachment-grid" data-count="' + countAttr + '"' +
+            (images.length > 9 ? ' data-extra="' + (images.length - 9) + '"' : '') + '>';
+        images.forEach(function (a, i) {
+            if (i >= 9) return;
+            var src = a.url || a.file_path || a.download_url || '';
+            var extra = (i === 8 && images.length > 9)
+                ? '<span class="comms-chat-attachment-more">+' + (images.length - 9) + '</span>'
+                : '';
+            html += '<button type="button" class="comms-chat-attachment-image-btn" data-comms-lightbox-src="' +
+                escapeCommsHtml(src) + '" aria-label="View image fullscreen">' +
+                '<img src="' + escapeCommsHtml(src) + '" alt="' + escapeCommsHtml(a.file_name || 'image') + '" loading="lazy">' +
+                extra +
+                '</button>';
+        });
+        // Keep remaining images in DOM (hidden) so conversation lightbox can include them.
+        if (images.length > 9) {
+            images.slice(9).forEach(function (a) {
+                var src = a.url || a.file_path || a.download_url || '';
+                html += '<button type="button" class="comms-chat-attachment-image-btn is-overflow-hidden" tabindex="-1" aria-hidden="true" data-comms-lightbox-src="' +
+                    escapeCommsHtml(src) + '"><img src="' + escapeCommsHtml(src) + '" alt=""></button>';
+            });
+        }
+        html += '</div>';
+    }
+
+    files.forEach(function (a) {
+        var dlUrl = a.download_url || '#';
+        var sizeLabel = formatHeaderFileBytes(a.file_size);
+        html += '<a href="' + escapeCommsHtml(dlUrl) + '" class="comms-chat-attachment-file' + headerFileKindClass(a) + '" download="' + escapeCommsHtml(a.file_name || 'document') + '">' +
+            '<span class="comms-chat-attachment-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></span>' +
+            '<span class="comms-chat-attachment-file-meta"><span class="comms-chat-attachment-file-name">' + escapeCommsHtml(a.file_name || 'file') + '</span>' +
+            (sizeLabel ? '<span class="comms-chat-attachment-file-size">' + escapeCommsHtml(sizeLabel) + '</span>' : '') +
+            '</span></a>';
+    });
     return html;
+}
+
+function renderHeaderImageBatchBubble(groupMsgs) {
+    var images = collectHeaderImageAttachments(groupMsgs);
+    if (!images.length) return '';
+    var last = groupMsgs[groupMsgs.length - 1];
+    var mine = !!last.mine;
+    var sideCls = mine ? 'is-mine' : 'is-theirs';
+    var pickerOpen = Number(headerChatState.openReactionPickerId) === Number(last.id);
+    var isLocalMsg = String(last.id || '').indexOf('local-') === 0;
+    var showMsgActions = !!mine && !isLocalMsg;
+    var batchAttr = last.batch_id ? ' data-batch-id="' + escapeCommsHtml(String(last.batch_id)) + '"' : '';
+    var countAttr = Math.min(images.length, 9);
+    var grid = '<div class="comms-chat-attachment-grid" data-count="' + countAttr + '"' +
+        (images.length > 9 ? ' data-extra="' + (images.length - 9) + '"' : '') + '>';
+    images.forEach(function (item, i) {
+        if (i >= 9) {
+            grid += '<button type="button" class="comms-chat-attachment-image-btn is-overflow-hidden" tabindex="-1" aria-hidden="true" data-comms-lightbox-src="' +
+                escapeCommsHtml(item.src) + '"><img src="' + escapeCommsHtml(item.src) + '" alt=""></button>';
+            return;
+        }
+        var extra = (i === 8 && images.length > 9)
+            ? '<span class="comms-chat-attachment-more">+' + (images.length - 9) + '</span>'
+            : '';
+        grid += '<button type="button" class="comms-chat-attachment-image-btn" data-comms-lightbox-src="' +
+            escapeCommsHtml(item.src) + '" aria-label="View image fullscreen">' +
+            '<img src="' + escapeCommsHtml(item.src) + '" alt="' + escapeCommsHtml(item.file_name) + '" loading="lazy">' +
+            extra + '</button>';
+    });
+    grid += '</div>';
+
+    var html = '<div class="comms-chat-bubble-wrap ' + sideCls + (pickerOpen ? ' is-picker-open' : '') +
+        ' is-image-batch" data-id="' + last.id + '" data-batch-size="' + images.length + '"' + batchAttr + '>' +
+        '<div class="comms-chat-bubble-row">' +
+        '<div class="comms-chat-bubble-tools">' +
+        (showMsgActions ? renderHeaderMessageActions(last) : '') +
+        '<button type="button" class="comms-chat-react-btn" data-react-toggle="' + last.id +
+        '" aria-label="Add reaction" title="React" aria-expanded="' + (pickerOpen ? 'true' : 'false') + '">' +
+        headerReactBtnIcon + '</button>' +
+        '</div>' +
+        '<div class="comms-chat-bubble-cluster">' +
+        '<div class="comms-chat-bubble ' + sideCls + ' has-attachment-only">' +
+        grid +
+        '</div>' +
+        '</div></div>' +
+        renderHeaderReactionChips(last.reactions, last.id) +
+        '</div>';
+
+    // Hidden anchors so each batched message remains addressable for delete/edit handlers by data-id.
+    groupMsgs.slice(0, -1).forEach(function (m) {
+        html += '<div class="comms-chat-batch-anchor" hidden data-id="' + m.id + '" aria-hidden="true"></div>';
+    });
+    return html;
+}
+
+function isHeaderAttachmentOnlyMessage(msg) {
+    if (!msg) return false;
+    if (msg.message_type === 'call' || msg.message_type === 'system' || msg.message_type === 'deleted' || msg.deleted_for_all) return false;
+    var hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
+    return hasAttachments && !String(msg.body || '').trim();
+}
+
+function headerBatchClassForIndex(items, index) {
+    var msg = items[index];
+    if (!isHeaderAttachmentOnlyMessage(msg)) return '';
+    var prev = items[index - 1];
+    var next = items[index + 1];
+    var samePrev = isHeaderAttachmentOnlyMessage(prev)
+        && !!prev.mine === !!msg.mine
+        && String(prev.batch_id || '') === String(msg.batch_id || '')
+        && String(msg.batch_id || '') !== '';
+    var sameNext = isHeaderAttachmentOnlyMessage(next)
+        && !!next.mine === !!msg.mine
+        && String(next.batch_id || '') === String(msg.batch_id || '')
+        && String(msg.batch_id || '') !== '';
+    // Also tighten consecutive attachment-only messages without batch_id (server reload).
+    if (!msg.batch_id) {
+        samePrev = isHeaderAttachmentOnlyMessage(prev) && !!prev.mine === !!msg.mine;
+        sameNext = isHeaderAttachmentOnlyMessage(next) && !!next.mine === !!msg.mine;
+    }
+    if (!samePrev && !sameNext) return '';
+    var cls = ' is-batch-attach';
+    if (!samePrev && sameNext) cls += ' is-batch-first';
+    else if (samePrev && sameNext) cls += ' is-batch-mid';
+    else if (samePrev && !sameNext) cls += ' is-batch-last';
+    return cls;
+}
+
+function setHeaderMessagesBtnActive(active) {
+    var btn = document.getElementById('commsMsgBtn');
+    if (!btn) return;
+    var onMessagesPage = !!document.body.classList.contains('comms-messages-page')
+        || /^\/communications\/?$/.test(window.location.pathname || '');
+    // Stay selected while on See All Messages.
+    if (onMessagesPage) {
+        btn.classList.add('is-active');
+        btn.setAttribute('aria-pressed', 'true');
+        return;
+    }
+    btn.classList.toggle('is-active', !!active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+}
+
+function onCommsHeaderPresence(presenceMap) {
+    if (!presenceMap || !headerChatState.conversationId) return;
+    var peer = findCachedHeaderPeer(headerChatState.conversationId);
+    if (!peer || !peer.id) return;
+    var onlineIds = {};
+    Object.keys(presenceMap).forEach(function (key) {
+        var metas = presenceMap[key] || [];
+        metas.forEach(function (meta) {
+            var uid = Number((meta && meta.user_id) || key || 0);
+            if (uid) onlineIds[uid] = true;
+        });
+    });
+    var next = onlineIds[Number(peer.id)] ? 'online' : 'offline';
+    peer.online_status = next;
+    peer.is_online = next === 'online';
+    if (next === 'online') peer.last_seen = new Date().toISOString();
+    applyHeaderPeerHeader(peer, peer.name || 'Chat');
 }
 
 function closeHeaderChatModal() {
     var modal = document.getElementById('commsChatModal');
     if (!modal) return;
+    stopHeaderLocalTyping();
+    stopHeaderPeerRefresh();
     modal.hidden = true;
+    modal.setAttribute('hidden', '');
     modal.classList.remove('is-fullscreen', 'is-empty-thread', 'is-thread-open');
     document.body.classList.remove('comms-chat-modal-open');
     headerChatState.conversationId = null;
     headerChatState.messages = [];
+    headerChatState.faqSuggestions = [];
+    headerChatState.faqLoading = false;
+    headerChatState.faqKnownEmpty = false;
     headerChatState.fullscreen = false;
     window.__COMMS_HEADER_ACTIVE_ID__ = null;
+    setHeaderMessagesBtnActive(false);
+    var typingEl = document.getElementById('commsChatModalTyping');
+    if (typingEl) {
+        typingEl.hidden = true;
+        typingEl.textContent = '';
+    }
     hideHeaderReactionPicker();
     clearHeaderChatAttachments();
+    var faqMenu = document.getElementById('commsChatFaqMenu');
+    var faqPanel = document.getElementById('commsChatFaqSuggestions');
+    var faqList = document.getElementById('commsChatFaqSuggestionsList');
+    if (faqMenu) faqMenu.hidden = true;
+    if (faqPanel) faqPanel.hidden = true;
+    if (faqList) faqList.innerHTML = '';
+    setHeaderFaqMenuOpen(false);
+    clearHeaderFaqPanelPosition();
     var sidebar = document.getElementById('commsChatFsSidebar');
     var empty = document.getElementById('commsChatFsEmpty');
     var active = document.getElementById('commsChatFsActive');
@@ -194,14 +649,16 @@ function renderFullscreenChatList(conversations) {
     if (empty) empty.hidden = true;
     list.innerHTML = items.map(function (c) {
         var peer = c.other_user || {};
-        var name = peer.name || 'User';
-        var preview = (c.last_message && c.last_message.body) || 'No messages yet';
+        var fullName = peer.name || 'User';
+        var name = truncateCommsName(fullName, 28);
+        var previewRaw = (c.last_message && c.last_message.body) || 'No messages yet';
+        var preview = truncateCommsName(previewRaw, 40);
         var unread = Number(c.unread_count || 0);
-        var avatar = peer.profile_image_url || defaultCommsAvatar(name);
-        var searchBlob = String(name + ' ' + preview).toLowerCase();
+        var avatar = peer.profile_image_url || defaultCommsAvatar(fullName);
+        var searchBlob = String(fullName + ' ' + previewRaw).toLowerCase();
         var active = Number(c.id) === Number(headerChatState.conversationId) ? ' is-active' : '';
-        return '<button type="button" class="comms-chat-fs-item' + active + (unread > 0 ? ' is-unread' : '') + '" data-id="' + c.id + '" data-name="' + escapeCommsHtml(name) + '" data-avatar="' + escapeCommsHtml(avatar) + '" data-unread="' + (unread > 0 ? '1' : '0') + '" data-search="' + escapeCommsHtml(searchBlob) + '" role="listitem">' +
-            '<img class="comms-chat-fs-item-avatar" src="' + escapeCommsHtml(avatar) + '" alt="" onerror="this.onerror=null;this.src=\'' + escapeCommsHtml(defaultCommsAvatar(name)) + '\'">' +
+        return '<button type="button" class="comms-chat-fs-item' + active + (unread > 0 ? ' is-unread' : '') + '" data-id="' + c.id + '" data-name="' + escapeCommsHtml(fullName) + '" data-avatar="' + escapeCommsHtml(avatar) + '" data-unread="' + (unread > 0 ? '1' : '0') + '" data-search="' + escapeCommsHtml(searchBlob) + '" role="listitem" title="' + escapeCommsHtml(fullName) + '">' +
+            '<img class="comms-chat-fs-item-avatar" src="' + escapeCommsHtml(avatar) + '" alt="" onerror="this.onerror=null;this.src=\'' + escapeCommsHtml(defaultCommsAvatar(fullName)) + '\'">' +
             '<div class="comms-chat-fs-item-main">' +
             '<span class="comms-chat-fs-item-name">' + escapeCommsHtml(name) + '</span>' +
             '<span class="comms-chat-fs-item-preview">' + escapeCommsHtml(preview) + '</span>' +
@@ -249,56 +706,110 @@ function applyFullscreenChatFilters() {
     }
 }
 
-function setHeaderChatFullscreen(enabled) {
-    var modal = document.getElementById('commsChatModal');
-    var sidebar = document.getElementById('commsChatFsSidebar');
-    var expandBtn = document.getElementById('commsChatModalOpenFull');
-    if (!modal) return;
+function syncHeaderComposerEndControls() {
+    var input = document.getElementById('commsChatModalInput');
+    var sendBtn = document.getElementById('commsChatModalSend');
+    var faqMenu = document.getElementById('commsChatFaqMenu');
+    var faqToggle = document.getElementById('commsChatFaqMenuToggle');
+    var composerEnd = document.querySelector('#commsChatModalForm .comms-chat-composer-end');
+    var hasText = !!(input && String(input.value || '').trim());
+    var hasFiles = !!(headerChatState.pendingAttachments && headerChatState.pendingAttachments.length);
+    var showSend = hasText || hasFiles;
+    var hasFaqs = !!(headerChatState.faqSuggestions && headerChatState.faqSuggestions.length);
+    // Same end-slot: burger when empty, send when typing/attaching.
+    var showFaq = !showSend && (hasFaqs || (!!headerChatState.faqLoading && !headerChatState.faqKnownEmpty));
 
-    headerChatState.fullscreen = !!enabled;
-    modal.classList.toggle('is-fullscreen', !!enabled);
-    if (sidebar) sidebar.hidden = !enabled;
-
-    if (expandBtn) {
-        var icon = expandBtn.querySelector('i, svg');
-        if (icon) {
-            icon.outerHTML = enabled ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/></svg>' : '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
-        }
-        expandBtn.title = enabled ? 'Exit fullscreen' : 'Toggle fullscreen';
-        expandBtn.setAttribute('aria-label', enabled ? 'Exit fullscreen' : 'Toggle fullscreen messages');
+    if (sendBtn) {
+        sendBtn.hidden = !showSend;
+        sendBtn.disabled = headerChatState.sending || !showSend;
+        sendBtn.setAttribute('aria-hidden', showSend ? 'false' : 'true');
     }
-
-    setHeaderChatEmptyThread(!headerChatState.conversationId);
+    if (faqMenu) {
+        if (!showFaq) {
+            faqMenu.hidden = true;
+            if (headerChatState.faqKnownEmpty && !showSend) faqMenu.setAttribute('data-no-faqs', '1');
+            setHeaderFaqMenuOpen(false);
+        } else {
+            faqMenu.removeAttribute('data-no-faqs');
+            faqMenu.hidden = false;
+        }
+    }
+    if (faqToggle) {
+        var coolLeft = headerFaqCooldownRemaining();
+        faqToggle.disabled = !hasFaqs && !headerChatState.faqLoading;
+        faqToggle.classList.toggle('is-loading', !!headerChatState.faqLoading && !hasFaqs);
+        faqToggle.classList.toggle('is-cooldown', coolLeft > 0);
+        faqToggle.setAttribute('aria-busy', (headerChatState.faqLoading && !hasFaqs) ? 'true' : 'false');
+        faqToggle.setAttribute('aria-hidden', showFaq ? 'false' : 'true');
+        faqToggle.title = coolLeft > 0
+            ? ('Suggested questions available in ' + coolLeft + 's')
+            : 'Suggested questions';
+        var timerBadge = faqToggle.querySelector('.comms-faq-toggle-timer');
+        if (coolLeft > 0) {
+            if (!timerBadge) {
+                timerBadge = document.createElement('span');
+                timerBadge.className = 'comms-faq-toggle-timer';
+                timerBadge.setAttribute('aria-hidden', 'true');
+                faqToggle.appendChild(timerBadge);
+            }
+            timerBadge.textContent = String(coolLeft);
+        } else if (timerBadge) {
+            timerBadge.remove();
+        }
+    }
+    if (composerEnd) {
+        composerEnd.classList.toggle('has-send', showSend);
+        composerEnd.classList.toggle('has-faq', showFaq);
+    }
 }
 
-function openHeaderMessagesFullscreen(conversationId, name, avatarUrl) {
-    var modal = document.getElementById('commsChatModal');
-    if (!modal) return;
+function syncHeaderExpandButtonVisibility() {
+    // Expand/fullscreen control removed — keep as no-op for callers.
+}
 
-    closeMessagesPopover();
-    modal.hidden = false;
-    document.body.classList.add('comms-chat-modal-open');
-    setHeaderChatFullscreen(true);
-    wireFullscreenChatControls();
-
-    refreshMessagesPopover();
-    var cached = window.__COMMS_HEADER_CONVERSATIONS__;
-    if (Array.isArray(cached)) {
-        renderFullscreenChatList(cached);
-    }
-
-    if (conversationId) {
-        openHeaderChatModal(conversationId, name, avatarUrl);
-        setHeaderChatFullscreen(true);
-    } else {
-        headerChatState.conversationId = null;
-        headerChatState.messages = [];
-        setHeaderChatEmptyThread(true);
-        var body = document.getElementById('commsChatModalBody');
-        if (body) {
-            body.innerHTML = '<p class="comms-chat-modal-empty">Select a conversation</p>';
+function storeMessagesReturnUrl() {
+    try {
+        var path = String(window.location.pathname || '') + String(window.location.search || '');
+        if (!/^\/communications(\/|$)/.test(window.location.pathname || '')) {
+            sessionStorage.setItem('comms_messages_return_url', path || '/dashboard');
         }
+    } catch (e) { /* ignore */ }
+}
+
+function goToSeeAllMessages(conversationId) {
+    storeMessagesReturnUrl();
+    var base = '/communications';
+    var url = String(base);
+    if (conversationId) {
+        url += (url.indexOf('?') >= 0 ? '&' : '?') + 'conversation=' + encodeURIComponent(conversationId);
     }
+    window.location.assign(url);
+}
+
+function clearHeaderChatFullscreenUi() {
+    var modal = document.getElementById('commsChatModal');
+    var sidebar = document.getElementById('commsChatFsSidebar');
+    headerChatState.fullscreen = false;
+    if (modal) {
+        modal.classList.remove('is-fullscreen', 'is-empty-thread');
+        modal.classList.toggle('is-thread-open', !!headerChatState.conversationId);
+    }
+    if (sidebar) sidebar.hidden = true;
+}
+
+function refreshHeaderFullscreenChatList() {
+    if (Array.isArray(window.__COMMS_HEADER_CONVERSATIONS__)) {
+        renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__);
+    }
+}
+
+function setHeaderChatFullscreen() {
+    // Fullscreen mode removed — always keep the small floating dock.
+    clearHeaderChatFullscreenUi();
+}
+
+function openHeaderMessagesFullscreen(conversationId) {
+    goToSeeAllMessages(conversationId || null);
 }
 
 function startHeaderChatWithUser(userId, name, avatarUrl) {
@@ -336,23 +847,51 @@ function startHeaderChatWithUser(userId, name, avatarUrl) {
 }
 
 function openHeaderChatModal(conversationId, name, avatarUrl) {
+    // See All Messages already has the full chat UI — never overlay the floating dock.
+    if (document.body.classList.contains('comms-messages-page')
+        || /^\/communications\/?$/.test(window.location.pathname || '')) {
+        return;
+    }
     var modal = document.getElementById('commsChatModal');
-    var title = document.getElementById('commsChatModalTitle');
-    var sub = document.getElementById('commsChatModalSub');
     var input = document.getElementById('commsChatModalInput');
     var body = document.getElementById('commsChatModalBody');
     if (!modal || !conversationId) return;
 
     closeMessagesPopover();
     hideHeaderReactionPicker();
+    if (headerChatState.conversationId && Number(headerChatState.conversationId) !== Number(conversationId)) {
+        stopHeaderLocalTyping(headerChatState.conversationId);
+    }
     headerChatState.conversationId = Number(conversationId);
     window.__COMMS_HEADER_ACTIVE_ID__ = headerChatState.conversationId;
-    if (title) title.textContent = name || 'Chat';
-    if (sub) sub.textContent = 'Active now';
-    setHeaderChatAvatar(name, avatarUrl);
+    setHeaderMessagesBtnActive(true);
+    var typingEl = document.getElementById('commsChatModalTyping');
+    if (typingEl) {
+        typingEl.hidden = true;
+        typingEl.textContent = '';
+    }
+
+    var cachedPeer = findCachedHeaderPeer(conversationId) || {
+        name: name || 'Chat',
+        profile_image_url: avatarUrl || '',
+        is_online: false,
+        online_status: 'offline'
+    };
+    applyHeaderPeerHeader(cachedPeer, name || 'Chat');
     if (input) {
         input.value = '';
     }
+
+    // Reset composer slot before opening (FAQ burger vs send).
+    headerChatState.faqLoading = true;
+    headerChatState.faqKnownEmpty = false;
+    headerChatState.faqSuggestions = headerChatState.faqSuggestions || [];
+    var faqMenu = document.getElementById('commsChatFaqMenu');
+    if (faqMenu) {
+        faqMenu.hidden = false;
+        faqMenu.removeAttribute('data-no-faqs');
+    }
+    syncHeaderComposerEndControls();
 
     var cached = readHeaderChatCache(conversationId);
     if (cached && Array.isArray(cached.messages) && cached.messages.length) {
@@ -362,29 +901,37 @@ function openHeaderChatModal(conversationId, name, avatarUrl) {
         }
         headerChatState.messages = cached.messages;
         renderHeaderChatMessages(cached.messages);
+        if (cached.conversation && cached.conversation.other_user) {
+            applyHeaderPeerHeader(cached.conversation.other_user, name || 'Chat');
+        }
     } else if (body) {
-        body.innerHTML = '';
+        body.innerHTML = '<p class="comms-chat-modal-empty">Loading messages…</p>';
     }
 
+    // Show the floating dock (Messenger-style small modal).
     modal.hidden = false;
+    modal.removeAttribute('hidden');
+    modal.style.display = '';
     document.body.classList.add('comms-chat-modal-open');
+    clearHeaderChatFullscreenUi();
     setHeaderChatEmptyThread(false);
-    if (headerChatState.fullscreen) {
-        setHeaderChatFullscreen(true);
-        document.querySelectorAll('#commsChatFsList .comms-chat-fs-item').forEach(function (el) {
-            el.classList.toggle('is-active', Number(el.getAttribute('data-id')) === Number(conversationId));
-        });
-    }
+    syncHeaderComposerEndControls();
 
     // Subscribe immediately so new messages appear while history loads.
     if (window.CommsRealtime && typeof window.CommsRealtime.subscribeConversation === 'function') {
         window.CommsRealtime.subscribeConversation(conversationId);
     }
     loadHeaderChatMessages(conversationId);
+    loadHeaderFaqSuggestions(conversationId);
     loadHeaderConversationPeer(conversationId);
+    startHeaderPeerRefresh(conversationId);
     markHeaderConversationRead(conversationId);
     window.setTimeout(function () {
-        if (input) input.focus();
+        if (input) {
+            input.focus();
+            syncHeaderComposerLineLimit();
+            syncHeaderComposerEndControls();
+        }
     }, 50);
 }
 
@@ -410,15 +957,22 @@ function loadHeaderConversationPeer(conversationId) {
         if (!data || !data.conversation) return;
         if (Number(headerChatState.conversationId) !== Number(conversationId)) return;
         var peer = data.conversation.other_user || {};
-        var title = document.getElementById('commsChatModalTitle');
-        var sub = document.getElementById('commsChatModalSub');
-        if (title && peer.name) title.textContent = peer.name;
-        if (sub) {
-            var bits = [peer.position, peer.barangay_name, peer.user_type_label].filter(Boolean);
-            sub.textContent = bits.length ? bits.join(' · ') : 'Active now';
+        applyHeaderPeerHeader(peer, peer.name || 'Chat');
+        var cached = readHeaderChatCache(conversationId) || {};
+        writeHeaderChatCache(conversationId, Object.assign({}, cached, {
+            messages: headerChatState.messages,
+            reactionEmojis: headerChatState.reactionEmojis,
+            conversation: data.conversation
+        }));
+        if (Array.isArray(window.__COMMS_HEADER_CONVERSATIONS__)) {
+            window.__COMMS_HEADER_CONVERSATIONS__.forEach(function (c) {
+                if (Number(c.id) === Number(conversationId) && data.conversation.other_user) {
+                    c.other_user = data.conversation.other_user;
+                }
+            });
         }
-        if (peer.profile_image_url || peer.name) {
-            setHeaderChatAvatar(peer.name, peer.profile_image_url || '');
+        if (window.Comms && typeof window.Comms.writeInboxCache === 'function' && Array.isArray(window.__COMMS_HEADER_CONVERSATIONS__)) {
+            window.Comms.writeInboxCache(window.__COMMS_HEADER_CONVERSATIONS__);
         }
     }).catch(function () { /* keep the values already shown */ });
 }
@@ -427,8 +981,6 @@ function wireFullscreenChatControls() {
     var searchInput = document.getElementById('commsChatFsSearch');
     var chips = document.querySelectorAll('.comms-chat-fs-filter');
     var list = document.getElementById('commsChatFsList');
-    var expandBtn = document.getElementById('commsChatModalOpenFull');
-    var headerExpand = document.getElementById('commsMsgOpenFull');
     var backBtn = document.getElementById('commsChatFsBack');
 
     if (searchInput && searchInput.dataset.wired !== 'true') {
@@ -459,44 +1011,10 @@ function wireFullscreenChatControls() {
         });
         list.dataset.fsWired = 'true';
     }
-    if (expandBtn && expandBtn.dataset.fsToggleWired !== 'true') {
-        expandBtn.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            var modal = document.getElementById('commsChatModal');
-            if (!modal || modal.hidden) {
-                openHeaderMessagesFullscreen(headerChatState.conversationId || null);
-                return;
-            }
-            if (headerChatState.fullscreen) {
-                setHeaderChatFullscreen(false);
-                if (!headerChatState.conversationId) {
-                    closeHeaderChatModal();
-                }
-                return;
-            }
-            setHeaderChatFullscreen(true);
-            wireFullscreenChatControls();
-            refreshMessagesPopover();
-        });
-        expandBtn.dataset.fsToggleWired = 'true';
-    }
-    if (headerExpand && headerExpand.dataset.fsWired !== 'true') {
-        headerExpand.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            openHeaderMessagesFullscreen(null);
-        });
-        headerExpand.dataset.fsWired = 'true';
-    }
     if (backBtn && backBtn.dataset.wired !== 'true') {
         backBtn.addEventListener('click', function (e) {
             e.preventDefault();
-            headerChatState.conversationId = null;
-            headerChatState.messages = [];
-            setHeaderChatEmptyThread(true);
-            var body = document.getElementById('commsChatModalBody');
-            if (body) body.innerHTML = '<p class="comms-chat-modal-empty">Select a conversation</p>';
+            closeHeaderChatModal();
         });
         backBtn.dataset.wired = 'true';
     }
@@ -585,16 +1103,29 @@ function positionHeaderReactionPicker(triggerBtn) {
 
 function showHeaderReactionPicker(messageId, triggerBtn) {
     hideHeaderMsgMenu();
-    headerChatState.openReactionPickerId = Number(messageId) || null;
-    if (!headerChatState.openReactionPickerId || !triggerBtn) {
+    var mid = Number(messageId) || 0;
+    if (!mid || !triggerBtn) {
         hideHeaderReactionPicker();
         return;
+    }
+    if (Number(headerChatState.openReactionPickerId) === mid) {
+        hideHeaderReactionPicker();
+        return;
+    }
+    headerChatState.openReactionPickerId = mid;
+    var msg = headerChatState.messages.find(function (m) { return Number(m.id) === mid; });
+    var mineEmoji = '';
+    if (msg && Array.isArray(msg.reactions)) {
+        msg.reactions.forEach(function (r) {
+            if (r && r.mine) mineEmoji = String(r.emoji || '');
+        });
     }
     var el = getHeaderReactionPickerEl();
     el.setAttribute('data-react-picker', String(headerChatState.openReactionPickerId));
     el.innerHTML = headerChatState.reactionEmojis.map(function (emoji) {
-        return '<button type="button" class="comms-chat-reaction-pick" data-react-emoji="' +
-            escapeCommsHtml(emoji) + '" role="menuitem">' +
+        var active = mineEmoji && emoji === mineEmoji ? ' is-active' : '';
+        return '<button type="button" class="comms-chat-reaction-pick' + active + '" data-react-emoji="' +
+            escapeCommsHtml(emoji) + '" role="menuitem" aria-pressed="' + (active ? 'true' : 'false') + '">' +
             escapeCommsHtml(emoji) + '</button>';
     }).join('');
     document.querySelectorAll('#commsChatModalBody .comms-chat-bubble-wrap').forEach(function (wrap) {
@@ -716,8 +1247,9 @@ function showHeaderMsgMenu(messageId, triggerBtn) {
     if (!msg || !triggerBtn) return;
     hideHeaderReactionPicker();
     var deleted = msg.deleted_for_all || msg.message_type === 'deleted';
+    var canEdit = !deleted && !!msg.mine && msg.message_type === 'text' && String(msg.body || '').trim() !== '';
     var items = '';
-    if (!deleted && msg.mine && msg.message_type === 'text') {
+    if (canEdit) {
         items += '<button type="button" role="menuitem" data-msg-edit="' + msg.id + '">Edit</button>';
     }
     items += '<button type="button" role="menuitem" data-msg-delete="' + msg.id + '">Delete</button>';
@@ -726,7 +1258,7 @@ function showHeaderMsgMenu(messageId, triggerBtn) {
     el.setAttribute('data-msg-menu', String(msg.id));
     el.hidden = false;
     document.querySelectorAll('#commsChatModalBody .comms-chat-bubble-wrap').forEach(function (wrap) {
-        var isOpen = Number(wrap.getAttribute('data-id')) === Number(msg.id);
+        var isOpen = String(wrap.getAttribute('data-id')) === String(msg.id);
         wrap.classList.toggle('is-menu-open', isOpen);
         var btn = wrap.querySelector('[data-msg-more]');
         if (btn) btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
@@ -778,37 +1310,34 @@ function removeHeaderMessageLocal(messageId) {
     renderHeaderChatMessages(headerChatState.messages, { preserveScroll: true });
 }
 
-function headerMessageMaxLines() {
+function headerMessageMaxChars() {
+    return (window.CommsChat && Number(window.CommsChat.messageMaxLength)) || 1000;
+}
+
+function headerMeasuredLength(text) {
     var input = document.getElementById('commsChatModalInput');
-    var raw = input && input.getAttribute('data-max-lines');
-    var n = Number(raw || 500);
-    return Number.isFinite(n) && n > 0 ? n : 500;
-}
-
-function countHeaderMessageLines(text) {
-    var value = String(text == null ? '' : text);
-    if (value === '') return 0;
-    return value.split(/\r\n|\r|\n/).length;
-}
-
-function clampHeaderMessageToMaxLines(text) {
-    var max = headerMessageMaxLines();
-    var value = String(text == null ? '' : text);
-    var parts = value.split(/\r\n|\r|\n/);
-    if (parts.length <= max) return value;
-    return parts.slice(0, max).join('\n');
+    var cpl = (window.Comms && window.Comms.estimateComposerCharsPerLine)
+        ? window.Comms.estimateComposerCharsPerLine(input)
+        : 36;
+    if (window.Comms && typeof window.Comms.measureMessageLength === 'function') {
+        return window.Comms.measureMessageLength(text, cpl);
+    }
+    return String(text == null ? '' : text).length;
 }
 
 function syncHeaderComposerLineLimit() {
     var input = document.getElementById('commsChatModalInput');
     if (!input) return 0;
-    var clamped = clampHeaderMessageToMaxLines(input.value);
-    if (clamped !== input.value) input.value = clamped;
-    var lines = countHeaderMessageLines(input.value);
-    var atLimit = lines >= headerMessageMaxLines();
+    if (window.Comms && typeof window.Comms.resizeGrowTextarea === 'function') {
+        // Modal: taller default (2 lines), grow up to 5 like See All / Messenger.
+        window.Comms.resizeGrowTextarea(input, 5, 2);
+    }
+    var len = headerMeasuredLength(input.value || '');
+    var max = headerMessageMaxChars();
+    var atLimit = len >= max;
     input.classList.toggle('is-line-limit', atLimit);
     input.setAttribute('aria-invalid', atLimit ? 'true' : 'false');
-    return lines;
+    return len;
 }
 
 function isHeaderComposerNavKey(e) {
@@ -832,24 +1361,27 @@ function saveHeaderEditedMessage(messageId) {
     var bodyEl = document.getElementById('commsChatModalBody');
     var input = bodyEl ? bodyEl.querySelector('[data-edit-input="' + messageId + '"]') : null;
     if (!input) return;
-    var body = clampHeaderMessageToMaxLines(String(input.value || ''));
+    var body = String(input.value || '');
     if (body === '') {
         if (window.Comms && typeof window.Comms.showToast === 'function') {
             window.Comms.showToast('Message cannot be empty.', 'error');
         }
         return;
     }
-    if (countHeaderMessageLines(body) > headerMessageMaxLines()) {
+    var maxChars = headerMessageMaxChars();
+    if (headerMeasuredLength(body) > maxChars) {
         if (window.Comms && typeof window.Comms.showToast === 'function') {
-            window.Comms.showToast('Message cannot exceed ' + headerMessageMaxLines() + ' lines.', 'error');
+            window.Comms.showToast('Message exceeds the ' + maxChars + ' character limit.', 'error');
         }
         return;
     }
-    if (body.length > 5000) {
-        if (window.Comms && typeof window.Comms.showToast === 'function') {
-            window.Comms.showToast('Message must be 5000 characters or less.', 'error');
-        }
-        return;
+    var saveBtn = bodyEl.querySelector('[data-edit-save="' + messageId + '"]');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.classList.add('is-loading');
+        saveBtn.setAttribute('aria-busy', 'true');
+        if (!saveBtn.dataset.label) saveBtn.dataset.label = saveBtn.textContent || 'Save';
+        saveBtn.textContent = 'Saving';
     }
     headerChatState.msgChangeSkipToast[String(messageId)] = true;
     fetch('/api/communications/messages/' + encodeURIComponent(messageId), {
@@ -873,6 +1405,12 @@ function saveHeaderEditedMessage(messageId) {
         window.setTimeout(function () { delete headerChatState.msgChangeSkipToast[String(messageId)]; }, 800);
     }).catch(function (err) {
         delete headerChatState.msgChangeSkipToast[String(messageId)];
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('is-loading');
+            saveBtn.removeAttribute('aria-busy');
+            saveBtn.textContent = saveBtn.dataset.label || 'Save';
+        }
         if (window.Comms && typeof window.Comms.showToast === 'function') {
             window.Comms.showToast(err.message || 'Unable to edit message.', 'error');
         }
@@ -952,59 +1490,133 @@ function renderHeaderChatMessages(messages, opts) {
         body.innerHTML = '<p class="comms-chat-modal-empty">No messages yet. Say hello.</p>';
         return;
     }
-    body.innerHTML = items.map(function (msg) {
+    var parts = [];
+    var skipUntil = -1;
+    var prevCreatedAt = null;
+    items.forEach(function (msg, index) {
+        if (index <= skipUntil) return;
+
+        var sepAt = msg.created_at;
+        if (shouldInsertCommsDateSeparator(prevCreatedAt, sepAt)) {
+            parts.push(renderCommsDateSeparator(sepAt));
+        }
+
         if (msg.message_type === 'call' || msg.message_type === 'system') {
             var callCls = headerCallBubbleClass(msg.body);
-            return '<div class="comms-chat-bubble-wrap ' + (msg.mine ? 'is-mine' : 'is-theirs') + ' is-call" data-id="' + msg.id + '">' +
+            parts.push('<div class="comms-chat-bubble-wrap ' + (msg.mine ? 'is-mine' : 'is-theirs') + ' is-call" data-id="' + msg.id + '" title="' + escapeCommsHtml(formatCommsFullDateTime(msg.created_at)) + '">' +
                 '<div class="comms-chat-bubble-row comms-chat-bubble-row--call">' +
+                '<div class="comms-chat-bubble-cluster">' +
                 '<div class="comms-chat-bubble ' + callCls + '">' +
                 headerCallEventIcon(msg.body) +
                 '<div class="comms-chat-bubble-text">' + escapeCommsHtml(msg.body || '') + '</div>' +
-                '<div class="comms-chat-bubble-time">' + escapeCommsHtml(formatCommsRelativeTime(msg.created_at)) + '</div>' +
-                '</div></div></div>';
+                '</div>' +
+                '</div></div></div>');
+            prevCreatedAt = msg.created_at;
+            return;
         }
         var mine = Boolean(msg.mine);
         var pickerOpen = Number(headerChatState.openReactionPickerId) === Number(msg.id);
         var editing = Number(headerChatState.editingId) === Number(msg.id);
         if (msg.deleted_for_all || msg.message_type === 'deleted') {
-            return '<div class="comms-chat-bubble-wrap ' + (mine ? 'is-mine' : 'is-theirs') + '" data-id="' + msg.id + '">' +
+            parts.push('<div class="comms-chat-bubble-wrap ' + (mine ? 'is-mine' : 'is-theirs') + '" data-id="' + msg.id + '" title="' + escapeCommsHtml(formatCommsFullDateTime(msg.created_at)) + '">' +
                 '<div class="comms-chat-bubble-row">' +
                 '<div class="comms-chat-bubble comms-chat-bubble--deleted">This message was deleted</div>' +
                 renderHeaderMessageActions(msg) +
-                '</div></div>';
+                '</div></div>');
+            prevCreatedAt = msg.created_at;
+            return;
         }
+
+        if (!editing && isHeaderImageOnlyMessage(msg)) {
+            var batchEnd = headerImageBatchEndIndex(items, index);
+            var group = items.slice(index, batchEnd + 1);
+            var batchImages = collectHeaderImageAttachments(group);
+            if (batchImages.length >= 2) {
+                parts.push(renderHeaderImageBatchBubble(group));
+                skipUntil = batchEnd;
+                prevCreatedAt = (group[group.length - 1] && group[group.length - 1].created_at) || msg.created_at;
+                return;
+            }
+        }
+
         var bodyHtml = '';
+        var bubbleContent = '';
         if (editing) {
-            bodyHtml = '<textarea class="comms-chat-edit-input" data-edit-input="' + msg.id + '" maxlength="5000" rows="2">' + escapeCommsHtml(msg.body || '') + '</textarea>' +
+            var maxLen = headerMessageMaxChars();
+            bubbleContent =
+                '<div class="comms-chat-edit-panel" role="group" aria-label="Edit message">' +
+                '<textarea class="comms-chat-edit-input" data-edit-input="' + msg.id + '" maxlength="' + maxLen + '" rows="3">' +
+                escapeCommsHtml(msg.body || '') +
+                '</textarea>' +
+                '<div class="comms-chat-edit-footer">' +
                 '<div class="comms-chat-edit-actions">' +
                 '<button type="button" class="comms-chat-edit-cancel" data-edit-cancel="' + msg.id + '">Cancel</button>' +
                 '<button type="button" class="comms-chat-edit-save" data-edit-save="' + msg.id + '">Save</button>' +
-                '</div>';
+                '</div></div></div>';
         } else if (msg.body) {
             bodyHtml = '<div class="comms-chat-bubble-text">' + escapeCommsHtml(msg.body) +
                 (msg.edited ? ' <em class="comms-chat-edited">edited</em>' : '') + '</div>';
         }
-        return '<div class="comms-chat-bubble-wrap ' + (mine ? 'is-mine' : 'is-theirs') + (pickerOpen ? ' is-picker-open' : '') + '" data-id="' + msg.id + '">' +
+        var isAutomation = msg.message_type === 'automation';
+        var hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
+        var hasTextBody = !!String(msg.body || '').trim() || editing;
+        var attachmentOnly = hasAttachments && !hasTextBody;
+        var splitAttachText = hasAttachments && hasTextBody && !editing;
+        var batchClass = headerBatchClassForIndex(items, index);
+        var batchSize = 0;
+        if (batchClass.indexOf('is-batch-attach') !== -1) {
+            var bStart = index;
+            while (bStart > 0 && headerBatchClassForIndex(items, bStart - 1)) bStart -= 1;
+            var bEnd = index;
+            while (bEnd + 1 < items.length && headerBatchClassForIndex(items, bEnd + 1)) bEnd += 1;
+            batchSize = bEnd - bStart + 1;
+        }
+        var batchAttr = (msg.batch_id ? ' data-batch-id="' + escapeCommsHtml(String(msg.batch_id)) + '"' : '') +
+            (batchSize ? ' data-batch-size="' + batchSize + '"' : '');
+        var isLocalMsg = String(msg.id || '').indexOf('local-') === 0;
+        var showMsgActions = !isAutomation && !!mine && !isLocalMsg && !editing;
+        var sideCls = mine ? 'is-mine' : 'is-theirs';
+        var autoCls = isAutomation ? ' comms-bubble--automation' : '';
+        var attachHtml = renderHeaderAttachmentBubbles(msg.attachments);
+        if (!editing) {
+            if (splitAttachText) {
+                bubbleContent =
+                    '<div class="comms-chat-bubble-cluster">' +
+                    '<div class="comms-chat-bubble ' + sideCls + ' has-attachment-only">' + attachHtml + '</div>' +
+                    '<div class="comms-chat-bubble ' + sideCls + autoCls + '">' + bodyHtml + '</div>' +
+                    '</div>';
+            } else {
+                bubbleContent =
+                    '<div class="comms-chat-bubble-cluster">' +
+                    '<div class="comms-chat-bubble ' + sideCls + autoCls + (attachmentOnly ? ' has-attachment-only' : '') + '">' +
+                    attachHtml +
+                    bodyHtml +
+                    '</div>' +
+                    '</div>';
+            }
+        } else {
+            bubbleContent = '<div class="comms-chat-bubble-cluster">' + bubbleContent + '</div>';
+        }
+        parts.push('<div class="comms-chat-bubble-wrap ' + sideCls + (pickerOpen ? ' is-picker-open' : '') + (isAutomation ? ' is-automation' : '') + batchClass + '" data-id="' + msg.id + '"' + batchAttr +
+            ' title="' + escapeCommsHtml(formatCommsFullDateTime(msg.created_at)) + '">' +
             '<div class="comms-chat-bubble-row">' +
             '<div class="comms-chat-bubble-tools">' +
-            renderHeaderMessageActions(msg) +
+            (showMsgActions ? renderHeaderMessageActions(msg) : '') +
             '<button type="button" class="comms-chat-react-btn" data-react-toggle="' + msg.id + '" aria-label="Add reaction" title="React" aria-expanded="' + (pickerOpen ? 'true' : 'false') + '">' + headerReactBtnIcon + '</button>' +
             '</div>' +
-            '<div class="comms-chat-bubble ' + (mine ? 'is-mine' : 'is-theirs') + '">' +
-            renderHeaderAttachmentBubbles(msg.attachments) +
-            bodyHtml +
-            '<div class="comms-chat-bubble-time">' + escapeCommsHtml(formatCommsRelativeTime(msg.created_at)) + '</div>' +
+            bubbleContent +
             '</div>' +
-            '</div>' +
-            renderHeaderReactionPicker(msg.id) +
             renderHeaderReactionChips(msg.reactions, msg.id) +
-            '</div>';
-    }).join('');
+            '</div>');
+        prevCreatedAt = msg.created_at;
+    });
+    body.innerHTML = parts.join('');
     if (opts.preserveScroll) {
         body.scrollTop = prevScroll;
     } else {
         body.scrollTop = body.scrollHeight;
     }
+    syncHeaderScrollBottomBtn();
     if (headerChatState.openReactionPickerId) {
         var pickerBtn = body.querySelector('[data-react-toggle="' + headerChatState.openReactionPickerId + '"]');
         if (pickerBtn) {
@@ -1015,13 +1627,44 @@ function renderHeaderChatMessages(messages, opts) {
     }
 }
 
+function syncHeaderScrollBottomBtn() {
+    var body = document.getElementById('commsChatModalBody');
+    var btn = document.getElementById('commsChatScrollBottom');
+    if (!body || !btn) return;
+    var distance = body.scrollHeight - body.scrollTop - body.clientHeight;
+    btn.hidden = distance < 72;
+}
+
+function jumpHeaderChatToLatest() {
+    var body = document.getElementById('commsChatModalBody');
+    if (!body) return;
+    body.scrollTop = body.scrollHeight;
+    syncHeaderScrollBottomBtn();
+}
+
 function cloneHeaderReactions(reactions) {
     return (Array.isArray(reactions) ? reactions : []).map(function (r) {
-        return { emoji: r.emoji, count: Number(r.count || 0), mine: !!r.mine };
+        return {
+            emoji: r.emoji,
+            count: Number(r.count || 0),
+            mine: !!r.mine,
+            users: Array.isArray(r.users) ? r.users.map(function (u) {
+                return {
+                    id: Number(u.id || 0),
+                    user_type: String(u.user_type || ''),
+                    name: String(u.name || ''),
+                    mine: !!u.mine,
+                    profile_image_url: String(u.profile_image_url || '')
+                };
+            }) : []
+        };
     });
 }
 
 function optimisticHeaderToggleReactions(reactions, emoji) {
+    if (window.Comms && typeof window.Comms.optimisticToggleReactions === 'function') {
+        return window.Comms.optimisticToggleReactions(reactions, emoji);
+    }
     var list = cloneHeaderReactions(reactions).filter(function (r) { return r.count > 0; });
     var mineEntry = null;
     var target = null;
@@ -1033,16 +1676,27 @@ function optimisticHeaderToggleReactions(reactions, emoji) {
     if (target && target.mine) {
         target.count -= 1;
         target.mine = false;
+        target.users = (target.users || []).filter(function (u) { return !u.mine; });
     } else {
         if (mineEntry && mineEntry !== target) {
             mineEntry.count -= 1;
             mineEntry.mine = false;
+            mineEntry.users = (mineEntry.users || []).filter(function (u) { return !u.mine; });
         }
         if (target) {
             target.count += 1;
             target.mine = true;
+            target.users = target.users || [];
+            if (!(target.users || []).some(function (u) { return u.mine; })) {
+                target.users.push({ id: 0, user_type: '', name: 'You', mine: true });
+            }
         } else {
-            list.push({ emoji: emoji, count: 1, mine: true });
+            list.push({
+                emoji: emoji,
+                count: 1,
+                mine: true,
+                users: [{ id: 0, user_type: '', name: 'You', mine: true }]
+            });
         }
     }
 
@@ -1129,6 +1783,8 @@ function toggleHeaderChatReaction(messageId, emoji) {
         return Number(m.id) === Number(messageId);
     });
     if (!msg) return;
+    // Temp optimistic messages cannot be reacted to until the server assigns a real id.
+    if (!Number(messageId) || String(messageId).indexOf('local-') === 0) return;
 
     var previous = cloneHeaderReactions(msg.reactions);
     var next = optimisticHeaderToggleReactions(previous, emoji);
@@ -1138,6 +1794,7 @@ function toggleHeaderChatReaction(messageId, emoji) {
     var seq = (headerChatState.reactSeq[key] || 0) + 1;
     headerChatState.reactSeq[key] = seq;
     headerChatState.reactSkipRealtime[key] = true;
+    headerChatState.reactLocalUntil[key] = Date.now() + 3200;
 
     if (added) playHeaderChatReactionSound();
     applyHeaderMessageReactions(messageId, next);
@@ -1153,18 +1810,27 @@ function toggleHeaderChatReaction(messageId, emoji) {
         credentials: 'same-origin',
         body: JSON.stringify({ emoji: emoji })
     }).then(function (r) {
-        return r.ok ? r.json() : null;
-    }).then(function (data) {
+        return r.json().then(function (data) {
+            return { ok: r.ok, data: data };
+        }).catch(function () {
+            return { ok: false, data: null };
+        });
+    }).then(function (result) {
         if (headerChatState.reactSeq[key] !== seq) return;
-        if (!data) {
+        if (!result.ok || !result.data) {
             applyHeaderMessageReactions(messageId, previous, { closePicker: false });
+            if (window.Comms && typeof window.Comms.showToast === 'function') {
+                var errMsg = (result.data && result.data.message) || 'Unable to update reaction.';
+                window.Comms.showToast(errMsg, 'error');
+            }
             return;
         }
         applyHeaderMessageReactions(
-            data.message_id || messageId,
-            Array.isArray(data.reactions) ? data.reactions : next,
+            result.data.message_id || messageId,
+            Array.isArray(result.data.reactions) ? result.data.reactions : next,
             { closePicker: false }
         );
+        headerChatState.reactLocalUntil[key] = Date.now() + 3200;
     }).catch(function () {
         if (headerChatState.reactSeq[key] !== seq) return;
         applyHeaderMessageReactions(messageId, previous, { closePicker: false });
@@ -1173,7 +1839,7 @@ function toggleHeaderChatReaction(messageId, emoji) {
         window.setTimeout(function () {
             if (headerChatState.reactSeq[key] !== seq) return;
             delete headerChatState.reactSkipRealtime[key];
-        }, 500);
+        }, 2800);
     });
 }
 
@@ -1246,13 +1912,28 @@ window.onCommsHeaderReactionChange = function (messageId, meta) {
 
 window.onCommsHeaderMessageInsert = function (message) {
     if (!message || Number(message.conversation_id) !== Number(headerChatState.conversationId)) return;
-    if (headerChatState.messages.some(function (m) { return Number(m.id) === Number(message.id); })) return;
+    var mid = String(message.id);
+    if (headerChatState.messages.some(function (m) { return String(m.id) === mid; })) return;
     var boot = document.getElementById('commsRealtimeBoot');
     var mine = boot
         && Number(message.sender_id) === Number(boot.dataset.currentUserId)
         && message.sender_type === boot.dataset.portalUserType;
     message.mine = !!mine;
     if (!message.reactions) message.reactions = [];
+    if (message.message_type === 'automation') {
+        var autoTempIdx = headerChatState.messages.findIndex(function (m) {
+            return String(m.id).indexOf('local-auto-') === 0;
+        });
+        if (autoTempIdx !== -1) {
+            headerChatState.messages[autoTempIdx] = message;
+            renderHeaderChatMessages(headerChatState.messages);
+            writeHeaderChatCache(headerChatState.conversationId, {
+                messages: headerChatState.messages,
+                reactionEmojis: headerChatState.reactionEmojis
+            });
+            return;
+        }
+    }
     headerChatState.messages.push(message);
     renderHeaderChatMessages(headerChatState.messages);
     writeHeaderChatCache(headerChatState.conversationId, {
@@ -1283,12 +1964,315 @@ window.onCommsHeaderMessageChange = function (row) {
         headerChatState.messages[idx].edited = true;
         if (!skipToast && String(prevBody || '') !== String(row.body || '')
             && window.Comms && typeof window.Comms.showToast === 'function') {
-            window.Comms.showToast('Message edited.', 'info');
+            window.Comms.showToast('Message edited.', 'success');
         }
     }
     renderHeaderChatMessages(headerChatState.messages, { preserveScroll: true });
     persistHeaderThreadCache();
 };
+
+function clearHeaderFaqPanelPosition() {
+    var panel = document.getElementById('commsChatFaqSuggestions');
+    var list = document.getElementById('commsChatFaqSuggestionsList');
+    if (!panel) return;
+    panel.classList.remove('is-fixed-pos');
+    panel.style.position = '';
+    panel.style.left = '';
+    panel.style.right = '';
+    panel.style.top = '';
+    panel.style.bottom = '';
+    panel.style.width = '';
+    panel.style.maxHeight = '';
+    panel.style.zIndex = '';
+    if (list) list.style.maxHeight = '';
+}
+
+function positionHeaderFaqPanel() {
+    var panel = document.getElementById('commsChatFaqSuggestions');
+    var toggle = document.getElementById('commsChatFaqMenuToggle');
+    var list = document.getElementById('commsChatFaqSuggestionsList');
+    if (!panel || !toggle || panel.hidden) return;
+
+    var rect = toggle.getBoundingClientRect();
+    var vw = window.innerWidth || document.documentElement.clientWidth || 360;
+    var vh = window.innerHeight || document.documentElement.clientHeight || 640;
+    var pad = vw <= 414 ? 8 : 12;
+    var width = Math.min(vw <= 414 ? 280 : (vw <= 768 ? 300 : 320), Math.max(200, vw - (pad * 2)));
+    var maxH = Math.min(
+        /* Prefer height of ~5 FAQ rows so 6–10 scroll inside the same box. */
+        Math.round((2.45 * 16 * 5) + (0.35 * 16 * 4) + 20),
+        vw <= 768 ? Math.floor(vh * 0.42) : 340,
+        Math.floor(vh * 0.55)
+    );
+
+    panel.classList.add('is-fixed-pos');
+    panel.style.position = 'fixed';
+    panel.style.width = width + 'px';
+    panel.style.zIndex = '5300';
+    panel.style.right = 'auto';
+
+    var left = Math.round(rect.right - width);
+    left = Math.max(pad, Math.min(left, vw - width - pad));
+    panel.style.left = left + 'px';
+
+    var spaceAbove = rect.top - pad;
+    var spaceBelow = vh - rect.bottom - pad;
+    var preferAbove = spaceAbove >= 140 || spaceAbove >= spaceBelow;
+    var usable = preferAbove ? spaceAbove : spaceBelow;
+    var height = Math.min(maxH, Math.max(120, usable));
+
+    if (preferAbove) {
+        panel.style.maxHeight = height + 'px';
+        panel.style.bottom = Math.round(vh - rect.top + 8) + 'px';
+        panel.style.top = 'auto';
+    } else {
+        panel.style.maxHeight = height + 'px';
+        panel.style.top = Math.round(rect.bottom + 8) + 'px';
+        panel.style.bottom = 'auto';
+    }
+
+    if (list) {
+        var hint = panel.querySelector('.comms-faq-cooldown-hint');
+        var hintH = hint ? (hint.getBoundingClientRect().height + 8) : 0;
+        list.style.maxHeight = Math.max(80, height - hintH - 18) + 'px';
+    }
+}
+
+function setHeaderFaqMenuOpen(open) {
+    var panel = document.getElementById('commsChatFaqSuggestions');
+    var toggle = document.getElementById('commsChatFaqMenuToggle');
+    if (!panel || !toggle) return;
+    var isOpen = !!open;
+    panel.hidden = !isOpen;
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggle.classList.toggle('is-open', isOpen);
+    if (isOpen) {
+        window.requestAnimationFrame(function () {
+            positionHeaderFaqPanel();
+        });
+    } else {
+        clearHeaderFaqPanelPosition();
+    }
+}
+
+function headerFaqCacheKey(conversationId) {
+    return 'comms_faq_sugg_v6_' + String(conversationId || '0');
+}
+
+function readHeaderFaqCache(conversationId) {
+    if (window.Comms && typeof window.Comms.readFaqSuggestionsCache === 'function') {
+        var shared = window.Comms.readFaqSuggestionsCache(conversationId);
+        return shared && Array.isArray(shared.faqs) ? shared : null;
+    }
+    try {
+        var raw = localStorage.getItem(headerFaqCacheKey(conversationId));
+        if (!raw) raw = sessionStorage.getItem(headerFaqCacheKey(conversationId));
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.faqs)) return null;
+        if (Date.now() - Number(parsed.at || 0) > 30 * 60 * 1000) return null;
+        return { faqs: parsed.faqs, at: parsed.at, fresh: (Date.now() - Number(parsed.at || 0) <= 15 * 1000) };
+    } catch (e) {
+        return null;
+    }
+}
+
+function writeHeaderFaqCache(conversationId, faqs) {
+    if (window.Comms && typeof window.Comms.writeFaqSuggestionsCache === 'function') {
+        window.Comms.writeFaqSuggestionsCache(conversationId, faqs);
+        return;
+    }
+    try {
+        localStorage.setItem(headerFaqCacheKey(conversationId), JSON.stringify({
+            at: Date.now(),
+            faqs: Array.isArray(faqs) ? faqs : []
+        }));
+    } catch (e) { /* ignore */ }
+}
+
+function applyHeaderFaqSuggestions(faqs) {
+    var toggle = document.getElementById('commsChatFaqMenuToggle');
+    var wasOpen = !!(toggle && toggle.getAttribute('aria-expanded') === 'true');
+    headerChatState.faqSuggestions = Array.isArray(faqs) ? faqs : [];
+    headerChatState.faqKnownEmpty = headerChatState.faqSuggestions.length === 0;
+    headerChatState.faqLoading = false;
+    renderHeaderFaqChips();
+    // Keep the burger panel open when the user toggled it; only close if empty.
+    if (!headerChatState.faqSuggestions.length) {
+        setHeaderFaqMenuOpen(false);
+    } else if (wasOpen) {
+        setHeaderFaqMenuOpen(true);
+    }
+}
+
+function headerFaqCooldownRemaining() {
+    var cid = String(headerChatState.conversationId || '');
+    return Math.max(0, Math.ceil((Number(headerChatState.faqCooldownUntil[cid] || 0) - Date.now()) / 1000));
+}
+
+function stopHeaderFaqCooldownTimer() {
+    if (headerChatState.faqCooldownTimer) {
+        window.clearInterval(headerChatState.faqCooldownTimer);
+        headerChatState.faqCooldownTimer = null;
+    }
+}
+
+function startHeaderFaqCooldown(seconds) {
+    var cid = String(headerChatState.conversationId || '');
+    if (!cid) return;
+    var secs = Math.max(1, Number(seconds) || 10);
+    headerChatState.faqCooldownUntil[cid] = Date.now() + (secs * 1000);
+    stopHeaderFaqCooldownTimer();
+    renderHeaderFaqChips();
+    headerChatState.faqCooldownTimer = window.setInterval(function () {
+        if (headerFaqCooldownRemaining() <= 0) {
+            stopHeaderFaqCooldownTimer();
+            delete headerChatState.faqCooldownUntil[String(headerChatState.conversationId || '')];
+        }
+        renderHeaderFaqChips();
+    }, 250);
+}
+
+function renderHeaderFaqChips() {
+    var menu = document.getElementById('commsChatFaqMenu');
+    var panel = document.getElementById('commsChatFaqSuggestions');
+    var list = document.getElementById('commsChatFaqSuggestionsList');
+    if (!list) {
+        syncHeaderComposerEndControls();
+        return;
+    }
+    if (!headerChatState.faqSuggestions.length) {
+        if (menu) menu.setAttribute('data-no-faqs', '1');
+        list.innerHTML = '';
+        if (panel) {
+            var oldHint = panel.querySelector(':scope > .comms-faq-cooldown-hint');
+            if (oldHint) oldHint.remove();
+        }
+        syncHeaderComposerEndControls();
+        return;
+    }
+    if (menu) menu.removeAttribute('data-no-faqs');
+    var remaining = headerFaqCooldownRemaining();
+    var cooling = remaining > 0;
+    list.innerHTML = headerChatState.faqSuggestions.map(function (faq) {
+        var q = String(faq.question || '');
+        var answer = String(faq.automated_response || '');
+        var faqId = Number(faq.id) || 0;
+        return '<button type="button" class="comms-faq-chip' + (cooling ? ' is-cooldown' : '') + '"' +
+            (cooling ? ' disabled aria-disabled="true"' : '') +
+            ' role="listitem" title="' + escapeCommsHtml(q) + '"' +
+            (faqId ? ' data-faq-id="' + faqId + '"' : '') +
+            ' data-faq-question="' + escapeCommsHtml(q) + '"' +
+            (answer ? ' data-faq-response="' + escapeCommsHtml(answer) + '"' : '') +
+            '>' + escapeCommsHtml(q) + '</button>';
+    }).join('');
+
+    if (panel) {
+        var hint = panel.querySelector(':scope > .comms-faq-cooldown-hint');
+        if (cooling) {
+            if (!hint) {
+                hint = document.createElement('p');
+                hint.className = 'comms-faq-cooldown-hint';
+                hint.setAttribute('role', 'status');
+                panel.insertBefore(hint, list);
+            }
+            hint.textContent = 'Suggested questions locked — wait ' + remaining + 's';
+        } else if (hint) {
+            hint.remove();
+        }
+    }
+    syncHeaderComposerEndControls();
+}
+
+function matchHeaderFaqResponse(question) {
+    var needle = String(question || '').trim().toLowerCase();
+    if (!needle) return null;
+    var faqs = headerChatState.faqSuggestions || [];
+    for (var i = 0; i < faqs.length; i++) {
+        if (String(faqs[i].question || '').trim().toLowerCase() === needle) {
+            return faqs[i];
+        }
+    }
+    return null;
+}
+
+function matchHeaderFaqById(faqId) {
+    var id = Number(faqId);
+    if (!id) return null;
+    var faqs = headerChatState.faqSuggestions || [];
+    for (var i = 0; i < faqs.length; i++) {
+        if (Number(faqs[i].id) === id) return faqs[i];
+    }
+    return null;
+}
+
+function resolveHeaderFaqMatch(text, opts) {
+    opts = opts || {};
+    if (opts.faqResponse) {
+        return {
+            id: Number(opts.faqId) || 0,
+            question: text,
+            automated_response: String(opts.faqResponse)
+        };
+    }
+    if (opts.faqId) {
+        var byId = matchHeaderFaqById(opts.faqId);
+        if (byId) return byId;
+    }
+    return matchHeaderFaqResponse(text);
+}
+
+function loadHeaderFaqSuggestions(conversationId) {
+    var menu = document.getElementById('commsChatFaqMenu');
+    var panel = document.getElementById('commsChatFaqSuggestions');
+    var list = document.getElementById('commsChatFaqSuggestionsList');
+    if (!panel || !list || !conversationId) return;
+
+    var cachedFaqs = readHeaderFaqCache(conversationId);
+    var cachedList = (cachedFaqs && Array.isArray(cachedFaqs.faqs)) ? cachedFaqs.faqs : null;
+    // Paint non-empty cache immediately; never treat empty cache as final (Official FAQs
+    // can appear after Kabataan last cached an empty list).
+    if (cachedList && cachedList.length) {
+        applyHeaderFaqSuggestions(cachedList);
+    } else {
+        headerChatState.faqLoading = true;
+        headerChatState.faqKnownEmpty = false;
+        if (menu) {
+            menu.hidden = false;
+            menu.removeAttribute('data-no-faqs');
+        }
+        syncHeaderComposerEndControls();
+    }
+
+    var routes = (window.CommsChat && window.CommsChat.routes) || {};
+    var urlTemplate = routes.faqSuggestions || '/api/communications/conversations/__ID__/faq-suggestions';
+    var url = String(urlTemplate).replace('__ID__', String(conversationId));
+    fetch(url, {
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRF-TOKEN': getCommsCsrfToken()
+        },
+        credentials: 'same-origin',
+        cache: 'no-store'
+    }).then(function (r) {
+        return r.ok ? r.json() : null;
+    }).then(function (data) {
+        if (Number(headerChatState.conversationId) !== Number(conversationId)) return;
+        var faqs = (data && Array.isArray(data.faqs)) ? data.faqs : [];
+        writeHeaderFaqCache(conversationId, faqs);
+        applyHeaderFaqSuggestions(faqs);
+    }).catch(function () {
+        if (Number(headerChatState.conversationId) !== Number(conversationId)) return;
+        headerChatState.faqLoading = false;
+        if (!headerChatState.faqSuggestions.length) {
+            headerChatState.faqKnownEmpty = true;
+            setHeaderFaqMenuOpen(false);
+            list.innerHTML = '';
+            syncHeaderComposerEndControls();
+        }
+    });
+}
 
 function loadHeaderChatMessages(conversationId) {
     if (headerChatState.loading) return;
@@ -1304,7 +2288,7 @@ function loadHeaderChatMessages(conversationId) {
         return r.ok ? r.json() : null;
     }).then(function (data) {
         if (!data || Number(headerChatState.conversationId) !== Number(conversationId)) return;
-        var messages = Array.isArray(data.messages) ? data.messages : [];
+        var messages = mergeHeaderPreservedReactions(Array.isArray(data.messages) ? data.messages : []);
         if (Array.isArray(data.reaction_emojis) && data.reaction_emojis.length) {
             headerChatState.reactionEmojis = data.reaction_emojis;
         }
@@ -1330,6 +2314,23 @@ function loadHeaderChatMessages(conversationId) {
     });
 }
 
+function mergeHeaderPreservedReactions(incoming) {
+    var localById = {};
+    (headerChatState.messages || []).forEach(function (m) {
+        localById[String(m.id)] = m;
+    });
+    var now = Date.now();
+    return (incoming || []).map(function (m) {
+        var key = String(m.id);
+        var until = Number(headerChatState.reactLocalUntil[key] || 0);
+        var skip = !!headerChatState.reactSkipRealtime[key];
+        if ((!skip && until <= now) || !localById[key]) return m;
+        var local = localById[key];
+        if (!Array.isArray(local.reactions)) return m;
+        return Object.assign({}, m, { reactions: cloneHeaderReactions(local.reactions) });
+    });
+}
+
 function markHeaderConversationRead(conversationId) {
     fetch('/api/communications/conversations/' + encodeURIComponent(conversationId) + '/read', {
         method: 'POST',
@@ -1342,34 +2343,46 @@ function markHeaderConversationRead(conversationId) {
     }).catch(function () { /* ignore */ });
 }
 
-function sendHeaderChatMessage(event) {
+function sendHeaderChatMessage(event, opts) {
+    opts = opts || {};
     if (event) event.preventDefault();
     var input = document.getElementById('commsChatModalInput');
     var conversationId = headerChatState.conversationId;
     if (!input || !conversationId) return;
-    var body = clampHeaderMessageToMaxLines(String(input.value || ''));
+    var body = String(input.value || '').replace(/\r\n/g, '\n').replace(/^\s+|\s+$/g, '');
     var files = headerChatState.pendingAttachments.slice();
-    if (body === '' && !files.length) return;
-    if (countHeaderMessageLines(body) > headerMessageMaxLines()) {
+    var previewUrls = headerChatState.pendingPreviewUrls.slice();
+    if (!body && !files.length) return;
+    if (opts.fromFaq && headerFaqCooldownRemaining() > 0) {
         if (window.Comms && typeof window.Comms.showToast === 'function') {
-            window.Comms.showToast('Message cannot exceed ' + headerMessageMaxLines() + ' lines.', 'error');
+            window.Comms.showToast('Please wait ' + headerFaqCooldownRemaining() + 's before sending another FAQ.', 'error');
         }
         return;
     }
-    if (body.length > 5000) {
+    var maxChars = headerMessageMaxChars();
+    if (headerMeasuredLength(body) > maxChars) {
         if (window.Comms && typeof window.Comms.showToast === 'function') {
-            window.Comms.showToast('Message must be 5000 characters or less.', 'error');
+            window.Comms.showToast('Message exceeds the ' + maxChars + ' character limit.', 'error');
         }
         return;
     }
     if (headerChatState.sending && files.length) return;
 
+    stopHeaderLocalTyping(conversationId);
+
     var sendBtn = document.getElementById('commsChatModalSend');
     input.value = '';
     syncHeaderComposerLineLimit();
-    clearHeaderChatAttachments();
+    // Keep blob URLs for optimistic attachment bubbles.
+    clearHeaderChatAttachments({ keepObjectUrls: true });
 
     var tempId = 'local-' + Date.now();
+    var autoTempId = null;
+    var faqMatch = (body !== '' && !files.length) ? resolveHeaderFaqMatch(body, opts) : null;
+    var expectAutoReply = !!(faqMatch && String(faqMatch.automated_response || '').trim());
+    var faqId = faqMatch && Number(faqMatch.id) ? Number(faqMatch.id) : (Number(opts.faqId) || null);
+    var batchId = files.length ? ('batch-' + Date.now()) : null;
+
     if (body !== '') {
         headerChatState.messages.push({
             id: tempId,
@@ -1381,6 +2394,51 @@ function sendHeaderChatMessage(event) {
             reactions: [],
             attachments: []
         });
+        if (expectAutoReply) {
+            autoTempId = 'local-auto-' + Date.now();
+            headerChatState.messages.push({
+                id: autoTempId,
+                conversation_id: conversationId,
+                body: String(faqMatch.automated_response),
+                message_type: 'automation',
+                mine: false,
+                created_at: new Date().toISOString(),
+                reactions: [],
+                attachments: []
+            });
+            startHeaderFaqCooldown(10);
+        }
+    }
+
+    if (files.length) {
+        var attachBase = Date.now();
+        files.forEach(function (file, index) {
+            var isImage = isHeaderImageFile(file);
+            var blobUrl = previewUrls[index] || (isImage ? URL.createObjectURL(file) : null);
+            headerChatState.messages.push({
+                id: 'local-att-' + attachBase + '-' + index,
+                conversation_id: conversationId,
+                body: '',
+                message_type: isImage ? 'image' : 'file',
+                mine: true,
+                created_at: new Date().toISOString(),
+                reactions: [],
+                batch_id: batchId,
+                attachments: [{
+                    id: 0,
+                    file_name: file.name,
+                    file_type: isImage ? 'image' : 'file',
+                    mime_type: file.type || null,
+                    file_size: file.size || null,
+                    storage_provider: 'local',
+                    url: blobUrl,
+                    download_url: blobUrl || '#'
+                }]
+            });
+        });
+    }
+
+    if (body !== '' || files.length) {
         renderHeaderChatMessages(headerChatState.messages);
     }
 
@@ -1406,18 +2464,60 @@ function sendHeaderChatMessage(event) {
         });
     }
 
-    function applySentMessage(data, replaceTempId) {
+    function applySentMessage(data, replaceTempId, keepBatchId) {
         if (!data || !data.message) return;
         var realIdx = headerChatState.messages.findIndex(function (m) { return Number(m.id) === Number(data.message.id); });
-        var tempIdx = replaceTempId ? headerChatState.messages.findIndex(function (m) { return String(m.id) === replaceTempId; }) : -1;
+        var tempIdx = replaceTempId ? headerChatState.messages.findIndex(function (m) { return String(m.id) === String(replaceTempId); }) : -1;
         if (realIdx !== -1 && tempIdx !== -1) {
             headerChatState.messages.splice(tempIdx, 1);
         } else if (tempIdx !== -1) {
-            headerChatState.messages[tempIdx] = data.message;
+            var prevAtt = headerChatState.messages[tempIdx].attachments || [];
+            prevAtt.forEach(function (a) {
+                if (a && a.url && String(a.url).indexOf('blob:') === 0) {
+                    try { URL.revokeObjectURL(a.url); } catch (e) { /* ignore */ }
+                }
+            });
+            var nextMsg = data.message;
+            if (keepBatchId) nextMsg = Object.assign({}, nextMsg, { batch_id: keepBatchId });
+            headerChatState.messages[tempIdx] = nextMsg;
         } else if (realIdx === -1) {
-            headerChatState.messages.push(data.message);
+            var pushed = data.message;
+            if (keepBatchId) pushed = Object.assign({}, pushed, { batch_id: keepBatchId });
+            headerChatState.messages.push(pushed);
+        }
+        if (data.automated_message) {
+            var autoTempIdx = headerChatState.messages.findIndex(function (m) {
+                return String(m.id).indexOf('local-auto-') === 0;
+            });
+            var autoIdx = headerChatState.messages.findIndex(function (m) {
+                return Number(m.id) === Number(data.automated_message.id);
+            });
+            if (autoIdx !== -1 && autoTempIdx !== -1) {
+                headerChatState.messages.splice(autoTempIdx, 1);
+            } else if (autoTempIdx !== -1) {
+                headerChatState.messages[autoTempIdx] = data.automated_message;
+            } else if (autoIdx === -1) {
+                headerChatState.messages.push(data.automated_message);
+            }
+        } else if (!expectAutoReply) {
+            headerChatState.messages = headerChatState.messages.filter(function (m) {
+                return String(m.id).indexOf('local-auto-') !== 0;
+            });
         }
         renderHeaderChatMessages(headerChatState.messages);
+    }
+
+    if (body !== '') {
+        var postBody = { body: body };
+        if (faqId) postBody.faq_id = faqId;
+        jobs.push(fetch('/api/communications/conversations/' + encodeURIComponent(conversationId) + '/messages', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
+            credentials: 'same-origin',
+            body: JSON.stringify(postBody)
+        }).then(parseMessageResponse).then(function (data) {
+            applySentMessage(data, tempId, null);
+        }));
     }
 
     if (files.length) {
@@ -1425,28 +2525,20 @@ function sendHeaderChatMessage(event) {
         if (sendBtn) sendBtn.disabled = true;
         files.forEach(function (file, index) {
             var fd = new FormData();
-            if (index === 0 && body !== '') {
-                fd.append('body', body);
-            }
             fd.append('attachment', file, file.name);
+            var optimistic = headerChatState.messages.filter(function (m) {
+                return String(m.id).indexOf('local-att-') === 0;
+            })[index];
+            var replaceId = optimistic ? optimistic.id : null;
             jobs.push(fetch('/api/communications/conversations/' + encodeURIComponent(conversationId) + '/messages', {
                 method: 'POST',
                 headers: headers,
                 credentials: 'same-origin',
                 body: fd
             }).then(parseMessageResponse).then(function (data) {
-                applySentMessage(data, index === 0 && body !== '' ? tempId : null);
+                applySentMessage(data, replaceId, batchId);
             }));
         });
-    } else if (body !== '') {
-        jobs.push(fetch('/api/communications/conversations/' + encodeURIComponent(conversationId) + '/messages', {
-            method: 'POST',
-            headers: Object.assign({ 'Content-Type': 'application/json' }, headers),
-            credentials: 'same-origin',
-            body: JSON.stringify({ body: body })
-        }).then(parseMessageResponse).then(function (data) {
-            applySentMessage(data, tempId);
-        }));
     }
 
     Promise.all(jobs).catch(function (err) {
@@ -1565,6 +2657,87 @@ function wireHeaderChatModal() {
     wireHeaderChatAttachButtons();
     wireHeaderChatCallButtons();
     wireFullscreenChatControls();
+    var chatBodyForLightbox = document.getElementById('commsChatModalBody');
+    if (chatBodyForLightbox && window.Comms && typeof window.Comms.wireChatImageLightbox === 'function') {
+        window.Comms.wireChatImageLightbox(chatBodyForLightbox);
+    }
+    if (chatBodyForLightbox && chatBodyForLightbox.dataset.scrollWired !== 'true') {
+        chatBodyForLightbox.addEventListener('scroll', function () {
+            syncHeaderScrollBottomBtn();
+        }, { passive: true });
+        chatBodyForLightbox.dataset.scrollWired = 'true';
+    }
+    var scrollBottomBtn = document.getElementById('commsChatScrollBottom');
+    if (scrollBottomBtn && scrollBottomBtn.dataset.wired !== 'true') {
+        scrollBottomBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            jumpHeaderChatToLatest();
+        });
+        scrollBottomBtn.dataset.wired = 'true';
+    }
+    var faqList = document.getElementById('commsChatFaqSuggestionsList');
+    if (faqList && faqList.dataset.wired !== 'true') {
+        faqList.addEventListener('click', function (e) {
+            var chip = e.target.closest('[data-faq-question]');
+            if (!chip || chip.disabled) return;
+            if (headerFaqCooldownRemaining() > 0) return;
+            var question = chip.getAttribute('data-faq-question') || '';
+            var faqId = Number(chip.getAttribute('data-faq-id') || 0) || null;
+            var faqResponse = chip.getAttribute('data-faq-response') || '';
+            if (!question) return;
+            setHeaderFaqMenuOpen(false);
+            var input = document.getElementById('commsChatModalInput');
+            if (input) {
+                input.value = question;
+            }
+            sendHeaderChatMessage(null, {
+                fromFaq: true,
+                faqId: faqId,
+                faqResponse: faqResponse
+            });
+        });
+        faqList.dataset.wired = 'true';
+    }
+    var faqToggle = document.getElementById('commsChatFaqMenuToggle');
+    if (faqToggle && faqToggle.dataset.wired !== 'true') {
+        faqToggle.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var menu = document.getElementById('commsChatFaqMenu');
+            if (!menu || menu.hidden) return;
+            var open = faqToggle.getAttribute('aria-expanded') !== 'true';
+            if (open) {
+                // Paint known FAQs first so the panel is never empty on toggle.
+                if (headerChatState.faqSuggestions && headerChatState.faqSuggestions.length) {
+                    renderHeaderFaqChips();
+                }
+                setHeaderFaqMenuOpen(true);
+                if (headerChatState.conversationId) {
+                    loadHeaderFaqSuggestions(headerChatState.conversationId);
+                }
+            } else {
+                setHeaderFaqMenuOpen(false);
+            }
+        });
+        document.addEventListener('click', function (e) {
+            var menu = document.getElementById('commsChatFaqMenu');
+            var panel = document.getElementById('commsChatFaqSuggestions');
+            if (!menu || menu.hidden) return;
+            if (menu.contains(e.target)) return;
+            if (panel && panel.contains(e.target)) return;
+            setHeaderFaqMenuOpen(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setHeaderFaqMenuOpen(false);
+        });
+        window.addEventListener('resize', function () {
+            var toggle = document.getElementById('commsChatFaqMenuToggle');
+            if (toggle && toggle.getAttribute('aria-expanded') === 'true') {
+                positionHeaderFaqPanel();
+            }
+        }, { passive: true });
+        faqToggle.dataset.wired = 'true';
+    }
     var chatBody = document.getElementById('commsChatModalBody');
     if (chatBody && chatBody.dataset.menuScroll !== 'true') {
         chatBody.addEventListener('scroll', function () {
@@ -1745,7 +2918,47 @@ function wireHeaderChatModal() {
         form.dataset.wired = 'true';
     }
     if (input && input.dataset.lineLimitWired !== 'true') {
-        input.addEventListener('input', syncHeaderComposerLineLimit);
+        input.removeAttribute('maxlength');
+        input.removeAttribute('data-max-lines');
+        input.addEventListener('input', function () {
+            syncHeaderComposerLineLimit();
+            syncHeaderComposerEndControls();
+            notifyHeaderComposerTyping(input.value);
+            var maxChars = headerMessageMaxChars();
+            var len = headerMeasuredLength(input.value || '');
+            if (len >= maxChars) {
+                if (input.dataset.limitToast !== '1') {
+                    input.dataset.limitToast = '1';
+                    if (window.Comms && typeof window.Comms.showToast === 'function') {
+                        window.Comms.showToast('Message cannot exceed ' + maxChars + ' characters.', 'error');
+                    }
+                }
+            } else {
+                input.dataset.limitToast = '0';
+            }
+        });
+        input.addEventListener('keydown', function (e) {
+            var maxChars = headerMessageMaxChars();
+            var current = String(input.value || '');
+            var len = headerMeasuredLength(current);
+            if (e.key === 'Enter' && !(e.ctrlKey || e.metaKey)) {
+                if (headerMeasuredLength(current + '\n') > maxChars) {
+                    e.preventDefault();
+                    if (window.Comms && typeof window.Comms.showToast === 'function') {
+                        window.Comms.showToast('Message cannot exceed ' + maxChars + ' characters.', 'error');
+                    }
+                    return;
+                }
+            }
+            if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                if (headerMeasuredLength(current + e.key) > maxChars) {
+                    e.preventDefault();
+                    if (window.Comms && typeof window.Comms.showToast === 'function') {
+                        window.Comms.showToast('Message cannot exceed ' + maxChars + ' characters.', 'error');
+                    }
+                }
+            }
+        });
         input.addEventListener('paste', function (e) {
             var paste = (e.clipboardData || window.clipboardData);
             if (!paste) return;
@@ -1755,17 +2968,20 @@ function wireHeaderChatModal() {
             var start = input.selectionStart || 0;
             var end = input.selectionEnd || 0;
             var value = input.value || '';
-            input.value = clampHeaderMessageToMaxLines(value.slice(0, start) + incoming + value.slice(end));
-            syncHeaderComposerLineLimit();
-        });
-        input.addEventListener('keydown', function (e) {
-            var lines = countHeaderMessageLines(input.value || '');
-            if (lines >= headerMessageMaxLines() && !isHeaderComposerNavKey(e)) {
-                e.preventDefault();
+            var next = value.slice(0, start) + incoming + value.slice(end);
+            var maxChars = headerMessageMaxChars();
+            while (next.length && headerMeasuredLength(next) > maxChars) {
+                next = next.slice(0, -1);
             }
+            input.value = next;
+            syncHeaderComposerLineLimit();
+            syncHeaderComposerEndControls();
+            notifyHeaderComposerTyping(input.value);
         });
         input.dataset.lineLimitWired = 'true';
     }
+    syncHeaderComposerEndControls();
+    syncHeaderExpandButtonVisibility();
     // Enter inserts a new line only; send via the send button.
     if (document.documentElement.dataset.commsChatEscWired !== 'true') {
         document.addEventListener('keydown', function (e) {
@@ -1781,7 +2997,10 @@ function wireHeaderChatModal() {
 
 window.openHeaderChatModal = openHeaderChatModal;
 window.closeHeaderChatModal = closeHeaderChatModal;
+window.onCommsHeaderPresence = onCommsHeaderPresence;
 window.openHeaderMessagesFullscreen = openHeaderMessagesFullscreen;
+window.setHeaderChatFullscreen = setHeaderChatFullscreen;
+window.goToSeeAllMessages = goToSeeAllMessages;
 window.renderFullscreenChatList = renderFullscreenChatList;
 window.reloadHeaderChatMessages = function (conversationId) {
     var id = conversationId || headerChatState.conversationId;

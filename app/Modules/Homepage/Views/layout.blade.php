@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0450a8">
-    <meta name="description" content="SK OnePortal — convenient online platform para mas madaling makilahok ang Kabataan sa mga programa, aktibidad, at oportunidad ng Sangguniang Kabataan sa Santa Cruz, Laguna.">
+    <meta name="description" content="SKOnePortal connects the Kabataan with their Sangguniang Kabataan through accessible digital services, programs, activities, and youth profiling in Santa Cruz, Laguna.">
     <title>@yield('title', 'SK OnePortal Kabataan')</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">

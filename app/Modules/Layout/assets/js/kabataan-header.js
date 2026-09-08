@@ -64,10 +64,12 @@ import './chat-modal.js';
     function closeMessagesPopover() {
         const pop = document.getElementById('commsMsgPopover');
         const btn = document.getElementById('commsMsgBtn');
+        const onMessagesPage = !!document.body.classList.contains('comms-messages-page')
+            || /^\/communications\/?$/.test(window.location.pathname || '');
         if (pop) {
             pop.classList.remove('show');
         }
-        if (btn) {
+        if (btn && !onMessagesPage) {
             btn.setAttribute('aria-expanded', 'false');
         }
     }
@@ -181,6 +183,54 @@ import './chat-modal.js';
     const msgBtn = document.getElementById('commsMsgBtn');
     const msgMenu = document.getElementById('commsMsgMenu');
     const csrf = document.querySelector('meta[name="csrf-token"]');
+
+    function isMessagesPage() {
+        return !!document.body.classList.contains('comms-messages-page')
+            || /^\/communications\/?$/.test(window.location.pathname || '');
+    }
+
+    function storeMessagesReturnUrl() {
+        try {
+            const path = String(window.location.pathname || '') + String(window.location.search || '');
+            if (!/^\/communications(\/|$)/.test(window.location.pathname || '')) {
+                sessionStorage.setItem('comms_messages_return_url', path || '/dashboard');
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function leaveMessagesPage() {
+        let url = '/dashboard';
+        try {
+            const stored = sessionStorage.getItem('comms_messages_return_url');
+            if (stored && !/^\/communications(\/|$)/.test(stored)) {
+                url = stored;
+            }
+            sessionStorage.removeItem('comms_messages_return_url');
+        } catch (e) { /* ignore */ }
+        window.location.assign(url);
+    }
+
+    function syncMessagesPageHeaderBtn() {
+        const btn = document.getElementById('commsMsgBtn');
+        if (!btn) return;
+        if (isMessagesPage()) {
+            btn.classList.add('is-active');
+            btn.setAttribute('aria-pressed', 'true');
+            btn.setAttribute('aria-expanded', 'false');
+            btn.title = 'Leave Messages';
+            btn.setAttribute('aria-label', 'Leave Messages');
+        }
+    }
+
+    function wireSeeAllMessagesLinks() {
+        document.querySelectorAll('.comms-msg-see-all-link').forEach(function (link) {
+            if (link.dataset.returnWired === '1') return;
+            link.addEventListener('click', function () {
+                storeMessagesReturnUrl();
+            });
+            link.dataset.returnWired = '1';
+        });
+    }
 
     function applyMessagesPopoverFilters() {
         const list = document.getElementById('commsMsgList');
@@ -313,12 +363,18 @@ import './chat-modal.js';
         list.style.display = '';
         list.innerHTML = items.map(function (c) {
             const peer = c.other_user || {};
-            const name = peer.name || 'User';
-            const preview = (c.last_message && c.last_message.body) || 'No messages yet';
+            const fullName = peer.name || 'User';
+            const name = (window.Comms && window.Comms.truncateText)
+                ? window.Comms.truncateText(fullName, 28)
+                : fullName;
+            const previewRaw = (c.last_message && c.last_message.body) || 'No messages yet';
+            const preview = (window.Comms && window.Comms.truncateText)
+                ? window.Comms.truncateText(previewRaw, 42)
+                : previewRaw;
             const unread = Number(c.unread_count || 0);
-            const avatar = avatarFor(name, peer.profile_image_url);
-            const searchBlob = String(name + ' ' + preview).toLowerCase();
-            return '<button type="button" class="comms-msg-item' + (unread > 0 ? ' comms-msg-unread' : '') + '" data-id="' + escMsg(c.id) + '" data-name="' + escMsg(name) + '" data-avatar="' + escMsg(avatar) + '" data-unread="' + (unread > 0 ? '1' : '0') + '" data-search="' + escMsg(searchBlob) + '" role="menuitem">' +
+            const avatar = avatarFor(fullName, peer.profile_image_url);
+            const searchBlob = String(fullName + ' ' + previewRaw).toLowerCase();
+            return '<button type="button" class="comms-msg-item' + (unread > 0 ? ' comms-msg-unread' : '') + '" data-id="' + escMsg(c.id) + '" data-name="' + escMsg(fullName) + '" data-avatar="' + escMsg(avatar) + '" data-unread="' + (unread > 0 ? '1' : '0') + '" data-search="' + escMsg(searchBlob) + '" role="menuitem" title="' + escMsg(fullName) + '">' +
                 '<img class="comms-msg-avatar" src="' + escMsg(avatar) + '" alt="">' +
                 '<div class="comms-msg-content">' +
                 '<div class="comms-msg-item-top">' +
@@ -330,11 +386,17 @@ import './chat-modal.js';
                 (unread > 0 ? '<span class="comms-msg-unread-dot" aria-hidden="true"></span>' : '') +
                 '</button>';
         }).join('') + starters.map(function (user) {
-            const name = user.name || 'User';
-            const preview = user.position || user.user_type_label || 'SK Official';
-            const avatar = avatarFor(name, user.profile_image_url);
-            const searchBlob = String(name + ' ' + preview).toLowerCase();
-            return '<button type="button" class="comms-msg-item" data-user-id="' + escMsg(user.id) + '" data-name="' + escMsg(name) + '" data-avatar="' + escMsg(avatar) + '" data-unread="0" data-search="' + escMsg(searchBlob) + '" role="menuitem">' +
+            const fullName = user.name || 'User';
+            const name = (window.Comms && window.Comms.truncateText)
+                ? window.Comms.truncateText(fullName, 28)
+                : fullName;
+            const previewRaw = user.position || user.user_type_label || 'SK Official';
+            const preview = (window.Comms && window.Comms.truncateText)
+                ? window.Comms.truncateText(previewRaw, 42)
+                : previewRaw;
+            const avatar = avatarFor(fullName, user.profile_image_url);
+            const searchBlob = String(fullName + ' ' + previewRaw).toLowerCase();
+            return '<button type="button" class="comms-msg-item" data-user-id="' + escMsg(user.id) + '" data-name="' + escMsg(fullName) + '" data-avatar="' + escMsg(avatar) + '" data-unread="0" data-search="' + escMsg(searchBlob) + '" role="menuitem" title="' + escMsg(fullName) + '">' +
                 '<img class="comms-msg-avatar" src="' + escMsg(avatar) + '" alt="">' +
                 '<div class="comms-msg-content">' +
                 '<div class="comms-msg-item-top">' +
@@ -402,9 +464,34 @@ import './chat-modal.js';
             e.preventDefault();
             e.stopPropagation();
         }
+        // On See All Messages: header Messages btn is selected; click again leaves to prior page.
+        if (isMessagesPage()) {
+            leaveMessagesPage();
+            return;
+        }
         const pop = document.getElementById('commsMsgPopover');
         const btn = document.getElementById('commsMsgBtn');
         if (!pop || !btn) {
+            return;
+        }
+        const chatModal = document.getElementById('commsChatModal');
+        const chatOpen = chatModal && !chatModal.hidden && window.__COMMS_HEADER_ACTIVE_ID__ != null;
+        // If floating chat is open, close it then show the chats list (one click).
+        if (chatOpen) {
+            if (typeof window.closeHeaderChatModal === 'function') {
+                window.closeHeaderChatModal();
+            }
+            if (typeof window.kabataanCloseHeaderOverlays === 'function') {
+                window.kabataanCloseHeaderOverlays('messages');
+            }
+            pop.classList.add('show');
+            pop.style.zIndex = '5200';
+            btn.setAttribute('aria-expanded', 'true');
+            btn.classList.remove('is-active');
+            btn.setAttribute('aria-pressed', 'false');
+            wireMessagesPopoverControls();
+            wireSeeAllMessagesLinks();
+            refreshMessagesPopover();
             return;
         }
         if (typeof window.kabataanCloseHeaderOverlays === 'function') {
@@ -419,12 +506,15 @@ import './chat-modal.js';
         pop.style.zIndex = '5200';
         btn.setAttribute('aria-expanded', 'true');
         wireMessagesPopoverControls();
+        wireSeeAllMessagesLinks();
         refreshMessagesPopover();
     }
 
     window.toggleMessagesPopover = toggleMessagesPopover;
     window.refreshMessagesPopover = refreshMessagesPopover;
     hydrateMessagesPopoverFromCache();
+    wireSeeAllMessagesLinks();
+    syncMessagesPageHeaderBtn();
 
     if (msgBtn) {
         msgBtn.addEventListener('click', function (e) {

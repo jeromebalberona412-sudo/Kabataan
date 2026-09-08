@@ -6,6 +6,8 @@
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
+    z-index: 5201;
+    overflow: visible;
 }
 
 .comms-header-msg-btn {
@@ -30,6 +32,12 @@
     background: rgba(255, 255, 255, 0.14);
     color: #fff;
     outline: none;
+}
+
+.comms-header-msg-btn.is-active,
+.comms-header-msg-btn[aria-pressed="true"] {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
 }
 
 .comms-header-msg-btn svg {
@@ -278,6 +286,7 @@ button.comms-msg-item {
 
 .comms-msg-content {
     min-width: 0;
+    overflow: hidden;
 }
 
 .comms-msg-item-top {
@@ -285,11 +294,15 @@ button.comms-msg-item {
     align-items: baseline;
     justify-content: space-between;
     gap: 8px;
+    min-width: 0;
 }
 
 .comms-msg-item-name {
     font-size: 14px;
     font-weight: 600;
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -298,13 +311,15 @@ button.comms-msg-item {
 .comms-msg-item-time {
     font-size: 12px;
     color: #64748b;
-    flex-shrink: 0;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .comms-msg-item-preview {
     margin-top: 2px;
     font-size: 13px;
     color: #64748b;
+    max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -364,7 +379,7 @@ button.comms-msg-item {
 
 .comms-msg-see-all-btn:hover,
 .comms-msg-see-all-btn:focus-visible {
-    background: #011e3c;
+    background: #1a6fd4;
     color: #fff;
     outline: none;
 }
@@ -372,16 +387,18 @@ button.comms-msg-item {
 @media (max-width: 414px) {
     .comms-msg-popover {
         position: fixed;
-        top: auto;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        width: 100%;
-        max-width: 100%;
-        max-height: min(72vh, 520px);
-        height: min(72vh, 520px);
-        border-radius: 16px 16px 0 0;
-        transform: translateY(12px);
+        top: calc(var(--kab-nav-h, 68px) + 6px);
+        bottom: auto;
+        left: auto;
+        right: 8px;
+        width: min(280px, calc(100vw - 16px));
+        max-width: calc(100vw - 16px);
+        max-height: min(58vh, 340px);
+        height: auto;
+        border-radius: 12px;
+        transform: translateY(-8px);
+        box-shadow: 0 8px 32px rgba(2, 42, 84, 0.18), 0 2px 8px rgba(0,0,0,0.08);
+        z-index: 5200;
     }
 
     .comms-msg-popover.show {
@@ -391,7 +408,9 @@ button.comms-msg-item {
 
 @media (max-width: 320px) {
     .comms-msg-popover {
-        max-height: min(78vh, 560px);
-        height: min(78vh, 560px);
+        right: 6px;
+        width: min(280px, calc(100vw - 12px));
+        max-width: calc(100vw - 12px);
+        max-height: min(58vh, 340px);
     }
 }

@@ -22,9 +22,160 @@ import { createClient } from '@supabase/supabase-js';
     var typingTimers = Object.create(null);
     var lastTypingSent = 0;
     var activeConversationId = null;
+    var localTyping = {
+        active: false,
+        conversationId: null,
+        idleTimer: null
+    };
 
     function getRoot() {
         return document.getElementById('commsApp') || document.getElementById('commsRealtimeBoot');
+    }
+
+    function myUserId() {
+        var root = getRoot();
+        return root ? Number(root.dataset.currentUserId || 0) : 0;
+    }
+
+    function myTypingIdentity() {
+        var root = getRoot();
+        var portal = root ? String(root.dataset.portalUserType || '').trim() : '';
+        var name = root ? String(root.dataset.currentUserName || '').trim() : '';
+        if (!name) {
+            if (portal === 'kabataan') name = 'Kabataan';
+            else if (portal === 'sk_official') name = 'SK Official';
+            else if (portal === 'sk_fed') name = 'SK Federation';
+            else name = 'Someone';
+        }
+        return {
+            user_id: myUserId(),
+            display_name: name,
+            portal: portal
+        };
+    }
+
+    function applyTypingUi(conversationId, visible, meta) {
+        var pageCid = window.__COMMS_PAGE_ACTIVE_ID__;
+        if (pageCid == null && window.CommsChat && typeof window.CommsChat.getActiveId === 'function') {
+            // Fallback when page has not set the global yet.
+            var maybe = window.CommsChat.getActiveId();
+            if (maybe != null && window.__COMMS_HEADER_ACTIVE_ID__ == null) pageCid = maybe;
+        }
+        var headerCid = window.__COMMS_HEADER_ACTIVE_ID__;
+        var pageEl = document.getElementById('commsTyping');
+        var modalEl = document.getElementById('commsChatModalTyping');
+        var paint = (window.Comms && typeof window.Comms.paintTypingEl === 'function')
+            ? window.Comms.paintTypingEl
+            : null;
+
+        if (pageEl) {
+            if (visible && Number(pageCid) === Number(conversationId)) {
+                if (paint) paint(pageEl, true, meta || null);
+                else {
+                    var who = (meta && meta.name) ? String(meta.name).trim() : '';
+                    pageEl.textContent = who ? (who + ' is typing...') : 'Typing...';
+                    pageEl.hidden = false;
+                }
+            } else if (!visible && (pageCid == null || Number(pageCid) === Number(conversationId))) {
+                if (paint) paint(pageEl, false);
+                else {
+                    pageEl.hidden = true;
+                    pageEl.textContent = '';
+                }
+            }
+        }
+        if (modalEl) {
+            if (visible && Number(headerCid) === Number(conversationId)) {
+                if (paint) paint(modalEl, true, meta || null);
+                else {
+                    var whoM = (meta && meta.name) ? String(meta.name).trim() : '';
+                    modalEl.textContent = whoM ? (whoM + ' is typing...') : 'Typing...';
+                    modalEl.hidden = false;
+                }
+            } else if (!visible && (headerCid == null || Number(headerCid) === Number(conversationId))) {
+                if (paint) paint(modalEl, false);
+                else {
+                    modalEl.hidden = true;
+                    modalEl.textContent = '';
+                }
+            }
+        }
+
+        if (window.CommsChat && typeof window.CommsChat.setTyping === 'function') {
+            var active = typeof window.CommsChat.getActiveId === 'function' ? window.CommsChat.getActiveId() : null;
+            if (!visible || Number(active) === Number(conversationId)) {
+                try { window.CommsChat.setTyping(!!visible, meta || null); } catch (e) { /* ignore */ }
+            }
+        }
+    }
+
+    function sendTypingBroadcast(conversationId, state) {
+        if (!signalChannel || !conversationId) return;
+        if (Number(activeConversationId) !== Number(conversationId)) return;
+        var identity = myTypingIdentity();
+        signalChannel.send({
+            type: 'broadcast',
+            event: 'typing',
+            payload: {
+                conversation_id: Number(conversationId),
+                user_id: identity.user_id,
+                display_name: identity.display_name,
+                portal: identity.portal,
+                state: state
+            }
+        });
+    }
+
+    function stopTyping(conversationId) {
+        var cid = conversationId != null ? conversationId : localTyping.conversationId;
+        clearTimeout(localTyping.idleTimer);
+        localTyping.idleTimer = null;
+        if (!cid) {
+            localTyping.active = false;
+            localTyping.conversationId = null;
+            return;
+        }
+        if (localTyping.active && Number(localTyping.conversationId) === Number(cid)) {
+            localTyping.active = false;
+            localTyping.conversationId = null;
+            sendTypingBroadcast(cid, 'stopped');
+        } else {
+            localTyping.active = false;
+            localTyping.conversationId = null;
+        }
+    }
+
+    function broadcastTyping(conversationId, opts) {
+        opts = opts || {};
+        if (!conversationId) return;
+        if (opts.stop || opts.forceStop) {
+            stopTyping(conversationId);
+            return;
+        }
+        if (!signalChannel || Number(activeConversationId) !== Number(conversationId)) return;
+
+        var now = Date.now();
+        var switched = Number(localTyping.conversationId) !== Number(conversationId);
+        if (localTyping.active && switched && localTyping.conversationId) {
+            sendTypingBroadcast(localTyping.conversationId, 'stopped');
+            localTyping.active = false;
+        }
+
+        if (!localTyping.active || switched) {
+            localTyping.active = true;
+            localTyping.conversationId = conversationId;
+            sendTypingBroadcast(conversationId, 'started');
+            lastTypingSent = now;
+        } else if (now - lastTypingSent >= 1200) {
+            // Keepalive so peer safety timeout does not clear mid-typing.
+            sendTypingBroadcast(conversationId, 'started');
+            lastTypingSent = now;
+        }
+
+        clearTimeout(localTyping.idleTimer);
+        localTyping.idleTimer = setTimeout(function () {
+            stopTyping(conversationId);
+        }, 1800);
     }
 
     function myInboxName() {
@@ -150,6 +301,11 @@ import { createClient } from '@supabase/supabase-js';
         var sb = ensureClient();
         if (!sb || !conversationId) return;
 
+        if (localTyping.active && localTyping.conversationId
+            && Number(localTyping.conversationId) !== Number(conversationId)) {
+            stopTyping(localTyping.conversationId);
+        }
+
         activeConversationId = conversationId;
 
         if (messageChannel) {
@@ -206,30 +362,32 @@ import { createClient } from '@supabase/supabase-js';
         signalChannel = sb.channel('comms-signal-' + conversationId, {
             config: { broadcast: { self: false } }
         })
-            .on('broadcast', { event: 'typing' }, function () {
-                if (!window.CommsChat || Number(window.CommsChat.getActiveId()) !== Number(conversationId)) return;
-                window.CommsChat.setTyping(true);
-                clearTimeout(typingTimers[conversationId]);
-                typingTimers[conversationId] = setTimeout(function () {
-                    window.CommsChat.setTyping(false);
-                }, 1600);
+            .on('broadcast', { event: 'typing' }, function (raw) {
+                var data = (raw && raw.payload) ? raw.payload : (raw || {});
+                var cid = Number(data.conversation_id || conversationId);
+                if (!cid) return;
+                if (data.user_id && Number(data.user_id) === myUserId()) return;
+
+                var pageMatch = Number(window.__COMMS_PAGE_ACTIVE_ID__) === cid;
+                var headerMatch = Number(window.__COMMS_HEADER_ACTIVE_ID__) === cid;
+                var chatMatch = window.CommsChat && typeof window.CommsChat.getActiveId === 'function'
+                    && Number(window.CommsChat.getActiveId()) === cid;
+                if (!pageMatch && !headerMatch && !chatMatch) return;
+
+                clearTimeout(typingTimers[cid]);
+                if (data.state === 'stopped') {
+                    applyTypingUi(cid, false);
+                    return;
+                }
+                applyTypingUi(cid, true, { name: data.display_name || 'Someone', userId: data.user_id });
+                typingTimers[cid] = setTimeout(function () {
+                    applyTypingUi(cid, false);
+                }, 4000);
             })
             .on('broadcast', { event: 'webrtc' }, function (payload) {
                 handleIncomingSignal(payload);
             })
             .subscribe();
-    }
-
-    function broadcastTyping(conversationId) {
-        if (!signalChannel || !conversationId) return;
-        var now = Date.now();
-        if (now - lastTypingSent < 800) return;
-        lastTypingSent = now;
-        signalChannel.send({
-            type: 'broadcast',
-            event: 'typing',
-            payload: { conversation_id: conversationId }
-        });
     }
 
     function sendOnChannel(channelName, payload) {
@@ -295,37 +453,90 @@ import { createClient } from '@supabase/supabase-js';
     function startPresence() {
         var sb = ensureClient();
         var root = getRoot();
-        if (!sb || !root) return;
+        if (!root) return;
 
         var userId = root.dataset.currentUserId;
-        presenceChannel = sb.channel('comms-presence', {
-            config: { presence: { key: String(userId) } }
-        });
+        var routes = (window.CommsChat && window.CommsChat.routes) || {};
 
-        presenceChannel
-            .on('presence', { event: 'sync' }, function () { /* peers available via presenceState */ })
-            .subscribe(async function (status) {
-                if (status === 'SUBSCRIBED') {
-                    await presenceChannel.track({
-                        user_id: Number(userId),
-                        portal: root.dataset.portalUserType,
-                        online_at: new Date().toISOString()
-                    });
-                }
+        function postPresence(online) {
+            if (!routes.presence || !window.Comms || typeof window.Comms.api !== 'function') return;
+            window.Comms.api(routes.presence, {
+                method: 'POST',
+                body: JSON.stringify({ online: !!online }),
+                dedupe: false
+            }).catch(function () { /* ignore */ });
+        }
+
+        if (sb) {
+            presenceChannel = sb.channel('comms-presence', {
+                config: { presence: { key: String(userId) } }
             });
 
-        var routes = (window.CommsChat && window.CommsChat.routes) || {};
-        if (routes.presence && window.Comms) {
-            var beat = function () {
-                window.Comms.api(routes.presence, {
-                    method: 'POST',
-                    body: JSON.stringify({ online: true }),
-                    dedupe: false
-                }).catch(function () { /* ignore */ });
-            };
-            beat();
-            setInterval(beat, 60000);
+            presenceChannel
+                .on('presence', { event: 'sync' }, function () {
+                    var stateMap = presenceChannel.presenceState ? presenceChannel.presenceState() : {};
+                    if (window.CommsChat && typeof window.CommsChat.updatePeerOnlineFromPresence === 'function') {
+                        window.CommsChat.updatePeerOnlineFromPresence(stateMap);
+                    }
+                    if (typeof window.onCommsHeaderPresence === 'function') {
+                        window.onCommsHeaderPresence(stateMap);
+                    }
+                })
+                .on('presence', { event: 'join' }, function () {
+                    var stateMap = presenceChannel.presenceState ? presenceChannel.presenceState() : {};
+                    if (window.CommsChat && typeof window.CommsChat.updatePeerOnlineFromPresence === 'function') {
+                        window.CommsChat.updatePeerOnlineFromPresence(stateMap);
+                    }
+                    if (typeof window.onCommsHeaderPresence === 'function') {
+                        window.onCommsHeaderPresence(stateMap);
+                    }
+                })
+                .on('presence', { event: 'leave' }, function () {
+                    var stateMap = presenceChannel.presenceState ? presenceChannel.presenceState() : {};
+                    if (window.CommsChat && typeof window.CommsChat.updatePeerOnlineFromPresence === 'function') {
+                        window.CommsChat.updatePeerOnlineFromPresence(stateMap);
+                    }
+                    if (typeof window.onCommsHeaderPresence === 'function') {
+                        window.onCommsHeaderPresence(stateMap);
+                    }
+                })
+                .subscribe(async function (status) {
+                    if (status === 'SUBSCRIBED') {
+                        await presenceChannel.track({
+                            user_id: Number(userId),
+                            portal: root.dataset.portalUserType,
+                            online_at: new Date().toISOString()
+                        });
+                    }
+                });
         }
+
+        postPresence(true);
+        setInterval(function () {
+            if (document.visibilityState === 'visible') postPresence(true);
+        }, 45000);
+
+        document.addEventListener('visibilitychange', function () {
+            postPresence(document.visibilityState === 'visible');
+        });
+
+        window.addEventListener('pagehide', function () {
+            try {
+                var token = document.querySelector('meta[name="csrf-token"]');
+                fetch(routes.presence, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': token ? token.getAttribute('content') : ''
+                    },
+                    credentials: 'same-origin',
+                    keepalive: true,
+                    body: JSON.stringify({ online: false })
+                });
+            } catch (e) { /* ignore */ }
+        });
     }
 
     function startPersonalInbox() {
@@ -398,14 +609,29 @@ import { createClient } from '@supabase/supabase-js';
         __booted: true,
         subscribeConversation: subscribeConversation,
         broadcastTyping: broadcastTyping,
+        stopTyping: stopTyping,
         broadcastSignal: broadcastSignal,
         refreshUnread: refreshUnread
     };
+
+    window.addEventListener('pagehide', function () {
+        if (localTyping.active && localTyping.conversationId) {
+            stopTyping(localTyping.conversationId);
+        }
+    });
+    document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden' && localTyping.active && localTyping.conversationId) {
+            stopTyping(localTyping.conversationId);
+        }
+    });
 
     if (enabled) {
         startPresence();
         startPersonalInbox();
         initGlobalMessageWatch();
+    } else {
+        // Still heartbeat so peers see accurate online/offline without realtime.
+        startPresence();
     }
 
     refreshUnread();

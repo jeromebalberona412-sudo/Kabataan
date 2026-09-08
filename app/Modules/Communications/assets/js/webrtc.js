@@ -1165,6 +1165,7 @@
             + 'Open <a href="' + suggestedHttpsUrl() + '">' + suggestedHttpsUrl() + '</a> '
             + '(run <code>npm run serve:lan</code>), accept the certificate once, then voice/video will work.';
         if (root.id === 'commsApp') {
+            root.classList.add('has-secure-banner');
             root.insertBefore(banner, root.firstChild);
         } else {
             document.body.appendChild(banner);

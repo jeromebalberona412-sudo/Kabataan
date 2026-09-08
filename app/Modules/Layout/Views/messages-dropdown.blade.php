@@ -24,7 +24,7 @@
         <div class="comms-msg-header-actions">
             <a
                 href="{{ $messagesIndexUrl }}"
-                class="comms-msg-header-icon-btn"
+                class="comms-msg-header-icon-btn comms-msg-see-all-link"
                 data-no-loading
                 title="Open Messages page"
                 aria-label="Open Messages page"
@@ -99,7 +99,7 @@
     </div>
 
     <div class="comms-msg-popover-footer">
-        <a href="{{ $messagesIndexUrl }}" class="comms-msg-see-all-btn" data-no-loading>
+        <a href="{{ $messagesIndexUrl }}" class="comms-msg-see-all-btn comms-msg-see-all-link" data-no-loading>
             See All in Messages
         </a>
     </div>

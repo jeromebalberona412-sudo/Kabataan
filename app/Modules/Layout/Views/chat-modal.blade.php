@@ -70,22 +70,29 @@
                     </div>
                 </div>
 
-                <div class="comms-chat-modal-body" id="commsChatModalBody" aria-live="polite">
-                    <p class="comms-chat-modal-empty">Select a conversation</p>
+                <div class="comms-chat-modal-body-wrap">
+                    <div class="comms-chat-modal-body" id="commsChatModalBody" aria-live="polite">
+                        <p class="comms-chat-modal-empty">Select a conversation</p>
+                    </div>
+                    <button type="button" class="comms-chat-scroll-bottom" id="commsChatScrollBottom" hidden title="Jump to latest" aria-label="Jump to latest messages">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
                 </div>
+
+                <div class="comms-chat-modal-typing" id="commsChatModalTyping" hidden aria-live="polite"></div>
 
                 <form class="comms-chat-modal-composer" id="commsChatModalForm" autocomplete="off">
                     <input type="file" id="commsChatPhotoInput" class="visually-hidden" accept="image/jpeg,image/png,image/webp,image/gif" multiple aria-hidden="true" tabindex="-1">
                     <input type="file" id="commsChatFileInput" class="visually-hidden" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-hidden="true" tabindex="-1">
                     <div class="comms-chat-attach-wrap">
-                        <button type="button" class="comms-chat-attach-btn" id="commsChatAttachBtn" title="Attach" aria-label="Attach">
+                        <button type="button" class="comms-chat-attach-btn" id="commsChatAttachBtn" title="Maximum 25 MB" aria-label="Attach. Maximum 25 MB">
                             <span aria-hidden="true">+</span>
                         </button>
                         <div class="comms-chat-attach-menu" id="commsChatAttachMenu" hidden>
-                            <button type="button" class="comms-chat-attach-menu-item" id="commsChatPickPhotos">
+                            <button type="button" class="comms-chat-attach-menu-item" id="commsChatPickPhotos" title="Maximum 25 MB">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> Photos
                             </button>
-                            <button type="button" class="comms-chat-attach-menu-item" id="commsChatPickFiles">
+                            <button type="button" class="comms-chat-attach-menu-item" id="commsChatPickFiles" title="Maximum 25 MB">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg> Files
                             </button>
                         </div>
@@ -101,13 +108,33 @@
                             class="comms-chat-modal-input"
                             rows="1"
                             placeholder="Type a message"
-                            maxlength="5000"
-                            data-max-lines="500"
                         ></textarea>
                     </div>
-                    <button type="submit" class="comms-chat-modal-send" id="commsChatModalSend" aria-label="Send message">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-                    </button>
+                    <div class="comms-chat-composer-end">
+                        <div class="comms-faq-menu" id="commsChatFaqMenu" hidden>
+                            <button
+                                type="button"
+                                class="comms-faq-menu-toggle"
+                                id="commsChatFaqMenuToggle"
+                                aria-expanded="false"
+                                aria-controls="commsChatFaqSuggestions"
+                                title="Suggested questions"
+                                aria-label="Suggested questions"
+                            >
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <line x1="4" y1="7" x2="20" y2="7"/>
+                                    <line x1="4" y1="12" x2="20" y2="12"/>
+                                    <line x1="4" y1="17" x2="20" y2="17"/>
+                                </svg>
+                            </button>
+                            <div class="comms-faq-suggestions" id="commsChatFaqSuggestions" hidden>
+                                <div class="comms-faq-suggestions-list" id="commsChatFaqSuggestionsList" role="list"></div>
+                            </div>
+                        </div>
+                        <button type="submit" class="comms-chat-modal-send" id="commsChatModalSend" title="Send" aria-label="Send message" hidden>
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>

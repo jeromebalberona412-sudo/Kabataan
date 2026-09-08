@@ -23,12 +23,14 @@
         'app/Modules/Communications/assets/css/communication.css',
         'app/Modules/Layout/assets/css/kabataan-messages.css',
         'app/Modules/Layout/assets/css/kabataan-call.css',
+        'app/Modules/Communications/assets/js/communication.js',
+        'app/Modules/Communications/assets/js/chat.js',
     ])
 </head>
-<body>
+<body class="comms-messages-page">
 @include('layout::kabataan-header')
 
-<main class="container-fluid py-3">
+<main class="container-fluid comms-page-main">
 @php
     $commsRoutes = [
         'conversations' => route('api.communications.conversations.index'),
@@ -46,6 +48,7 @@
         'calls' => route('api.communications.calls.index'),
         'presence' => route('api.communications.presence'),
         'callHistoryPage' => route('communications.calls'),
+        'faqSuggestions' => url('/api/communications/conversations/__ID__/faq-suggestions'),
     ];
 @endphp
 <div
@@ -53,7 +56,10 @@
     id="commsApp"
     data-current-user-id="{{ $currentUserId }}"
     data-portal-user-type="{{ $portalUserType }}"
+    data-current-user-name="{{ auth()->user()->name ?? '' }}"
+    data-current-user-avatar="{{ $currentUserAvatar ?? '' }}"
     data-initial-conversation="{{ $initialConversationId ?? '' }}"
+    data-message-max-length="{{ (int) config('communications.message_max_length', 1000) }}"
     data-routes='@json($commsRoutes)'
 >
     <div class="comms-shell">
@@ -68,8 +74,6 @@
                     <input type="search" id="commsUserSearch" class="comms-search-input" placeholder="Search SK Officials in your barangay" autocomplete="off">
                     <div class="comms-search-results" id="commsSearchResults" hidden></div>
                 </div>
-                <label class="visually-hidden" for="commsConvFilter">Filter conversations</label>
-                <input type="search" id="commsConvFilter" class="comms-search-input comms-search-input--filter" placeholder="Filter conversations" autocomplete="off">
             </div>
             <div class="comms-conv-list" id="commsConvList" role="list"></div>
             <div class="comms-empty" id="commsConvEmpty" hidden>
@@ -105,30 +109,68 @@
                     </div>
                 </header>
 
-                <div class="comms-messages" id="commsMessages" role="log"></div>
-                <div class="comms-typing" id="commsTyping" hidden>Typing...</div>
+                <div class="comms-messages-wrap">
+                    <div class="comms-messages" id="commsMessages" role="log"></div>
+                    <button type="button" class="comms-scroll-bottom" id="commsScrollBottom" hidden title="Jump to latest" aria-label="Jump to latest messages">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                </div>
+                <div class="comms-typing" id="commsTyping" hidden aria-live="polite"></div>
 
                 <form class="comms-composer" id="commsComposer" autocomplete="off">
+                    <input type="file" id="commsPhotoInput" class="visually-hidden" accept="image/jpeg,image/png,image/webp,image/gif" multiple aria-hidden="true" tabindex="-1">
+                    <input type="file" id="commsFileInput" class="visually-hidden" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-hidden="true" tabindex="-1">
                     <div class="comms-composer-tools">
-                        <input type="file" id="commsAttachInput" class="visually-hidden" accept="image/jpeg,image/png,image/webp,image/gif,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" aria-hidden="true" tabindex="-1">
-                        <button type="button" class="comms-attach-btn" id="commsAttachBtn" title="Attach image or file" aria-label="Attach image or file">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M21.44 11.05l-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a1.5 1.5 0 1 1-2.12-2.12l7.78-7.78"/>
-                            </svg>
-                        </button>
+                        <div class="comms-attach-wrap">
+                            <button type="button" class="comms-attach-btn" id="commsAttachBtn" title="Maximum 25 MB" aria-label="Attach. Maximum 25 MB" aria-expanded="false" aria-controls="commsAttachMenu">
+                                <span aria-hidden="true">+</span>
+                            </button>
+                            <div class="comms-attach-menu" id="commsAttachMenu" hidden>
+                                <button type="button" class="comms-attach-menu-item" id="commsPickPhotos" title="Maximum 25 MB">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> Photos
+                                </button>
+                                <button type="button" class="comms-attach-menu-item" id="commsPickFiles" title="Maximum 25 MB">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg> Files
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     <div class="comms-composer-main">
                         <div class="comms-attach-preview" id="commsAttachPreview" hidden>
                             <div class="comms-attach-preview-inner" id="commsAttachPreviewInner"></div>
-                            <button type="button" class="comms-attach-clear" id="commsAttachClear" aria-label="Remove attachment">&times;</button>
+                            <button type="button" class="comms-attach-clear" id="commsAttachClear" aria-label="Remove attachments">&times;</button>
                         </div>
                         <div class="comms-upload-progress" id="commsUploadProgress" hidden>
                             <div class="comms-upload-progress-bar" id="commsUploadProgressBar"></div>
                         </div>
                         <label class="visually-hidden" for="commsMessageInput">Message</label>
-                        <textarea id="commsMessageInput" rows="1" maxlength="5000" placeholder="Write a message"></textarea>
+                        <textarea id="commsMessageInput" rows="1" placeholder="Type a message"></textarea>
                     </div>
-                    <button type="submit" class="comms-send-btn" id="commsSendBtn">Send</button>
+                    <div class="comms-composer-end">
+                        <div class="comms-faq-menu" id="commsFaqMenu" hidden>
+                            <button
+                                type="button"
+                                class="comms-faq-menu-toggle"
+                                id="commsFaqMenuToggle"
+                                aria-expanded="false"
+                                aria-controls="commsFaqSuggestions"
+                                title="Suggested questions"
+                                aria-label="Suggested questions"
+                            >
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <line x1="4" y1="7" x2="20" y2="7"/>
+                                    <line x1="4" y1="12" x2="20" y2="12"/>
+                                    <line x1="4" y1="17" x2="20" y2="17"/>
+                                </svg>
+                            </button>
+                            <div class="comms-faq-suggestions" id="commsFaqSuggestions" hidden>
+                                <div class="comms-faq-suggestions-list" id="commsFaqSuggestionsList" role="list"></div>
+                            </div>
+                        </div>
+                        <button type="submit" class="comms-send-btn" id="commsSendBtn" title="Send" aria-label="Send message" hidden>
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                        </button>
+                    </div>
                 </form>
             </div>
         </section>
@@ -136,8 +178,5 @@
 </div>
 </main>
 
-@vite([
-    'app/Modules/Communications/assets/js/chat.js',
-])
 </body>
 </html>

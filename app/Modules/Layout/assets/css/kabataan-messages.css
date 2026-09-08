@@ -57,6 +57,11 @@
     color: #fff;
 }
 
+.comms-chat-bubble.is-mine.is-editing {
+    background: #ffffff !important;
+    color: #0f172a !important;
+}
+
 .comms-chat-modal-send,
 .comms-chat-edit-save,
 .comms-chat-edit-actions [data-edit-save] {

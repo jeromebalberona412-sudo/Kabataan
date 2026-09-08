@@ -11,6 +11,7 @@ use App\Services\BarangayLogoUrlService;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -500,15 +501,7 @@ class ConversationService
         $type ??= $this->types->normalizeSearchRole((string) $user->role) ?? $this->types->fromUser($user);
 
         $avatar = $this->resolveAvatarUrl($user, (string) $type);
-
-        $online = null;
-        $lastSeen = null;
-        if (Schema::hasColumn('users', 'online_status')) {
-            $online = $user->online_status ?? null;
-        }
-        if (Schema::hasColumn('users', 'last_seen')) {
-            $lastSeen = optional($user->last_seen)?->toIso8601String();
-        }
+        $presence = $this->resolvePresence($user);
 
         if (Schema::hasTable('barangays') && ! $user->relationLoaded('barangay')) {
             $user->loadMissing('barangay');
@@ -517,23 +510,95 @@ class ConversationService
             $user->loadMissing('officialProfile');
         }
 
-        $position = $user->officialProfile?->position
+        $position = trim((string) (
+            $user->officialProfile?->position
             ?: $user->officialProfile?->federation_position
-            ?: null;
+            ?: ''
+        ));
+        if ($position === '') {
+            $position = null;
+        }
 
         return [
             'id' => (int) $user->id,
-            'name' => (string) $user->name,
+            'name' => $this->resolveDisplayName($user, (string) $type),
             'role' => (string) $user->role,
             'user_type' => $type,
             'user_type_label' => $this->types->label($type),
             'profile_image_url' => $avatar,
-            'online_status' => $online,
-            'last_seen' => $lastSeen,
+            'online_status' => $presence['online_status'],
+            'is_online' => $presence['is_online'],
+            'last_seen' => $presence['last_seen'],
             'barangay_id' => (int) ($user->barangay_id ?? 0) ?: null,
             'barangay_name' => $user->barangay?->name,
             'position' => $position,
         ];
+    }
+
+    /**
+     * Prefer fresh last_seen (2 min window). Sticky "online" without a recent last_seen is treated offline.
+     *
+     * @return array{online_status: string, is_online: bool, last_seen: ?string}
+     */
+    protected function resolvePresence(User $user): array
+    {
+        $lastSeen = null;
+        if (Schema::hasColumn('users', 'last_seen') && $user->last_seen) {
+            try {
+                $lastSeen = $user->last_seen instanceof Carbon
+                    ? $user->last_seen
+                    : Carbon::parse($user->last_seen);
+            } catch (\Throwable) {
+                $lastSeen = null;
+            }
+        }
+
+        $isOnline = false;
+        if ($lastSeen) {
+            $isOnline = $lastSeen->gte(now()->subMinutes(2));
+        }
+
+        return [
+            'online_status' => $isOnline ? 'online' : 'offline',
+            'is_online' => $isOnline,
+            'last_seen' => $lastSeen?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * SK officials: first + full middle name + last (+ suffix). Others: users.name.
+     */
+    public function resolveDisplayName(User $user, ?string $type = null): string
+    {
+        $type ??= $this->types->fromUser($user);
+        $fallback = trim((string) ($user->name ?? ''));
+
+        if (! in_array((string) $type, ['sk_official', 'sk_fed'], true)
+            && ! in_array((string) ($user->role ?? ''), ['sk_official', 'sk_fed'], true)) {
+            return $fallback !== '' ? $fallback : 'User';
+        }
+
+        if (Schema::hasTable('official_profiles') && ! $user->relationLoaded('officialProfile')) {
+            $user->loadMissing('officialProfile');
+        }
+
+        $profile = $user->officialProfile;
+        if (! $profile) {
+            return $fallback !== '' ? $fallback : 'SK Official';
+        }
+
+        $parts = array_values(array_filter([
+            trim((string) ($profile->first_name ?? '')),
+            trim((string) ($profile->middle_name ?? '')),
+            trim((string) ($profile->last_name ?? '')),
+            trim((string) ($profile->suffix ?? '')),
+        ], static fn (string $part): bool => $part !== ''));
+
+        if ($parts === []) {
+            return $fallback !== '' ? $fallback : 'SK Official';
+        }
+
+        return implode(' ', $parts);
     }
 
     /**

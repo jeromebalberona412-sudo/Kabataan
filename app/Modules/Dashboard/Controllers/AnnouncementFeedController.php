@@ -462,8 +462,9 @@ class AnnouncementFeedController extends Controller
             self::USER_TYPE
         );
         $authorName = Str::limit(
-            $post->user?->name
-                ?? ($post->is_federation_wide ? 'SK Federation' : ('SK Brgy. '.($post->barangay?->name ?? ''))),
+            $post->is_federation_wide
+                ? 'SK Federation'
+                : ('SK Brgy. '.($post->barangay?->name ?? 'Barangay')),
             50,
             '...'
         );

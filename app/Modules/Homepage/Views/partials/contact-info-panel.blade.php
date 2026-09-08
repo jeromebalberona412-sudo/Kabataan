@@ -1,4 +1,3 @@
-<div class="contact-info-cards">
     <div class="contact-info-card">
         <div class="contact-info-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -9,18 +8,6 @@
         <div class="contact-info-content">
             <h3>Address</h3>
             <p>Municipal Hall<br>Santa Cruz, Laguna<br>Philippines 4009</p>
-        </div>
-    </div>
-
-    <div class="contact-info-card">
-        <div class="contact-info-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 012.84 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
-            </svg>
-        </div>
-        <div class="contact-info-content">
-            <h3>Phone</h3>
-            <p>SK Federation: +63 9081137315</p>
         </div>
     </div>
 
@@ -71,7 +58,11 @@
         </div>
         <div class="contact-info-content">
             <h3>Follow Us</h3>
-            <p>Facebook: @SKOnePortal<br>Twitter: @SKOnePortal<br>Instagram: @skoneportal_</p>
+            <p>
+                <a href="https://www.facebook.com/profile.php?id=61554523405915" target="_blank" rel="noopener noreferrer">
+                    Facebook: Pambayang Pederasyon ng mga Sangguniang Kabataan - Santa Cruz, Laguna
+                </a>
+            </p>
         </div>
     </div>
 </div>

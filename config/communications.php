@@ -3,7 +3,8 @@
 return [
     'portal_user_type' => env('COMMUNICATIONS_PORTAL_USER_TYPE', 'kabataan'),
 
-    'message_max_length' => 5000,
+    'message_max_length' => (int) env('COMMUNICATIONS_MESSAGE_MAX_LENGTH', 1000),
+
 
     'messages_per_page' => 40,
 
@@ -11,9 +12,19 @@ return [
 
     'reaction_emojis' => ['👍', '❤️', '😆', '😮', '😢', '🙏'],
 
+    'faq' => [
+        'max_questions' => 10,
+        'question_max_length' => 50,
+        'response_max_length' => 500,
+        'cooldown_seconds' => 10,
+        'match_threshold' => 0.55,
+    ],
+
     'attachments' => [
-        'image_max_kb' => (int) env('COMMUNICATIONS_IMAGE_MAX_KB', 5120),
+        'image_max_kb' => (int) env('COMMUNICATIONS_IMAGE_MAX_KB', 25600),
         'file_max_kb' => (int) env('COMMUNICATIONS_FILE_MAX_KB', 10240),
+        'batch_max_images' => 50,
+        'batch_max_bytes' => 25 * 1024 * 1024,
         'allow_svg' => (bool) env('COMMUNICATIONS_ALLOW_SVG', false),
         'image_extensions' => ['jpg', 'jpeg', 'png', 'webp', 'gif'],
         'file_extensions' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'],

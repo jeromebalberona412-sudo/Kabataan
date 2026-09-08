@@ -2,9 +2,11 @@
 
 namespace App\Modules\Communications\Services;
 
+use App\Modules\Communications\Models\MessageAttachment;
 use App\Services\CloudinaryService;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -52,11 +54,29 @@ class MessageAttachmentStorageService
     }
 
     /**
+     * Upload a document to Supabase Storage when configured; otherwise store in DB.
+     *
+     * @return array{file_name: string, file_path: string, public_id: string, file_type: string, mime_type: string, file_size: int, storage_provider: string, _file_contents?: string}
+     */
+    public function storeDocument(UploadedFile $file, int $conversationId): array
+    {
+        if ($this->supabaseConfigured()) {
+            try {
+                return $this->storeDocumentInSupabase($file, $conversationId);
+            } catch (RuntimeException $e) {
+                // Fall through to database storage so Word/PDF still send.
+            }
+        }
+
+        return $this->storeDocumentInDatabase($file);
+    }
+
+    /**
      * Upload a document to Supabase Storage at communication/attachments/.
      *
      * @return array{file_name: string, file_path: string, public_id: string, file_type: string, mime_type: string, file_size: int, storage_provider: string}
      */
-    public function storeDocument(UploadedFile $file, int $conversationId): array
+    public function storeDocumentInSupabase(UploadedFile $file, int $conversationId): array
     {
         if (! $this->supabaseConfigured()) {
             throw new RuntimeException('Supabase Storage is not configured for communication document uploads.');
@@ -71,7 +91,7 @@ class MessageAttachmentStorageService
         );
 
         $bucket = (string) config('services.supabase.communication_bucket', 'communication');
-        $mime = (string) ($file->getMimeType() ?: 'application/octet-stream');
+        $mime = $this->resolveDocumentMime($file);
         $contents = file_get_contents($file->getRealPath() ?: $file->getPathname());
         if ($contents === false) {
             throw new RuntimeException('Unable to read uploaded file.');
@@ -108,6 +128,77 @@ class MessageAttachmentStorageService
             'mime_type' => $mime,
             'file_size' => (int) $file->getSize(),
             'storage_provider' => 'supabase',
+        ];
+    }
+
+    /**
+     * Store a document directly in PostgreSQL as BYTEA.
+     * Used when Supabase Storage is not configured or rejects the MIME type.
+     *
+     * @return array{file_name: string, file_path: string, public_id: string, file_type: string, mime_type: string, file_size: int, storage_provider: string, _file_contents: string}
+     */
+    public function storeDocumentInDatabase(UploadedFile $file): array
+    {
+        $path = $file->getRealPath() ?: $file->getPathname();
+        if (! $path || ! is_file($path)) {
+            throw new RuntimeException('Unable to read uploaded file for database storage.');
+        }
+
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            throw new RuntimeException('Unable to read uploaded file contents.');
+        }
+
+        $fileName = $this->safeOriginalName($file);
+        $mime = $this->resolveDocumentMime($file);
+
+        return [
+            'file_name' => $fileName,
+            'file_path' => 'db:'.$fileName,
+            'public_id' => '',
+            'file_type' => 'file',
+            'mime_type' => $mime,
+            'file_size' => (int) $file->getSize(),
+            'storage_provider' => 'database',
+            '_file_contents' => $contents,
+        ];
+    }
+
+    /**
+     * Write the raw BYTEA data for an attachment after the record has been inserted.
+     */
+    public function writeBytea(int $attachmentId, string $contents): void
+    {
+        DB::update(
+            "UPDATE message_attachments SET file_data = decode(?, 'hex') WHERE id = ?",
+            [bin2hex($contents), $attachmentId]
+        );
+    }
+
+    /**
+     * @return array{contents: string, mime_type: string, file_name: string}
+     */
+    public function fetchDatabaseObject(MessageAttachment $attachment): array
+    {
+        $row = DB::selectOne(
+            "SELECT encode(file_data, 'hex') AS hex FROM message_attachments WHERE id = ?",
+            [$attachment->id]
+        );
+
+        $hex = is_object($row) ? (string) ($row->hex ?? '') : '';
+        if ($hex === '') {
+            abort(404, 'Attachment data not found.');
+        }
+
+        $data = hex2bin($hex);
+        if ($data === false || $data === '') {
+            abort(404, 'Attachment data is empty.');
+        }
+
+        return [
+            'contents' => $data,
+            'mime_type' => (string) ($attachment->mime_type ?: 'application/octet-stream'),
+            'file_name' => (string) $attachment->file_name,
         ];
     }
 
@@ -166,6 +257,30 @@ class MessageAttachmentStorageService
         } catch (\Throwable) {
             // Best-effort cleanup; message row cascade still removes DB metadata.
         }
+    }
+
+    private function resolveDocumentMime(UploadedFile $file): string
+    {
+        $ext = strtolower((string) $file->getClientOriginalExtension());
+        $byExt = match ($ext) {
+            'pdf' => 'application/pdf',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls' => 'application/vnd.ms-excel',
+            'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'ppt' => 'application/vnd.ms-powerpoint',
+            'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'txt' => 'text/plain',
+            'csv' => 'text/csv',
+            default => null,
+        };
+
+        $detected = trim((string) ($file->getMimeType() ?: ''));
+        if ($detected !== '' && $detected !== 'application/octet-stream') {
+            return $detected;
+        }
+
+        return $byExt ?: 'application/octet-stream';
     }
 
     private function safeOriginalName(UploadedFile $file): string

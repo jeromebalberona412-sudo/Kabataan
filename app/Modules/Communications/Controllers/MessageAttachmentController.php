@@ -51,6 +51,21 @@ class MessageAttachmentController extends Controller
             ]);
         }
 
+        if ($attachment->storage_provider === 'database') {
+            $payload = $this->storage->fetchDatabaseObject($attachment);
+            $mime = $payload['mime_type'] ?: 'application/octet-stream';
+            $fileName = $payload['file_name'];
+            $contents = $payload['contents'];
+            $safeName = str_replace(['"', "\r", "\n"], '', $fileName);
+
+            return response()->streamDownload(function () use ($contents) {
+                echo $contents;
+            }, $safeName, [
+                'Content-Type' => $mime,
+                'Cache-Control' => 'private, no-store',
+            ]);
+        }
+
         abort(404, 'Unknown attachment storage provider.');
     }
 }
