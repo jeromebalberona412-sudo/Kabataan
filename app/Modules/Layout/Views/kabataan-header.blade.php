@@ -127,6 +127,7 @@
 
 @include('layout::kabataan-logout-modal')
 @include('layout::kabataan-session-timeout')
+@include('kkprofiling::partials.kk-profiling-update-mandatory-modal')
 
 @auth
 @include('layout::chat-modal')

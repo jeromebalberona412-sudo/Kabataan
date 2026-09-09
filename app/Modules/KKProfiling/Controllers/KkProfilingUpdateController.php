@@ -38,8 +38,12 @@ class KkProfilingUpdateController extends Controller
 
         $request->session()->put('kk_profiling_update_required', true);
 
+        $targetYear = $this->scheduleService->targetProfilingYearForRegistration($registration)
+            ?? $this->scheduleService->expectedProfilingYear();
+
+        $this->scheduleService->startAnnualUpdate($registration, $targetYear);
+
         $formData = is_array($registration->form_data) ? $registration->form_data : [];
-        $respondentNumber = $formData['respondent_number'] ?? $registration->respondent_number;
         $barangayName = $registration->barangay?->name ?? 'Santa Cruz';
         $purok = $formData['purok_zone'] ?? '';
         if (is_array($purok)) {
@@ -49,12 +53,13 @@ class KkProfilingUpdateController extends Controller
         return view('kkprofiling::kk-profiling-update', [
             'user' => $user,
             'kkProfilingUpdateRequired' => true,
-            'kkProfilingTargetYear' => $this->scheduleService->targetProfilingYearForRegistration($registration),
+            'kkProfilingUpdateMode' => true,
+            'kkProfilingTargetYear' => $targetYear,
             'kkProfilingFormData' => $this->profilingHistoryService->formDataForUpdate($registration),
             'kkProfilingOriginalEmail' => $registration->email,
             'kkUpdateBarangay' => $barangayName,
-            'kkRespondentNumber' => $respondentNumber ?? '',
-            'kkRespondentDisplay' => KKProfilingController::formatRespondentDisplay($respondentNumber),
+            'kkRespondentNumber' => '',
+            'kkRespondentDisplay' => KKProfilingController::formatRespondentDisplay(null),
             'kkBarangayLogoUrl' => KKProfilingController::getBarangayLogoUrl($registration->barangay_id),
             'kkBarangayZones' => $this->barangayZoneService->activeZonesForBarangay((int) $registration->barangay_id),
             'kkSelectedPurokZone' => $purok,

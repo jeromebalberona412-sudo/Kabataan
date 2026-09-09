@@ -10,38 +10,52 @@ use Illuminate\Support\Facades\Cache;
 class KabataanRegistration extends Model
 {
     use SoftDeletes;
-    
+
     protected static function booted()
     {
         static::updated(function ($registration) {
-            // Clear user-specific cache when registration is updated
-            if ($registration->user_id) {
-                Cache::forget("kabataan_registration.latest.{$registration->user_id}");
-                Cache::forget("kk_profiling_history.max_year.{$registration->id}");
-                Cache::forget("kk_profiling_history.completed.{$registration->id}.*");
-            }
-            
-            // Clear barangay-specific cache
-            if ($registration->barangay_id) {
-                Cache::forget("kk_profiling_schedule.{$registration->barangay_id}.*");
-            }
+            self::forgetProfilingCaches($registration);
         });
-        
+
         static::deleted(function ($registration) {
-            // Clear user-specific cache when registration is deleted
-            if ($registration->user_id) {
-                Cache::forget("kabataan_registration.latest.{$registration->user_id}");
-                Cache::forget("kk_profiling_history.max_year.{$registration->id}");
-                Cache::forget("kk_profiling_history.completed.{$registration->id}.*");
-            }
-            
-            // Clear barangay-specific cache
-            if ($registration->barangay_id) {
-                Cache::forget("kk_profiling_schedule.{$registration->barangay_id}.*");
-            }
+            self::forgetProfilingCaches($registration);
         });
     }
-    
+
+    /**
+     * Laravel Cache::forget does not treat * as a wildcard — forget exact keys only.
+     */
+    private static function forgetProfilingCaches(self $registration): void
+    {
+        if ($registration->user_id) {
+            Cache::forget("kabataan_registration.latest.{$registration->user_id}");
+        }
+
+        Cache::forget("kk_profiling_history.max_year.{$registration->id}");
+
+        $formData = is_array($registration->form_data) ? $registration->form_data : [];
+        $years = [];
+        if (! empty($formData['profile_updated_year'])) {
+            $years[] = (int) $formData['profile_updated_year'];
+        }
+        if (! empty($registration->profiling_year)) {
+            $years[] = (int) $registration->profiling_year;
+        }
+        $years[] = (int) now(config('app.timezone', 'Asia/Manila'))->format('Y');
+        $years[] = (int) now(config('app.timezone', 'Asia/Manila'))->format('Y') - 1;
+
+        foreach (array_unique($years) as $year) {
+            if ($year > 0) {
+                Cache::forget("kk_profiling_history.completed.{$registration->id}.{$year}");
+            }
+        }
+
+        if ($registration->barangay_id) {
+            $today = now(config('app.timezone', 'Asia/Manila'))->toDateString();
+            Cache::forget("kk_profiling_schedule.{$registration->barangay_id}.{$today}");
+        }
+    }
+
     protected $fillable = [
         'tenant_id',
         'barangay_id',
@@ -75,15 +89,15 @@ class KabataanRegistration extends Model
     ];
 
     protected $casts = [
-        'form_data'        => 'array',
+        'form_data' => 'array',
         'evaluation_notes' => 'array',
-        'submitted_at'     => 'datetime',
+        'submitted_at' => 'datetime',
         'email_verified_at' => 'datetime',
         'facial_verification_completed_at' => 'datetime',
-        'password_set_at'  => 'datetime',
-        'reviewed_at'      => 'datetime',
-        'archived_at'      => 'datetime',
-        'deleted_at'       => 'datetime',
+        'password_set_at' => 'datetime',
+        'reviewed_at' => 'datetime',
+        'archived_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     public function barangay(): BelongsTo
@@ -104,6 +118,11 @@ class KabataanRegistration extends Model
     public function rejections()
     {
         return $this->hasMany(RejectedKkProfiling::class, 'kabataan_registration_id');
+    }
+
+    public function profilingUpdates()
+    {
+        return $this->hasMany(KkProfilingUpdate::class, 'kabataan_id');
     }
 
     public function scopeForBarangay($query, int $barangayId)
@@ -144,14 +163,15 @@ class KabataanRegistration extends Model
 
     public function getFullNameAttribute(): string
     {
-        $name = $this->first_name . ' ';
+        $name = $this->first_name.' ';
         if ($this->middle_name) {
-            $name .= substr($this->middle_name, 0, 1) . '. ';
+            $name .= substr($this->middle_name, 0, 1).'. ';
         }
         $name .= $this->last_name;
         if ($this->suffix) {
-            $name .= ' ' . $this->suffix;
+            $name .= ' '.$this->suffix;
         }
+
         return $name;
     }
 }

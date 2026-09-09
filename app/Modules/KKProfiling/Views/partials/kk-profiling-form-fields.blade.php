@@ -4,10 +4,11 @@
                             type="button"
                             class="kkp-form-clear-btn"
                             id="kkpFormClearAllBtn"
-                            hidden
+                            @if (empty($kkProfilingUpdateMode)) hidden @endif
                             aria-haspopup="dialog"
+                            aria-controls="kkpClearDraftModal"
                         >
-                            Clear All Data
+                            {{ !empty($kkProfilingUpdateMode) ? 'Clear Data' : 'Clear All Data' }}
                         </button>
                     </div>
 
@@ -71,7 +72,12 @@
 
                     {{-- -- I. PROFILE -- --}}
 
-                    <div class="kkp-section-heading">I. PROFILE</div>
+                    <div class="kkp-section-heading">
+                        I. PROFILE
+                        @if (!empty($kkProfilingUpdateMode))
+                            <span class="kkpu-section-note">Existing personal information</span>
+                        @endif
+                    </div>
 
 
 
@@ -297,9 +303,20 @@
 
                     {{-- -- II. DEMOGRAPHIC CHARACTERISTICS -- --}}
 
-                    <div class="kkp-section-heading" style="margin-top:10px;">II. DEMOGRAPHIC CHARACTERISTICS <span class="kkp-required">*</span></div>
+                    <div class="kkp-section-heading" style="margin-top:10px;">
+                        II. DEMOGRAPHIC CHARACTERISTICS <span class="kkp-required">*</span>
+                        @if (!empty($kkProfilingUpdateMode))
+                            <span class="kkpu-section-note">Current-year answers required</span>
+                        @endif
+                    </div>
 
-                    <p class="kkp-demo-instruction">Please put a Check mark (?) next to the word or Phrase that matches your response. <span class="kkp-required">*</span></p>
+                    <p class="kkp-demo-instruction">
+                        @if (!empty($kkProfilingUpdateMode))
+                            Answer these questions for the current profiling year. Previous-year answers are not carried over. <span class="kkp-required">*</span>
+                        @else
+                            Please put a Check mark (?) next to the word or Phrase that matches your response. <span class="kkp-required">*</span>
+                        @endif
+                    </p>
 
 
 
@@ -578,8 +595,8 @@
                             </div>
 
                             <svg class="kkp-assembly-flow-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                                <path class="kkp-assembly-flow-path kkp-assembly-flow-path--yes" d="M42 72 C55 72, 58 38, 72 38" />
-                                <path class="kkp-assembly-flow-path kkp-assembly-flow-path--no" d="M42 88 C58 88, 58 78, 72 78" />
+                                <path class="kkp-assembly-flow-path kkp-assembly-flow-path--yes" d="M42 70 C54 70, 58 50, 72 50" />
+                                <path class="kkp-assembly-flow-path kkp-assembly-flow-path--no" d="M42 86 C56 86, 58 82, 72 82" />
                             </svg>
 
                             </div>
@@ -589,8 +606,6 @@
                     </div>
 
 
-
-                    {{-- -- THANK YOU -- --}}
 
                     <div class="kkp-thankyou">Thank you for your participation!</div>
 

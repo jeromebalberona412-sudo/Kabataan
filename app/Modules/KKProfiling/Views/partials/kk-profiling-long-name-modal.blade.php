@@ -17,7 +17,7 @@
                 <p>You have entered more than 50 characters. Are you sure you want to proceed and add more characters to your legal name?</p>
                 <p>Maximum allowed is 150 characters.</p>
                 <label class="kkp-long-name-confirm-label" for="kkpLongNameConfirmInput">
-                    Type <strong>yes</strong> to continue
+                    Type <strong>yes</strong> to continue <span class="kkp-required" aria-hidden="true">*</span>
                 </label>
                 <input
                     type="text"
@@ -27,16 +27,20 @@
                     autocapitalize="none"
                     spellcheck="false"
                     placeholder="yes"
-                    maxlength="8"
+                    maxlength="3"
+                    required
+                    aria-required="true"
+                    aria-describedby="kkpLongNameConfirmHint"
                 >
-                <p class="kkp-long-name-confirm-hint" id="kkpLongNameConfirmHint" hidden>
-                    Please type <strong>yes</strong> exactly to continue.
+                <p class="kkp-long-name-confirm-hint" id="kkpLongNameConfirmHint" hidden role="alert">
+                    This field is required. Please type <strong>yes</strong> exactly to continue.
                 </p>
             </section>
         </div>
         <div class="kkp-info-modal-footer">
             <div class="kkp-info-modal-actions">
                 <button type="button" class="kkp-info-btn kkp-info-btn-secondary" id="kkpLongNameCancelBtn">Cancel</button>
+                <button type="button" class="kkp-info-btn kkp-info-btn-primary" id="kkpLongNameConfirmBtn">Continue</button>
             </div>
         </div>
     </div>

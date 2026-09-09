@@ -17,22 +17,22 @@ class CacheInvalidationService
     /**
      * Clear all cache keys related to a specific registration
      */
-    public function clearRegistrationCache(int $registrationId, ?int $userId = null, ?int $barangayId = null): void
+    public function clearRegistrationCache(int $registrationId, ?int $userId = null, ?int $barangayId = null, ?int $profilingYear = null): void
     {
         Cache::forget("kk_profiling_history.max_year.{$registrationId}");
-        
-        // Clear all profiling completion caches for this registration
-        $cacheStore = Cache::getStore();
-        if (method_exists($cacheStore, 'getPrefix')) {
-            $prefix = $cacheStore->getPrefix();
-            // Note: This is a simplified approach. For production, consider using cache tags
-            // or a more sophisticated cache invalidation strategy
+
+        if ($profilingYear !== null) {
+            Cache::forget("kk_profiling_history.completed.{$registrationId}.{$profilingYear}");
+        } else {
+            $year = (int) now()->format('Y');
+            Cache::forget("kk_profiling_history.completed.{$registrationId}.{$year}");
+            Cache::forget("kk_profiling_history.completed.{$registrationId}.".($year - 1));
         }
-        
+
         if ($userId) {
             $this->clearUserCache($userId);
         }
-        
+
         if ($barangayId) {
             $this->clearBarangayCache($barangayId);
         }
@@ -45,7 +45,7 @@ class CacheInvalidationService
     {
         Cache::forget("barangay_sk_profiles.officials.{$barangayId}");
         Cache::forget("abyip.latest_document.{$barangayId}");
-        
+
         // Clear profiling schedule cache for this barangay
         $today = now()->toDateString();
         Cache::forget("kk_profiling_schedule.{$barangayId}.{$today}");

@@ -157,6 +157,100 @@ body.kabataan-has-view-only-banner {
     opacity: 0.8;
 }
 
+/* Mandatory annual KK Profiling update modal */
+html.kkpu-mandatory-open,
+body.kkpu-mandatory-open {
+    overflow: hidden !important;
+}
+
+.kkpu-mandatory-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.kkpu-mandatory-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.62);
+}
+
+.kkpu-mandatory-modal__panel {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 440px);
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 22px 48px rgba(15, 23, 42, 0.28);
+    padding: 1.5rem 1.35rem 1.35rem;
+    text-align: center;
+}
+
+.kkpu-mandatory-modal__title {
+    margin: 0 0 0.35rem;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.kkpu-mandatory-modal__year {
+    margin: 0 0 0.85rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0450a8;
+}
+
+.kkpu-mandatory-modal__body {
+    margin: 0 0 0.7rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: #334155;
+}
+
+.kkpu-mandatory-modal__cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.55rem;
+    min-height: 46px;
+    padding: 0.7rem 1.2rem;
+    border-radius: 999px;
+    background: #0450a8;
+    color: #fff !important;
+    font-weight: 700;
+    text-decoration: none !important;
+    box-shadow: 0 8px 18px rgba(4, 80, 168, 0.28);
+}
+
+.kkpu-mandatory-modal__cta:hover,
+.kkpu-mandatory-modal__cta:focus-visible {
+    background: #033d82;
+    outline: none;
+}
+
+.kkpu-mandatory-modal__hint {
+    margin: 0.85rem 0 0;
+    font-size: 0.78rem;
+    color: #64748b;
+    line-height: 1.4;
+}
+
+@media (max-width: 480px) {
+    .kkpu-mandatory-modal__panel {
+        padding: 1.25rem 1rem 1.1rem;
+    }
+
+    .kkpu-mandatory-modal__title {
+        font-size: 1.1rem;
+    }
+}
+
 .kabataan-header__page-badge {
     display: none;
     font-size: 11px;

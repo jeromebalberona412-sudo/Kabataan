@@ -6,30 +6,29 @@ use App\Http\Controllers\Controller;
 use App\Models\Barangay;
 use App\Models\KabataanRegistration;
 use App\Models\User;
-use App\Notifications\KabataanProfilingEmailChangeVerify;
 use App\Notifications\KabataanProfilingUpdatedEmail;
 use App\Notifications\KabataanVerifyEmail;
-use App\Rules\PhilippineMobileNumber;
 use App\Rules\ParticipantSignatureImage;
+use App\Rules\PhilippineMobileNumber;
 use App\Rules\ValidEmailAddress;
 use App\Services\BarangayLogoUrlService;
 use App\Services\BarangayZoneService;
+use App\Services\InvalidEmailService;
 use App\Services\KabataanNotificationService;
 use App\Services\KabataanPhotoService;
 use App\Services\KabataanProfilingHistoryService;
 use App\Services\KkProfilingScheduleService;
 use App\Services\KkRegistrationDraftService;
 use App\Services\KkSurveyResponseService;
-use App\Services\InvalidEmailService;
 use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
+use App\Services\RespondentNumberService;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
@@ -285,6 +284,7 @@ class KKProfilingController extends Controller
 
         if (strpos($respondentNumber, '-') !== false) {
             $last = substr($respondentNumber, strrpos($respondentNumber, '-') + 1);
+
             return (string) ((int) $last);
         }
 
@@ -411,11 +411,8 @@ class KKProfilingController extends Controller
         }
 
         $existingForm = $registration->form_data ?? [];
-        if (! empty($existingForm['respondent_number'])) {
-            $validated['respondent_number'] = $existingForm['respondent_number'];
-        } else {
-            unset($validated['respondent_number']);
-        }
+        // Respondent # is assigned only after a successful update completes.
+        unset($validated['respondent_number']);
 
         $originalEmail = strtolower(trim((string) $registration->email));
         $validated['email'] = $originalEmail;
@@ -433,174 +430,17 @@ class KKProfilingController extends Controller
         );
 
         $barangayName = $registration->barangay?->name ?? 'your barangay';
-        session()->flash('kabataan_toast', [
-            'title' => 'Congratulations!',
-            'message' => "You've successfully updated your KK Profiling for {$profilingYear}.",
-        ]);
         session()->put('kk_profiling_update_required', false);
 
         return $this->updateSuccessResponse($request, [
-            'message' => 'Your KK Profiling information for '.$profilingYear.' has been updated successfully. A confirmation email has been sent to '.$originalEmail.'.',
+            'title' => 'Congratulations!',
+            'message' => "You've successfully updated your KK Profiling for {$profilingYear}.",
+            'profiling_year' => $profilingYear,
             'notification' => [
                 'title' => 'KK Profiling Updated',
                 'message' => "Congratulations! You've successfully updated your KK Profiling for {$profilingYear} in {$barangayName}.",
             ],
         ]);
-    }
-
-    public function verifyUpdateEmail(Request $request, int $id, string $hash)
-    {
-        if (! URL::hasValidSignature($request)) {
-            return redirect()->route('dashboard')->withErrors([
-                'kk_profiling' => 'The verification link is invalid or expired.',
-            ]);
-        }
-
-        $registration = KabataanRegistration::find($id);
-        $pending = $registration
-            ? Cache::get($this->pendingUpdateCacheKey($registration->id))
-            : null;
-
-        if (! $registration || ! is_array($pending)) {
-            return redirect()->route('dashboard')->withErrors([
-                'kk_profiling' => 'No pending KK Profiling update was found. Please submit the update again.',
-            ]);
-        }
-
-        $newEmail = strtolower(trim((string) ($pending['new_email'] ?? '')));
-        if ($newEmail === '' || ! hash_equals($hash, sha1($newEmail))) {
-            return redirect()->route('dashboard')->withErrors([
-                'kk_profiling' => 'The verification link is invalid.',
-            ]);
-        }
-
-        $user = User::find($registration->user_id);
-        if (! $user) {
-            return redirect()->route('dashboard')->withErrors([
-                'kk_profiling' => 'Unable to complete your KK Profiling update.',
-            ]);
-        }
-
-        $validated = is_array($pending['validated'] ?? null) ? $pending['validated'] : [];
-        $validated['email'] = $newEmail;
-
-        $this->applyProfilingUpdate(
-            $registration,
-            $user,
-            $validated,
-            (int) ($pending['profiling_year'] ?? now()->year),
-            isset($pending['schedule_id']) ? (int) $pending['schedule_id'] : null,
-            $newEmail,
-        );
-
-        Cache::forget($this->pendingUpdateCacheKey($registration->id));
-
-        return redirect()->route('dashboard')
-            ->with('success', 'Your email has been verified and your KK Profiling update is complete.');
-    }
-
-    public function resendUpdateEmailVerification(Request $request)
-    {
-        $user = Auth::user();
-        if (! $user) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 401);
-        }
-
-        $registration = KabataanRegistration::where('user_id', $user->id)->latest()->first();
-        if (! $registration) {
-            return response()->json(['success' => false, 'message' => 'No KK Profiling record found.'], 404);
-        }
-
-        $pending = Cache::get($this->pendingUpdateCacheKey($registration->id));
-        if (! is_array($pending) || empty($pending['new_email'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No pending email change found. Please submit your KK Profiling update again.',
-            ], 422);
-        }
-
-        $newEmail = strtolower(trim((string) $pending['new_email']));
-        $profilingYear = (int) ($pending['profiling_year'] ?? now()->year);
-
-        $invalidCheck = $this->invalidEmails->checkBeforeSending($newEmail);
-        if (! $invalidCheck['allowed']) {
-            return response()->json([
-                'success' => false,
-                'message' => $invalidCheck['message'] ?? 'This email address is invalid and cannot receive mail.',
-                'errors' => [
-                    'email' => [$invalidCheck['message'] ?? 'This email address is invalid and cannot receive mail.'],
-                ],
-            ], 422);
-        }
-
-        $retryAfter = $this->resendVerificationCooldownSeconds($registration->id);
-        if ($retryAfter > 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please wait '.$retryAfter.' seconds before requesting another verification email.',
-                'retry_after' => $retryAfter,
-            ], 429);
-        }
-
-        $verificationUrl = MailUrl::temporarySignedRoute(
-            'kkprofiling.verify-update',
-            now()->addHours(24),
-            [
-                'id' => $registration->id,
-                'hash' => sha1($newEmail),
-            ],
-        );
-
-        try {
-            $this->invalidEmails->attemptMailDelivery($newEmail, function () use ($newEmail, $verificationUrl, $profilingYear) {
-                Notification::route('mail', $newEmail)
-                    ->notify(new KabataanProfilingEmailChangeVerify($verificationUrl, $profilingYear));
-            }, 'email');
-        } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->errors()['email'][0] ?? 'This email address is invalid and cannot receive mail.',
-                'errors' => $e->errors(),
-            ], 422);
-        }
-
-        $this->markResendVerificationCooldown($registration->id);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Verification email has been resent. Please check your inbox.',
-            'email' => $newEmail,
-            'retry_after' => 60,
-        ]);
-    }
-
-    private function pendingUpdateCacheKey(int $registrationId): string
-    {
-        return 'kk_profiling_update_pending:'.$registrationId;
-    }
-
-    private function resendVerificationCooldownKey(int $registrationId): string
-    {
-        return 'kk_profiling_resend_cooldown:'.$registrationId;
-    }
-
-    private function resendVerificationCooldownSeconds(int $registrationId): int
-    {
-        $expiresAt = Cache::get($this->resendVerificationCooldownKey($registrationId));
-        if (! is_int($expiresAt)) {
-            return 0;
-        }
-
-        return max(0, $expiresAt - time());
-    }
-
-    private function markResendVerificationCooldown(int $registrationId, int $seconds = 60): void
-    {
-        Cache::put(
-            $this->resendVerificationCooldownKey($registrationId),
-            time() + $seconds,
-            now()->addSeconds($seconds),
-        );
     }
 
     /**
@@ -694,13 +534,21 @@ class KKProfilingController extends Controller
             }
 
             $registration->refresh();
+            app(RespondentNumberService::class)->assignToRegistration($registration);
+            $registration->refresh();
+
             app(KabataanProfilingHistoryService::class)->saveSnapshot(
                 $registration,
                 $profilingYear,
                 $scheduleId,
             );
-            app(KkProfilingScheduleService::class)->forgetCompletionCache(
-                (int) $registration->id,
+
+            $scheduleService = app(KkProfilingScheduleService::class);
+            if (\Illuminate\Support\Facades\Schema::hasTable('kk_profiling_updates')) {
+                $scheduleService->markAnnualUpdateCompleted($registration, $profilingYear);
+            }
+            $scheduleService->forgetRegistrationCaches(
+                $registration,
                 $profilingYear,
             );
 
@@ -742,7 +590,7 @@ class KKProfilingController extends Controller
             return response()->json(array_merge(['success' => true, 'redirect' => route('dashboard')], $payload));
         }
 
-        return redirect()->route('dashboard')->with('success', $payload['message'] ?? 'Update complete.');
+        return redirect()->route('dashboard');
     }
 
     /**

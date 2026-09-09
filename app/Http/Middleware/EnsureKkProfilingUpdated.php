@@ -6,12 +6,17 @@ use App\Models\KabataanRegistration;
 use App\Services\KkProfilingScheduleService;
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Auth;
 
 class EnsureKkProfilingUpdated
 {
+    /**
+     * Dashboard is allowed so the mandatory modal can render.
+     * Other Kabataan routes redirect to dashboard while the update is incomplete.
+     */
     private const ALLOWED_WHILE_REQUIRED = [
+        'dashboard',
         'kkprofiling.update.show',
         'kkprofiling.update',
         'kkprofiling.resend-update-verification',
@@ -32,13 +37,31 @@ class EnsureKkProfilingUpdated
             ->latest('id')
             ->first();
 
-        $requiresUpdate = $this->scheduleService->requiresProfilingUpdate($registration);
+        $requiresUpdate = $this->scheduleService->needsKkProfilingUpdate($registration);
+        $targetYear = $registration
+            ? ($this->scheduleService->targetProfilingYearForRegistration($registration)
+                ?? $this->scheduleService->expectedProfilingYear())
+            : $this->scheduleService->expectedProfilingYear();
+
         $request->session()->put('kk_profiling_update_required', $requiresUpdate);
+        $request->session()->put('kk_profiling_update_year', $requiresUpdate ? $targetYear : null);
+
+        view()->share('kkProfilingUpdateRequired', $requiresUpdate);
+        view()->share('kkProfilingUpdateYear', $requiresUpdate ? $targetYear : null);
 
         if (! $requiresUpdate || $request->routeIs(...self::ALLOWED_WHILE_REQUIRED)) {
             return $next($request);
         }
 
-        return redirect()->route('kkprofiling.update.show');
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => 'KK Profiling update is required before continuing.',
+                'redirect' => route('dashboard'),
+                'kk_profiling_update_required' => true,
+                'year' => $targetYear,
+            ], 403);
+        }
+
+        return redirect()->route('dashboard');
     }
 }

@@ -33,8 +33,16 @@ class KabataanProfilingHistoryService
     }
 
     /**
-     * Profile-only fields for yearly KK update (Section I).
-     * Demographic characteristics, footer fields, and signature are left blank.
+     * Personal/basic fields only for yearly KK update (Section I).
+     * Current-year demographic/questionnaire answers must be re-entered blank.
+     *
+     * Prefill: last_name, first_name, middle_name, suffix, custom_suffix,
+     * purok_zone, sex, age, birthday, email, contact_number, respondent_number.
+     *
+     * Intentionally excluded (blank on update form):
+     * civil_status, youth_classification, youth_age_group, education, work_status,
+     * sk_voter, national_voter, sk_voted, kk_assembly, kk_times, kk_reason,
+     * signature_name, signature.
      *
      * @return array<string, mixed>
      */
@@ -63,7 +71,8 @@ class KabataanProfilingHistoryService
             $suffix = 'None';
         }
 
-        return array_merge($prefill, [
+        // Explicitly do not carry prior-year questionnaire answers into UPDATE mode.
+        return [
             'last_name' => $registration->last_name,
             'first_name' => $registration->first_name,
             'middle_name' => $registration->middle_name,
@@ -71,7 +80,12 @@ class KabataanProfilingHistoryService
             'email' => $registration->email,
             'contact_number' => $registration->contact_number,
             'respondent_number' => $formData['respondent_number'] ?? $registration->respondent_number,
-        ]);
+            'purok_zone' => $prefill['purok_zone'] ?? null,
+            'sex' => $prefill['sex'] ?? null,
+            'age' => $prefill['age'] ?? null,
+            'birthday' => $prefill['birthday'] ?? null,
+            'custom_suffix' => $prefill['custom_suffix'] ?? null,
+        ];
     }
 
     /**

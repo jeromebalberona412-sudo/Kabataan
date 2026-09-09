@@ -684,23 +684,63 @@ function kkpValidateContact(value, requireEmpty) {
         const hint = document.getElementById('kkpLongNameConfirmHint');
         if (input) {
             input.value = '';
+            input.classList.remove('is-invalid');
+            input.setAttribute('aria-invalid', 'false');
         }
         if (hint) {
             hint.hidden = true;
+            hint.textContent = '';
         }
     }
 
-    function syncLongNameConfirmFromTypedYes() {
+    function setLongNameConfirmError(message) {
         const input = document.getElementById('kkpLongNameConfirmInput');
         const hint = document.getElementById('kkpLongNameConfirmHint');
+        if (input) {
+            input.classList.add('is-invalid');
+            input.setAttribute('aria-invalid', 'true');
+        }
+        if (hint) {
+            hint.hidden = false;
+            hint.innerHTML = message;
+        }
+    }
+
+    function clearLongNameConfirmError() {
+        const input = document.getElementById('kkpLongNameConfirmInput');
+        const hint = document.getElementById('kkpLongNameConfirmHint');
+        if (input) {
+            input.classList.remove('is-invalid');
+            input.setAttribute('aria-invalid', 'false');
+        }
+        if (hint) {
+            hint.hidden = true;
+            hint.textContent = '';
+        }
+    }
+
+    function syncLongNameConfirmFromTypedYes(options = {}) {
+        const showRequiredOnEmpty = !!options.showRequiredOnEmpty;
+        const input = document.getElementById('kkpLongNameConfirmInput');
         const typed = (input?.value || '').trim().toLowerCase();
         const ok = typed === 'yes';
 
-        if (hint) {
-            hint.hidden = typed === '' || ok;
+        if (typed === '') {
+            if (showRequiredOnEmpty) {
+                setLongNameConfirmError('This field is required. Please type <strong>yes</strong> exactly to continue.');
+            } else {
+                clearLongNameConfirmError();
+            }
+            return false;
         }
 
-        return ok;
+        if (!ok) {
+            setLongNameConfirmError('Please type <strong>yes</strong> exactly to continue.');
+            return false;
+        }
+
+        clearLongNameConfirmError();
+        return true;
     }
 
     function openLongNameModal(el, nextValue, caret) {
@@ -730,11 +770,7 @@ function kkpValidateContact(value, requireEmpty) {
     }
 
     function confirmLongNameModal() {
-        if (!syncLongNameConfirmFromTypedYes()) {
-            const hint = document.getElementById('kkpLongNameConfirmHint');
-            if (hint) {
-                hint.hidden = false;
-            }
+        if (!syncLongNameConfirmFromTypedYes({ showRequiredOnEmpty: true })) {
             document.getElementById('kkpLongNameConfirmInput')?.focus();
             return;
         }
@@ -775,25 +811,21 @@ function kkpValidateContact(value, requireEmpty) {
     }
 
     document.getElementById('kkpLongNameConfirmInput')?.addEventListener('input', function () {
-        if (syncLongNameConfirmFromTypedYes()) {
-            confirmLongNameModal();
+        // Hard cap at 3 characters (yes).
+        if (this.value.length > 3) {
+            this.value = this.value.slice(0, 3);
         }
+        syncLongNameConfirmFromTypedYes();
     });
 
     document.getElementById('kkpLongNameConfirmInput')?.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
             event.preventDefault();
-            if (syncLongNameConfirmFromTypedYes()) {
-                confirmLongNameModal();
-            } else {
-                const hint = document.getElementById('kkpLongNameConfirmHint');
-                if (hint) {
-                    hint.hidden = false;
-                }
-            }
+            confirmLongNameModal();
         }
     });
 
+    document.getElementById('kkpLongNameConfirmBtn')?.addEventListener('click', confirmLongNameModal);
     document.getElementById('kkpLongNameCancelBtn')?.addEventListener('click', cancelLongNameModal);
     document.getElementById('kkpLongNameCloseBtn')?.addEventListener('click', cancelLongNameModal);
     document.getElementById('kkpLongNameBackdrop')?.addEventListener('click', cancelLongNameModal);

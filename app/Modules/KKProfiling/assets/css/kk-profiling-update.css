@@ -33,7 +33,11 @@
 .kkpu-lock-bar__logo {
     width: 36px;
     height: 36px;
-    object-fit: contain;
+    object-fit: cover;
+    border-radius: 50%;
+    background: #fff;
+    padding: 3px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     flex-shrink: 0;
 }
 
@@ -86,6 +90,15 @@
     margin-bottom: 18px;
 }
 
+.kkpu-page-eyebrow {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #0450a8;
+}
+
 .kkpu-page-title {
     margin: 0 0 8px;
     font-size: 26px;
@@ -94,12 +107,34 @@
     line-height: 1.25;
 }
 
+.kkpu-page-year {
+    display: block;
+    margin-top: 4px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0450a8;
+}
+
 .kkpu-page-subtitle {
     margin: 0;
     font-size: 14px;
     line-height: 1.5;
     color: #4b5563;
     max-width: 720px;
+}
+
+.kkpu-section-note {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    vertical-align: middle;
+    color: #0450a8;
+    background: rgba(4, 80, 168, 0.1);
 }
 
 .kkpu-paper {
@@ -152,7 +187,129 @@
     .kkpu-lock-bar__logo {
         width: 28px;
         height: 28px;
+        padding: 2px;
     }
+}
+
+/* Clear Data confirmation modal (update page — wizard CSS not loaded) */
+.kkpu-page-body .kkp-clear-draft-modal.kkp-info-modal {
+    max-width: 360px;
+    max-height: none;
+    border-radius: 12px;
+}
+
+.kkpu-page-body .kkp-clear-draft-modal .kkp-info-modal-close {
+    width: 28px;
+    height: 28px;
+    top: 0.35rem;
+    right: 0.35rem;
+    font-size: 1.25rem;
+}
+
+.kkpu-page-body .kkp-clear-draft-modal .kkp-info-modal-scroll {
+    max-height: none;
+    padding: 1.15rem 1.1rem 0.65rem;
+}
+
+.kkpu-page-body .kkp-clear-draft-modal .kkp-info-title {
+    margin: 0 0 0.45rem;
+    font-size: 1.05rem;
+    padding-right: 1.5rem;
+}
+
+.kkpu-page-body .kkp-clear-draft-modal .kkp-info-lang p {
+    margin: 0 0 0.45rem;
+    font-size: 0.84rem;
+    line-height: 1.4;
+    color: #475569;
+}
+
+.kkpu-page-body .kkp-clear-draft-modal .kkp-info-lang p:last-child {
+    margin-bottom: 0;
+}
+
+.kkpu-page-body .kkp-clear-draft-modal .kkp-info-modal-footer {
+    padding: 0.65rem 1.1rem 0.9rem;
+}
+
+.kkpu-page-body .kkp-clear-draft-modal .kkp-info-btn {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+    min-height: 34px;
+}
+
+.kkpu-page-body .kkp-info-btn-danger {
+    background: #dc2626;
+    color: #fff;
+}
+
+.kkpu-page-body .kkp-info-btn-danger:hover,
+.kkpu-page-body .kkp-info-btn-danger:focus-visible {
+    background: #b91c1c;
+}
+
+/* Keep validation errors fully visible on the update form (match signup batch style) */
+.kkpu-page .kkp-field-error,
+.kkpu-page .kkp-section-error {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #dc2626 !important;
+    position: static !important;
+    z-index: 5;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    margin-top: 4px;
+    pointer-events: none;
+}
+
+.kkpu-page .kkp-demo-block-error {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #dc2626 !important;
+    position: static !important;
+    flex: 0 0 100% !important;
+    flex-basis: 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    order: 99;
+    align-self: stretch;
+    box-sizing: border-box;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    padding: 4px 8px;
+    margin: 0;
+    border-top: 1px solid #fecaca;
+    border-radius: 0;
+    background: #fef2f2 !important;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.kkpu-page .kkp-demo-block:has(.kkp-demo-block-error) {
+    outline: 1px solid #dc2626;
+    outline-offset: 1px;
+}
+
+.kkpu-page .kkp-input-err {
+    border-bottom-color: #dc2626 !important;
+}
+
+.kkpu-page .kkp-sig-status.is-invalid {
+    display: block !important;
+    visibility: visible !important;
+    color: #dc2626 !important;
 }
 
 /* Mobile zoom functionality for KK Profiling Update */
@@ -186,5 +343,193 @@
 
     .kkpu-page .kkp-responsive-container {
         padding: 0;
+    }
+
+    /*
+     * Keep KK Assembly connector lines visible while zoomed.
+     * Global responsive CSS hides the SVG on mobile — restore it here.
+     */
+    .kkpu-page .kkp-assembly-flow-svg {
+        display: block;
+    }
+
+    .kkpu-page .kkp-assembly-flow-path {
+        stroke-width: 1.6;
+        opacity: 0.7;
+    }
+
+    .kkpu-page .kkp-assembly-flow-path--on {
+        stroke-width: 2;
+        opacity: 1;
+    }
+
+    /* Long follow-up labels (e.g. "There was no KK Assembly Meeting") must wrap */
+    .kkpu-page .kkp-assembly-followup .kkp-chk-lbl,
+    .kkpu-page .kkp-assembly-question .kkp-chk-lbl {
+        white-space: normal;
+        align-items: flex-start;
+        line-height: 1.3;
+    }
+
+    .kkpu-page .kkp-assembly-question .kkp-demo-block-label,
+    .kkpu-page .kkp-assembly-followup .kkp-demo-block-label {
+        max-width: 96px;
+        width: 96px;
+        min-width: 96px;
+        font-size: 9.5px;
+        line-height: 1.2;
+        padding: 4px 4px;
+    }
+
+    .kkpu-page .kkp-assembly-arrow {
+        top: 0.35em;
+        transform: none;
+    }
+}
+
+/* KK Profiling update success modal (green) */
+.kkpu-success-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.kkpu-success-overlay[hidden] {
+    display: none !important;
+}
+
+.kkpu-success-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+}
+
+.kkpu-success-modal {
+    position: relative;
+    z-index: 1;
+    width: min(420px, calc(100vw - 2rem));
+    max-height: min(90vh, 560px);
+    overflow: auto;
+    background: #fff;
+    border-radius: 16px;
+    padding: 2rem 1.75rem 1.5rem;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+    border-top: 4px solid #16a34a;
+}
+
+.kkpu-success-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 999px;
+    background: #f0fdf4;
+    color: #166534;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.kkpu-success-close:hover,
+.kkpu-success-close:focus-visible {
+    background: #dcfce7;
+    color: #14532d;
+    outline: none;
+}
+
+.kkpu-success-brand {
+    margin: 0 0 1rem;
+    padding-right: 1.5rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #166534;
+}
+
+.kkpu-success-icon {
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 1.1rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(22, 163, 74, 0.35);
+}
+
+.kkpu-success-icon svg {
+    width: 36px;
+    height: 36px;
+    color: #fff;
+}
+
+.kkpu-success-title {
+    margin: 0 0 0.65rem;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #14532d;
+    line-height: 1.3;
+}
+
+.kkpu-success-message {
+    margin: 0 0 1.35rem;
+    font-size: 0.98rem;
+    line-height: 1.6;
+    color: #3f6212;
+}
+
+.kkpu-success-actions {
+    display: flex;
+    justify-content: center;
+}
+
+.kkpu-success-ok {
+    width: 100%;
+    max-width: 220px;
+    min-height: 46px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 22px rgba(22, 163, 74, 0.3);
+}
+
+.kkpu-success-ok:hover,
+.kkpu-success-ok:focus-visible {
+    background: linear-gradient(135deg, #16a34a 0%, #166534 100%);
+    outline: none;
+}
+
+body.kkpu-success-open {
+    overflow: hidden;
+}
+
+@media (max-width: 414px) {
+    .kkpu-success-modal {
+        padding: 1.6rem 1.2rem 1.25rem;
+        border-radius: 14px;
+    }
+
+    .kkpu-success-title {
+        font-size: 1.25rem;
+    }
+
+    .kkpu-success-message {
+        font-size: 0.92rem;
     }
 }
