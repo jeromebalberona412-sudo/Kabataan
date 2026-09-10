@@ -159,7 +159,8 @@ class IdImageQualityService
      */
     public function validateUpload(UploadedFile $file, string $side = 'front'): array
     {
-        $path = $file->getRealPath();
+        // Hostinger / some PHP setups return false from getRealPath(); pathname still works.
+        $path = $file->getRealPath() ?: $file->getPathname();
 
         if (! is_string($path) || $path === '' || ! is_file($path)) {
             return $this->fail('missing_file', 'Image file is missing. Please capture or upload again.', [

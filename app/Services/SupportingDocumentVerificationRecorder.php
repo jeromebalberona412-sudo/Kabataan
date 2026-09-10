@@ -58,8 +58,11 @@ class SupportingDocumentVerificationRecorder
         $fingerprint = $this->fingerprintService->fingerprint($signals);
 
         $frontPath = $sides['front'] instanceof UploadedFile
-            ? $sides['front']->getRealPath()
+            ? ($sides['front']->getRealPath() ?: $sides['front']->getPathname())
             : null;
+        if (! is_string($frontPath) || $frontPath === '' || ! is_file($frontPath)) {
+            $frontPath = null;
+        }
         $perceptualHash = is_string($frontPath) ? $this->perceptualHashService->hashFromFile($frontPath) : null;
 
         $duplicate = $this->duplicateDetection->evaluate(

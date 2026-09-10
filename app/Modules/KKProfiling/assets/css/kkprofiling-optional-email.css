@@ -189,6 +189,7 @@
     line-height: 1.3;
     color: #0f172a;
     background: #fff;
+    text-transform: uppercase;
 }
 
 .kkp-long-name-confirm-input:focus {
@@ -201,11 +202,20 @@
     box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.15);
 }
 
-.kkp-long-name-confirm-hint {
+.kkp-long-name-confirm-hint,
+.kkp-clear-draft-modal .kkp-info-lang p.kkp-long-name-confirm-hint,
+.kkp-long-name-modal .kkp-long-name-confirm-hint {
     margin: 0.4rem 0 0;
-    font-size: 0.78rem;
+    font-size: 11px;
     line-height: 1.35;
-    color: #b91c1c;
+    font-weight: 600;
+    color: #dc2626;
+}
+
+.kkp-long-name-confirm-hint strong,
+.kkp-clear-draft-modal .kkp-info-lang p.kkp-long-name-confirm-hint strong {
+    color: #dc2626;
+    font-weight: 700;
 }
 
 .kkp-long-name-confirm-hint[hidden] {

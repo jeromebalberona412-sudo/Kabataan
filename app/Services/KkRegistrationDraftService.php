@@ -300,12 +300,123 @@ class KkRegistrationDraftService
         return $this->persist($wizard);
     }
 
-    public function markVerificationSent(array $wizard): array
+    /**
+     * Enforce a 60-second gap between set-password emails (send/resend).
+     * No hard attempt cap — users may resend indefinitely after each cooldown.
+     *
+     * @param  array<string, mixed>  $wizard
+     * @return array{remaining_seconds:int}
+     */
+    public function setPasswordEmailCooldown(array $wizard): array
     {
+        $sentAt = $wizard['verification_sent_at'] ?? null;
+
+        if (! is_string($sentAt) || trim($sentAt) === '') {
+            return ['remaining_seconds' => 0];
+        }
+
+        try {
+            $availableAt = Carbon::parse($sentAt)->addSeconds(60);
+        } catch (\Throwable) {
+            return ['remaining_seconds' => 0];
+        }
+
+        $remaining = (int) max(0, $availableAt->getTimestamp() - now()->getTimestamp());
+
+        return ['remaining_seconds' => $remaining];
+    }
+
+    /**
+     * @param  array<string, mixed>  $wizard
+     */
+    public function assertSetPasswordEmailCooldown(array $wizard): void
+    {
+        $remaining = (int) ($this->setPasswordEmailCooldown($wizard)['remaining_seconds'] ?? 0);
+
+        if ($remaining <= 0) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'email' => ["Please wait {$remaining} second".($remaining === 1 ? '' : 's').' before resending the set-password link.'],
+        ]);
+    }
+
+    /**
+     * Persist a freshly issued set-password link token and clear prior email verification.
+     * Call only after the email was sent successfully so a failed send does not kill the previous link.
+     *
+     * @param  array<string, mixed>  $wizard
+     * @return array<string, mixed>
+     */
+    public function applySetPasswordLink(array $wizard, string $linkToken): array
+    {
+        $linkToken = strtolower(trim($linkToken));
+
+        if ($linkToken === '' || strlen($linkToken) !== 40 || ! ctype_xdigit($linkToken)) {
+            throw ValidationException::withMessages([
+                'email' => ['Unable to create a set-password link. Please try again.'],
+            ]);
+        }
+
+        $wizard['set_password_link_token'] = $linkToken;
+        $wizard['email_verified_at'] = null;
         $wizard['verification_sent_at'] = now()->toIso8601String();
         $wizard['current_step'] = max((int) ($wizard['current_step'] ?? 1), 3);
 
         return $this->persist($wizard);
+    }
+
+    /**
+     * @deprecated Prefer applySetPasswordLink() after a successful send.
+     *
+     * @param  array<string, mixed>  $wizard
+     * @return array<string, mixed>
+     */
+    public function rotateSetPasswordLink(array $wizard): array
+    {
+        return $this->applySetPasswordLink($wizard, bin2hex(random_bytes(20)));
+    }
+
+    public function markVerificationSent(array $wizard): array
+    {
+        if (empty($wizard['set_password_link_token'])) {
+            return $this->applySetPasswordLink($wizard, bin2hex(random_bytes(20)));
+        }
+
+        $wizard['verification_sent_at'] = now()->toIso8601String();
+        $wizard['current_step'] = max((int) ($wizard['current_step'] ?? 1), 3);
+
+        return $this->persist($wizard);
+    }
+
+    /**
+     * Whether the email link hash matches the current (non-superseded) set-password token.
+     *
+     * @param  array<string, mixed>  $wizard
+     */
+    public function matchesSetPasswordLink(array $wizard, string $hash): bool
+    {
+        $hash = strtolower(trim($hash));
+
+        if ($hash === '' || strlen($hash) !== 40 || ! ctype_xdigit($hash)) {
+            return false;
+        }
+
+        $current = strtolower(trim((string) ($wizard['set_password_link_token'] ?? '')));
+
+        if ($current !== '' && hash_equals($current, $hash)) {
+            return true;
+        }
+
+        // Legacy drafts emailed with sha1(email) before rotating tokens existed.
+        if ($current === '') {
+            $email = strtolower(trim($wizard['email'] ?? $wizard['step1_data']['email'] ?? ''));
+
+            return $email !== '' && hash_equals(sha1($email), $hash);
+        }
+
+        return false;
     }
 
     public function markEmailVerified(array $wizard): array
@@ -359,22 +470,28 @@ class KkRegistrationDraftService
 
         if ($approvedRegistration) {
             throw ValidationException::withMessages([
-                'email' => ['This email already has an approved KK Profiling record.'],
+                'email' => ['This email is already taken. Please use another email.'],
             ]);
         }
     }
 
     public function commitWizard(array $wizard, string $password): KabataanRegistration
     {
-        if (empty($wizard['step1_data'])) {
-            throw ValidationException::withMessages([
-                'step' => ['Registration data is incomplete. Please restart the wizard.'],
-            ]);
-        }
-
         if (empty($wizard['email_verified_at'])) {
             throw ValidationException::withMessages([
                 'email' => ['Please verify your email before completing registration.'],
+            ]);
+        }
+
+        if (empty($wizard['verification_sent_at'])) {
+            throw ValidationException::withMessages([
+                'email' => ['Please request the set-password email before completing registration.'],
+            ]);
+        }
+
+        if (empty($wizard['step1_data'])) {
+            throw ValidationException::withMessages([
+                'step' => ['Registration data is incomplete. Please restart the wizard.'],
             ]);
         }
 
@@ -633,6 +750,7 @@ class KkRegistrationDraftService
             'email' => null,
             'email_verified_at' => null,
             'verification_sent_at' => null,
+            'set_password_link_token' => null,
             'current_step' => 1,
             'expires_at' => now()->addDays(7)->toIso8601String(),
         ];

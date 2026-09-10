@@ -2,8 +2,11 @@
 
 namespace App\Notifications;
 
+use App\Mail\KabataanSetPasswordMail;
+use App\Support\MailUrl;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Mail;
 
 class KabataanSetPasswordEmail extends Notification
 {
@@ -16,15 +19,50 @@ class KabataanSetPasswordEmail extends Notification
         return ['mail'];
     }
 
-    public function toMail($notifiable): MailMessage
+    /**
+     * Prefer a Mailable with an explicit To address.
+     * Laravel does not auto-fill To when toMail() returns a Mailable.
+     */
+    public function toMail($notifiable): KabataanSetPasswordMail|MailMessage
     {
+        $address = $notifiable->routeNotificationFor('mail', $this);
+
+        if (is_string($address) && $address !== '') {
+            return (new KabataanSetPasswordMail($this->setPasswordUrl))->to($address);
+        }
+
+        if (is_array($address)) {
+            $mailable = new KabataanSetPasswordMail($this->setPasswordUrl);
+            foreach ($address as $email => $name) {
+                if (is_int($email)) {
+                    $mailable->to($name);
+                } else {
+                    $mailable->to($email, $name);
+                }
+            }
+
+            return $mailable;
+        }
+
+        // Fallback: plain MailMessage with embeddable PNG when possible.
+        $logoPath = null;
+        foreach ([
+            public_path('images/SK_OnePortal_logo.png'),
+            public_path('images/SK_OnePortal.png'),
+            public_path('images/skoneportal_logo.webp'),
+        ] as $path) {
+            if (is_string($path) && is_file($path)) {
+                $logoPath = $path;
+                break;
+            }
+        }
+
         return (new MailMessage)
             ->subject('Set Your KK Profiling Account Password')
-            ->greeting('Hello!')
-            ->line('Thank you for submitting your KK Profiling registration.')
-            ->line('Click the button below to verify your email and set your account password.')
-            ->action('Set Password', $this->setPasswordUrl)
-            ->line('This link will expire in 24 hours for your security.')
-            ->line('If you did not submit this form, no further action is required.');
+            ->view('emails.kkprofiling-set-password', [
+                'setPasswordUrl' => $this->setPasswordUrl,
+                'logoPath' => $logoPath,
+                'logoUrl' => MailUrl::root().'/images/'.($logoPath ? rawurlencode(basename($logoPath)) : 'SK_OnePortal_logo.png'),
+            ]);
     }
 }

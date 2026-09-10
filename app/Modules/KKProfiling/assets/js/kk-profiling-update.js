@@ -125,12 +125,16 @@
     }
 
     function clearFieldErrors() {
+        if (typeof window.clearKkProfilingValidationUi === 'function') {
+            window.clearKkProfilingValidationUi(form);
+            return;
+        }
         form.querySelectorAll('.kkp-field-error').forEach((el) => el.remove());
-        form.querySelectorAll('.kkp-input-error, .is-invalid').forEach((el) => {
-            el.classList.remove('kkp-input-error', 'is-invalid');
+        form.querySelectorAll('.kkp-input-err, .kkp-input-error, .is-invalid, .is-error').forEach((el) => {
+            el.classList.remove('kkp-input-err', 'kkp-input-error', 'is-invalid', 'is-error');
         });
-        form.querySelectorAll('.kkp-demo-block-error').forEach((el) => {
-            el.classList.remove('kkp-demo-block-error');
+        form.querySelectorAll('.kkp-demo-block-error, .kkp-section-error, .kkp-name-max-hint').forEach((el) => {
+            el.remove();
         });
     }
 

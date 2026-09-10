@@ -35,13 +35,13 @@
             <div class="branding-content">
                 <div class="logo-wrapper">
                     <img
-                        src="{{ asset('images/SK_OnePortal.png') }}"
+                        src="{{ asset('images/skoneportal_logo.webp') }}"
                         alt="SK OnePortal Logo"
-                        class="youth-logo kkp-setpw-logo"
+                        class="youth-logo"
                     >
                 </div>
                 <h1 class="youth-main-title">SK OnePortal</h1>
-                <p class="youth-tagline">Official Youth Portal – Santa Cruz, Laguna</p>
+                <p class="youth-tagline">Official Youth Portal &ndash; Santa Cruz, Laguna</p>
                 <p class="kkp-setpw-branding-sub">KK Profiling · {{ $barangay }}</p>
             </div>
         </div>
@@ -52,9 +52,11 @@
                     <h2 class="card-title">Set Your Password</h2>
                     <p class="card-subtitle">
                         @if(!empty($emailVerified))
-                            Your email has been verified. Create a secure password for your <strong>{{ $barangay }}</strong> account.
+                            Your email has been verified. Create a secure password for your
+                            <strong>{{ $barangay }}</strong> KK Profiling account.
                         @else
-                            Almost done! Create a password for your <strong>{{ $barangay }}</strong> KK account.
+                            Almost done! Create a secure password for your
+                            <strong>{{ $barangay }}</strong> KK Profiling account.
                         @endif
                     </p>
                 </div>
@@ -83,7 +85,9 @@
                     novalidate
                     @if(!empty($wizardToken))
                         data-wizard-token="{{ $wizardToken }}"
+                        data-email-hash="{{ $emailHash ?? '' }}"
                         data-finalize-url="{{ route('kkprofiling.wizard.finalize-token', ['token' => $wizardToken]) }}"
+                        data-link-status-url="{{ route('kkprofiling.wizard.set-password-link-status', ['token' => $wizardToken]) }}"
                     @endif
                 >
                     @csrf

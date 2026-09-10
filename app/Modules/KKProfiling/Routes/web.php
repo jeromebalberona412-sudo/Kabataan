@@ -33,6 +33,10 @@ Route::get('/kkprofiling/wizard/set-password/{token}/{hash}', [KKProfilingWizard
 Route::get('/kkprofiling/wizard/verify/{token}/{hash}', [KKProfilingWizardController::class, 'openSetPasswordFromEmail'])
     ->name('kkprofiling.wizard.verify');
 
+Route::get('/api/kkprofiling/wizard/set-password/{token}/link-status', [KKProfilingWizardController::class, 'setPasswordLinkStatus'])
+    ->middleware('throttle:60,1')
+    ->name('kkprofiling.wizard.set-password-link-status');
+
 Route::post('/api/kkprofiling/wizard/set-password/{token}/finalize', [KKProfilingWizardController::class, 'finalizeByToken'])
     ->name('kkprofiling.wizard.finalize-token');
 
@@ -51,10 +55,8 @@ Route::prefix('/api/kkprofiling/{barangay}/wizard')->group(function () {
     Route::post('/step-2', [KKProfilingWizardController::class, 'saveStep2'])->name('kkprofiling.wizard.step2');
     Route::post('/set-step', [KKProfilingWizardController::class, 'setStep'])->name('kkprofiling.wizard.set-step');
     Route::post('/send-verification', [KKProfilingWizardController::class, 'sendVerification'])
-        ->middleware('throttle:5,1')
         ->name('kkprofiling.wizard.send-verification');
     Route::post('/resend-verification', [KKProfilingWizardController::class, 'resendVerification'])
-        ->middleware('throttle:5,1')
         ->name('kkprofiling.wizard.resend-verification');
     Route::post('/finalize', [KKProfilingWizardController::class, 'finalize'])->name('kkprofiling.wizard.finalize');
     Route::post('/clear-draft', [KKProfilingWizardController::class, 'clearDraft'])->name('kkprofiling.wizard.clear-draft');

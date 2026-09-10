@@ -170,6 +170,12 @@
     let lastStep1IdentityFingerprint = null;
     /** Tracks server-persisted ID sides after refresh (File inputs are empty). */
     let restoredDocumentSides = { documentType: '', front: false, back: false };
+    /** Prevents double-submit on Save/Upload & Continue and email resend. */
+    let wizardNavBusy = false;
+    let emailVerifyBusy = false;
+    /** Cache distinct front/back check so Upload & Continue is one pass when images are already OK. */
+    let lastDistinctPairKey = '';
+    let lastDistinctPairOk = false;
 
     const docTypeRadios = document.querySelectorAll('input[name="document_type"]');
     const schoolIdUploadPanel = document.getElementById('kkpSchoolIdUpload');
@@ -961,9 +967,44 @@
         const force = Boolean(options.force);
         const documentType = getSelectedDocumentType();
 
-        // Gemini / Groq AI verification disabled — skip detect-id / OCR scan UI.
+        // Even with AI OCR off, always reject identical front/back as soon as both sides exist.
         if (!STEP2_AI_ID_VERIFICATION_ENABLED) {
             clearOcrUiState({ hidePanel: true });
+
+            if (documentType && hasCompleteDocumentUpload()) {
+                let files = getActiveDocumentFiles();
+                if (!files.front || !files.back) {
+                    try {
+                        files = await resolveActiveDocumentFiles();
+                    } catch (_restoreError) {
+                        files = getActiveDocumentFiles();
+                    }
+                }
+
+                const sameSideError = await validateDistinctFrontAndBack(files);
+                if (sameSideError) {
+                    lastOcrPayload = {
+                        success: false,
+                        validation_error: true,
+                        needs_review: false,
+                        verification_status: 'invalid_image',
+                        document_detected: null,
+                        id_type: null,
+                        confidence: 0,
+                        ocr_status: 'invalid_upload',
+                        message: sameSideError,
+                    };
+                    showDocUploadError(sameSideError);
+                    updateNavButtons(currentStep);
+                    return;
+                }
+
+                if (lastOcrPayload?.ocr_status === 'invalid_upload') {
+                    lastOcrPayload = null;
+                }
+                hideDocUploadError();
+            }
+
             updateNavButtons(currentStep);
             return;
         }
@@ -1229,8 +1270,17 @@
     }
 
     function hasBlockingOcrError() {
-        // Supporting ID verification is optional — never block Next / Skip & Continue.
-        return false;
+        // Only hard-block optional Step 2 for same front/back (or other invalid_upload) errors.
+        if (!lastOcrPayload || !lastOcrPayload.validation_error) {
+            return false;
+        }
+
+        const status = String(lastOcrPayload.ocr_status || lastOcrPayload.verification_status || '');
+        const message = String(lastOcrPayload.message || '').toLowerCase();
+
+        return status === 'invalid_upload'
+            || status === 'invalid_image'
+            || message.includes('front and back must be different');
     }
 
     function ocrResultIsAcceptableForContinue() {
@@ -1511,11 +1561,16 @@
         }
 
         // Always compare content hashes (sizes often differ for real front vs back).
-        if (window.crypto?.subtle) {
-            try {
+        try {
+            const [frontBuffer, backBuffer] = await Promise.all([
+                front.arrayBuffer(),
+                back.arrayBuffer(),
+            ]);
+
+            if (window.crypto?.subtle) {
                 const [frontHash, backHash] = await Promise.all([
-                    crypto.subtle.digest('SHA-256', await front.arrayBuffer()),
-                    crypto.subtle.digest('SHA-256', await back.arrayBuffer()),
+                    crypto.subtle.digest('SHA-256', frontBuffer),
+                    crypto.subtle.digest('SHA-256', backBuffer),
                 ]);
 
                 const toHex = (buffer) => [...new Uint8Array(buffer)]
@@ -1525,15 +1580,18 @@
                 if (toHex(frontHash) === toHex(backHash)) {
                     return true;
                 }
-            } catch (_error) {
-                // Fall through.
+            } else if (buffersEqual(frontBuffer, backBuffer)) {
+                // Non-secure contexts (rare HTTP deploys) may lack crypto.subtle.
+                return true;
             }
-        } else if (
-            front.size === back.size
-            && front.name === back.name
-            && front.lastModified === back.lastModified
-        ) {
-            return true;
+        } catch (_error) {
+            if (
+                front.size === back.size
+                && front.name === back.name
+                && front.lastModified === back.lastModified
+            ) {
+                return true;
+            }
         }
 
         // Only treat as the same photo when perceptual hashes are essentially identical.
@@ -1555,13 +1613,60 @@
         return larger > 0 && (smaller / larger) >= 0.97;
     }
 
+    function buffersEqual(a, b) {
+        if (!(a instanceof ArrayBuffer) || !(b instanceof ArrayBuffer) || a.byteLength !== b.byteLength) {
+            return false;
+        }
+
+        const viewA = new Uint8Array(a);
+        const viewB = new Uint8Array(b);
+        for (let i = 0; i < viewA.length; i += 1) {
+            if (viewA[i] !== viewB[i]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function documentPairCacheKey(files) {
+        if (!files?.front || !files?.back) {
+            return '';
+        }
+
+        return [
+            files.front.name || '',
+            files.front.size || 0,
+            files.front.lastModified || 0,
+            files.back.name || '',
+            files.back.size || 0,
+            files.back.lastModified || 0,
+        ].join('|');
+    }
+
+    function invalidateDistinctPairCache() {
+        lastDistinctPairKey = '';
+        lastDistinctPairOk = false;
+    }
+
     async function validateDistinctFrontAndBack(files) {
         if (!files?.front || !files?.back) {
             return null;
         }
 
+        const pairKey = documentPairCacheKey(files);
+        if (pairKey && pairKey === lastDistinctPairKey && lastDistinctPairOk) {
+            return null;
+        }
+
         if (await filesAppearIdentical(files.front, files.back)) {
+            invalidateDistinctPairCache();
             return 'Front and back must be different photos. You uploaded the same image for both sides. Please upload the real front and the real back of your ID.';
+        }
+
+        if (pairKey) {
+            lastDistinctPairKey = pairKey;
+            lastDistinctPairOk = true;
         }
 
         return null;
@@ -1599,6 +1704,7 @@
             return;
         }
         restoredDocumentSides = { documentType: '', front: false, back: false };
+        invalidateDistinctPairCache();
     }
 
     function markRestoredDocumentSide(documentType, side, present) {
@@ -1726,6 +1832,7 @@
 
         resetFilePreview(input.id);
         input.value = '';
+        invalidateDistinctPairCache();
         clearOcrUiState({ hidePanel: !hasCompleteDocumentUpload() });
 
         if (hasCompleteDocumentUpload()) {
@@ -2021,6 +2128,7 @@
         Object.values(DOCUMENT_INPUT_IDS).flat().forEach((inputId) => {
             const input = getDocumentInput(inputId);
             input?.addEventListener('change', async () => {
+                invalidateDistinctPairCache();
                 const selected = input.files?.[0];
                 if (selected && selected.size > 900_000) {
                     const compressed = await compressImageFile(selected);
@@ -2077,6 +2185,121 @@
         });
 
         syncDocumentUploadPanels();
+        bindIdPreviewLightbox();
+    }
+
+    function bindIdPreviewLightbox() {
+        const lightbox = document.getElementById('kkpIdPreviewLightbox');
+        const lightboxImg = document.getElementById('kkpIdPreviewLightboxImg');
+        const zoomLabel = document.getElementById('kkpIdPreviewZoomLabel');
+        const zoomInBtn = document.getElementById('kkpIdPreviewZoomIn');
+        const zoomOutBtn = document.getElementById('kkpIdPreviewZoomOut');
+        const closeBtn = lightbox?.querySelector('.kkp-id-preview-lightbox-close');
+
+        if (!lightbox || !lightboxImg || lightbox.dataset.bound === '1') {
+            return;
+        }
+        lightbox.dataset.bound = '1';
+
+        const MIN_ZOOM = 1;
+        const MAX_ZOOM = 4;
+        const ZOOM_STEP = 0.25;
+        let zoom = MIN_ZOOM;
+        let lastFocus = null;
+
+        function updateZoomUi() {
+            lightboxImg.style.transform = `scale(${zoom})`;
+            if (zoomLabel) {
+                zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
+            }
+            if (zoomOutBtn) {
+                zoomOutBtn.disabled = zoom <= MIN_ZOOM;
+            }
+            if (zoomInBtn) {
+                zoomInBtn.disabled = zoom >= MAX_ZOOM;
+            }
+        }
+
+        function closeLightbox() {
+            lightbox.hidden = true;
+            lightbox.setAttribute('aria-hidden', 'true');
+            lightboxImg.removeAttribute('src');
+            zoom = MIN_ZOOM;
+            updateZoomUi();
+            document.body.classList.remove('kkp-id-preview-open');
+            if (lastFocus && typeof lastFocus.focus === 'function') {
+                lastFocus.focus();
+            }
+            lastFocus = null;
+        }
+
+        function openLightbox(src, altText) {
+            if (!src) {
+                return;
+            }
+
+            lastFocus = document.activeElement;
+            lightboxImg.src = src;
+            lightboxImg.alt = altText || 'Uploaded ID photo';
+            zoom = MIN_ZOOM;
+            updateZoomUi();
+            lightbox.hidden = false;
+            lightbox.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('kkp-id-preview-open');
+            closeBtn?.focus?.();
+        }
+
+        document.addEventListener('click', (event) => {
+            const thumb = event.target.closest?.('[data-kkp-view-preview]');
+            if (!thumb || !root.contains(thumb)) {
+                return;
+            }
+
+            event.preventDefault();
+            const inputId = thumb.getAttribute('data-kkp-view-preview');
+            const img = document.getElementById(`${inputId}PreviewImg`);
+            const src = img?.currentSrc || img?.src || previewUrls[inputId] || '';
+            openLightbox(src, img?.alt || 'Uploaded ID photo');
+        });
+
+        lightbox.querySelectorAll('[data-kkp-preview-close]').forEach((el) => {
+            el.addEventListener('click', (event) => {
+                event.preventDefault();
+                closeLightbox();
+            });
+        });
+
+        zoomInBtn?.addEventListener('click', (event) => {
+            event.preventDefault();
+            zoom = Math.min(MAX_ZOOM, Math.round((zoom + ZOOM_STEP) * 100) / 100);
+            updateZoomUi();
+        });
+
+        zoomOutBtn?.addEventListener('click', (event) => {
+            event.preventDefault();
+            zoom = Math.max(MIN_ZOOM, Math.round((zoom - ZOOM_STEP) * 100) / 100);
+            updateZoomUi();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (lightbox.hidden) {
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeLightbox();
+            } else if (event.key === '+' || event.key === '=') {
+                event.preventDefault();
+                zoom = Math.min(MAX_ZOOM, Math.round((zoom + ZOOM_STEP) * 100) / 100);
+                updateZoomUi();
+            } else if (event.key === '-') {
+                event.preventDefault();
+                zoom = Math.max(MIN_ZOOM, Math.round((zoom - ZOOM_STEP) * 100) / 100);
+                updateZoomUi();
+            }
+        });
+
+        updateZoomUi();
     }
 
     function csrfToken() {
@@ -2153,10 +2376,10 @@
 
             if (autoApproved) {
                 if (titleEl) {
-                    titleEl.textContent = 'Registration Submitted Successfully';
+                    titleEl.textContent = 'Registration Verified!';
                 }
                 if (messageEl) {
-                    messageEl.textContent = 'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.';
+                    messageEl.textContent = 'Your ID address matches your registered barangay. Your account is approved — you can log in now.';
                 }
             } else {
                 if (titleEl) {
@@ -2180,7 +2403,7 @@
     window.kkpShowRegistrationComplete = showRegistrationCompleteState;
 
     async function pollRegistrationCompletion() {
-        if (registrationCompleted) {
+        if (registrationCompleted || !verificationSent) {
             return;
         }
 
@@ -2200,7 +2423,8 @@
             );
             const data = await response.json();
 
-            if (data.completed) {
+            // completed === true only when password_set/active exists in the database
+            if (response.ok && data.completed === true) {
                 registrationAutoApproved = Boolean(data.auto_approved);
                 showRegistrationCompleteState(registrationAutoApproved);
             }
@@ -2210,7 +2434,7 @@
     }
 
     function startRegistrationCompletionPoll() {
-        if (registrationCompleted) {
+        if (registrationCompleted || !verificationSent) {
             return;
         }
 
@@ -2568,20 +2792,23 @@
             const remaining = Math.ceil((until - Date.now()) / 1000);
 
             if (remaining > 0 && window.startResendTimer) {
+                // Resume existing 1-minute cooldown.
                 window.startResendTimer({ seconds: remaining, persist: false });
-            } else if (until > 0 && remaining <= 0) {
-                sessionStorage.removeItem(cooldownKey);
-                enableResendButton();
-            } else if (window.startResendTimer) {
+            } else if (skipAutoSend && window.startResendTimer) {
+                // Just arrived from Upload & Continue after a successful send — start 1-minute countdown.
                 window.startResendTimer();
             } else {
-                lockResendButton();
+                sessionStorage.removeItem(cooldownKey);
+                enableResendButton();
             }
         } else {
-            lockResendButton();
+            // Email not sent yet — keep Resend available so the user can retry.
+            enableResendButton();
         }
 
-        if (!registrationCompleted) {
+        // Only poll for the success modal after the set-password email was sent.
+        // Success appears once password is set and the registration row exists in the DB.
+        if (!registrationCompleted && verificationSent) {
             startRegistrationCompletionPoll();
         }
     }
@@ -2590,6 +2817,8 @@
         const canGoBack = step >= 2;
         const hasSelectedFiles = hasPartialDocumentUpload();
         const analyzing = step === 2 && isOcrAnalysisInProgress();
+        const sameSideBlocked = step === 2 && hasSelectedFiles && hasBlockingOcrError();
+        const navLocked = wizardNavBusy || analyzing || sameSideBlocked;
 
         if (navBar) {
             navBar.hidden = false;
@@ -2599,20 +2828,32 @@
 
         if (backBtn) {
             backBtn.hidden = !canGoBack;
-            backBtn.disabled = !canGoBack || analyzing;
+            backBtn.disabled = !canGoBack || wizardNavBusy || analyzing;
             backBtn.style.display = canGoBack ? '' : 'none';
-            backBtn.title = analyzing ? 'Please wait while your ID is being verified.' : '';
+            backBtn.title = analyzing
+                ? 'Please wait while your ID is being verified.'
+                : (wizardNavBusy ? 'Please wait…' : '');
         }
 
         if (nextBtn) {
             nextBtn.hidden = step === 3;
-            nextBtn.disabled = analyzing;
-            nextBtn.setAttribute('aria-disabled', analyzing ? 'true' : 'false');
-            nextBtn.title = analyzing ? 'Please wait while your ID is being verified.' : '';
+            nextBtn.disabled = navLocked;
+            nextBtn.setAttribute('aria-disabled', navLocked ? 'true' : 'false');
+            nextBtn.title = analyzing
+                ? 'Please wait while your ID is being verified.'
+                : (wizardNavBusy
+                    ? 'Please wait…'
+                    : (sameSideBlocked
+                        ? 'Front and back must be different photos.'
+                        : ''));
         }
 
         if (nextLabelEl) {
-            if (analyzing) {
+            if (wizardNavBusy && step === 2) {
+                nextLabelEl.textContent = hasSelectedFiles ? 'Uploading…' : 'Continuing…';
+            } else if (wizardNavBusy && step === 1) {
+                nextLabelEl.textContent = 'Saving…';
+            } else if (analyzing) {
                 nextLabelEl.textContent = 'Verifying ID…';
             } else if (step === 1) {
                 nextLabelEl.textContent = 'Save & Continue';
@@ -2626,6 +2867,11 @@
         clearAllButtons.forEach((btn) => {
             btn.hidden = registrationCompleted || step !== 1;
         });
+    }
+
+    function setWizardNavBusy(busy) {
+        wizardNavBusy = Boolean(busy);
+        updateNavButtons(currentStep);
     }
 
     async function setStep(step, options = {}) {
@@ -2734,10 +2980,19 @@
         const data = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-            const error = new Error(data.message || 'Request failed.');
+            const error = new Error(
+                data.message
+                || (response.status === 429
+                    ? 'Please wait 1 minute before resending the set-password link.'
+                    : 'Request failed.'),
+            );
             error.errors = data.errors || {};
             error.turnstile_required = Boolean(data.turnstile_required);
             error.payload = data;
+            error.status = response.status;
+            if (response.status === 429 && !error.payload.resend_cooldown_seconds) {
+                error.payload.resend_cooldown_seconds = 60;
+            }
             throw error;
         }
 
@@ -2770,7 +3025,7 @@
     }
 
     async function saveStep1() {
-        if (!form) {
+        if (!form || wizardNavBusy) {
             return false;
         }
 
@@ -2788,6 +3043,8 @@
         if (!valid) {
             return false;
         }
+
+        setWizardNavBusy(true);
 
         try {
             syncHiddenCheckboxFields();
@@ -2813,6 +3070,8 @@
                 alert(error.message);
             }
             return false;
+        } finally {
+            setWizardNavBusy(false);
         }
     }
 
@@ -2830,6 +3089,10 @@
     }
 
     async function saveStep2() {
+        if (wizardNavBusy) {
+            return false;
+        }
+
         hideDocUploadError();
 
         const hasFiles = hasPartialDocumentUpload();
@@ -2839,10 +3102,13 @@
             return false;
         }
 
+        setWizardNavBusy(true);
+
         let turnstileToken = '';
         try {
             turnstileToken = await getStep2TurnstileToken();
         } catch (error) {
+            setWizardNavBusy(false);
             if (error?.message === 'Verification cancelled.') {
                 return false;
             }
@@ -2893,6 +3159,8 @@
                     || error.message;
 
                 showDocUploadError(message);
+            } finally {
+                setWizardNavBusy(false);
             }
 
             return saved;
@@ -2902,6 +3170,7 @@
         const liveFiles = getActiveDocumentFiles();
 
         if (!documentType) {
+            setWizardNavBusy(false);
             showDocUploadError('Please select a document type.');
             return false;
         }
@@ -2965,6 +3234,8 @@
                 showDocUploadError(message);
                 updateNavButtons(currentStep);
                 return false;
+            } finally {
+                setWizardNavBusy(false);
             }
         }
 
@@ -2972,11 +3243,13 @@
         try {
             files = await resolveActiveDocumentFiles();
         } catch (restoreError) {
+            setWizardNavBusy(false);
             showDocUploadError(restoreError?.message || 'Unable to restore the saved ID photo. Please upload again.');
             return false;
         }
 
         if (!documentType) {
+            setWizardNavBusy(false);
             showDocUploadError('Please select a document type.');
             return false;
         }
@@ -2985,27 +3258,52 @@
         const backError = validateDocumentFile(files.back);
 
         if (frontError || backError) {
+            setWizardNavBusy(false);
             showDocUploadError(frontError || backError);
             return false;
         }
 
         const sameSideError = await validateDistinctFrontAndBack(files);
         if (sameSideError) {
+            setWizardNavBusy(false);
             showDocUploadError(sameSideError);
             lastOcrPayload = {
                 success: false,
                 validation_error: true,
+                needs_review: false,
+                verification_status: 'invalid_image',
+                ocr_status: 'invalid_upload',
                 message: sameSideError,
             };
-            renderOcrFields(lastOcrPayload);
+            updateNavButtons(currentStep);
             return false;
         }
 
         try {
+            const beforeCompressKey = documentPairCacheKey(files);
             const compressed = await compressActiveDocumentFiles();
             if (!compressed.front || !compressed.back) {
                 showDocUploadError('Please upload both front and back images of your selected ID.');
                 return false;
+            }
+
+            // Skip second identical-photo scan when compression kept the same files.
+            const afterCompressKey = documentPairCacheKey(compressed);
+            if (afterCompressKey !== beforeCompressKey || !lastDistinctPairOk) {
+                const compressedSameSideError = await validateDistinctFrontAndBack(compressed);
+                if (compressedSameSideError) {
+                    showDocUploadError(compressedSameSideError);
+                    lastOcrPayload = {
+                        success: false,
+                        validation_error: true,
+                        needs_review: false,
+                        verification_status: 'invalid_image',
+                        ocr_status: 'invalid_upload',
+                        message: compressedSameSideError,
+                    };
+                    updateNavButtons(currentStep);
+                    return false;
+                }
             }
 
             const formData = new FormData();
@@ -3070,6 +3368,8 @@
             showDocUploadError(message);
             updateNavButtons(currentStep);
             return false;
+        } finally {
+            setWizardNavBusy(false);
         }
     }
 
@@ -3093,42 +3393,20 @@
     }
 
     async function sendVerificationEmail(isResend) {
+        if (emailVerifyBusy) {
+            return false;
+        }
+
+        emailVerifyBusy = true;
         showEmailStatus('');
+        lockResendButton();
 
         try {
-            let required = root.dataset.turnstileRequired === '1';
-            let turnstileToken = '';
-            try {
-                turnstileToken = await obtainEmailVerifyTurnstileToken(required);
-            } catch (challengeError) {
-                if (challengeError?.message === 'Verification cancelled.') {
-                    return false;
-                }
-                throw challengeError;
-            }
-
+            // No Turnstile / attempt-cap on set-password send/resend — only the 1-minute cooldown.
             const endpoint = isResend ? `${apiBase}/resend-verification` : `${apiBase}/send-verification`;
+            const data = await postJson(endpoint, {});
 
-            let data;
-            try {
-                data = await postJson(endpoint, {
-                    'cf-turnstile-response': turnstileToken,
-                });
-            } catch (error) {
-                if (error.turnstile_required && !required) {
-                    root.dataset.turnstileRequired = '1';
-                    turnstileToken = await obtainEmailVerifyTurnstileToken(true);
-                    data = await postJson(endpoint, {
-                        'cf-turnstile-response': turnstileToken,
-                    });
-                } else {
-                    throw error;
-                }
-            }
-
-            if (typeof data.turnstile_required !== 'undefined') {
-                root.dataset.turnstileRequired = data.turnstile_required ? '1' : '0';
-            }
+            root.dataset.turnstileRequired = '0';
 
             if (data.registration_completed) {
                 showRegistrationCompleteState(Boolean(data.auto_approved));
@@ -3156,44 +3434,77 @@
                 }, 2500);
             }
 
+            const cooldownSeconds = Number(data.resend_cooldown_seconds);
             if (window.startResendTimer) {
-                window.startResendTimer();
+                window.startResendTimer({
+                    seconds: Number.isFinite(cooldownSeconds) && cooldownSeconds > 0
+                        ? Math.ceil(cooldownSeconds)
+                        : 60,
+                });
+            } else {
+                lockResendButton();
             }
+
+            startRegistrationCompletionPoll();
 
             return true;
         } catch (error) {
-            if (error?.message === 'Verification cancelled.') {
-                return false;
-            }
-
-            if (typeof error.turnstile_required !== 'undefined') {
-                root.dataset.turnstileRequired = error.turnstile_required ? '1' : '0';
-            }
-
             if (error.errors?.draft?.[0] && registrationCompleted) {
                 showRegistrationCompleteState(registrationAutoApproved);
                 return false;
             }
 
-            const emailMsg = error.errors?.email?.[0]
-                || error.errors?.['cf-turnstile-response']?.[0]
+            const cooldownSeconds = Number(error.payload?.resend_cooldown_seconds);
+            if (Number.isFinite(cooldownSeconds) && cooldownSeconds > 0 && window.startResendTimer) {
+                showEmailStatus(
+                    error.errors?.email?.[0]
+                        || error.message
+                        || `Please wait ${Math.ceil(cooldownSeconds)} seconds before resending.`,
+                    'error',
+                );
+                window.startResendTimer({ seconds: Math.ceil(cooldownSeconds) });
+                return false;
+            }
+
+            // Never surface Laravel "Too Many Attempts" for this flow — treat as cooldown retry.
+            const rawMsg = error.errors?.email?.[0]
                 || error.errors?.draft?.[0]
                 || error.message
-                || 'Failed to send set password link.';
+                || '';
+            const isTooMany = /too many attempts/i.test(rawMsg);
 
-            showEmailStatus(emailMsg, 'error');
+            if (isTooMany && window.startResendTimer) {
+                showEmailStatus('Please wait 1 minute before resending the set-password link.', 'error');
+                window.startResendTimer({ seconds: 60 });
+                return false;
+            }
+
+            showEmailStatus(rawMsg || 'Failed to send set password link.', 'error');
             enableResendButton();
 
             return false;
+        } finally {
+            emailVerifyBusy = false;
         }
     }
 
     window.kkpWizardSendVerification = sendVerificationEmail;
 
     async function handleNext() {
+        if (wizardNavBusy) {
+            return;
+        }
+
         if (currentStep === 2 && isOcrAnalysisInProgress()) {
             showDocUploadError('Please wait — your ID is still being verified.');
             ocrPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+        }
+
+        if (currentStep === 2 && hasBlockingOcrError()) {
+            const message = lastOcrPayload?.message
+                || 'Front and back must be different photos. You uploaded the same image for both sides. Please upload the real front and the real back of your ID.';
+            showDocUploadError(message);
             return;
         }
 
@@ -3306,6 +3617,60 @@
             form.reset();
         }
 
+        // Remove leftover required/invalid messages from a failed Save & Continue.
+        // Do not alter Sex / Age / Birthday / Email / Contact markup — only clear errors.
+        if (typeof window.clearKkProfilingValidationUi === 'function') {
+            window.clearKkProfilingValidationUi(form || document);
+        } else {
+            document.querySelectorAll('.kkp-field-error, .kkp-demo-block-error, .kkp-section-error, .kkp-name-max-hint').forEach((el) => el.remove());
+            document.querySelectorAll('.kkp-input-err, .kkp-input-error, .is-invalid, .is-error').forEach((el) => {
+                el.classList.remove('kkp-input-err', 'kkp-input-error', 'is-invalid', 'is-error');
+            });
+        }
+
+        const contactInput = document.getElementById('kkpContactNumber');
+        if (contactInput && (!contactInput.value || contactInput.value === '')) {
+            contactInput.value = '09';
+        }
+
+        const ageSelect = document.getElementById('kkpAge');
+        if (ageSelect && !ageSelect.value) {
+            ageSelect.selectedIndex = 0;
+        }
+
+        // Force Suffix back to None after Clear All (form.reset alone can leave Others UI open).
+        const suffixSelect = document.getElementById('kkpSuffix');
+        const customSuffixInput = document.getElementById('kkpCustomSuffix');
+        const customSuffixWrap = document.getElementById('kkpCustomSuffixWrap');
+        if (suffixSelect) {
+            Array.from(suffixSelect.options).forEach((option) => {
+                option.selected = option.value === 'None';
+            });
+            suffixSelect.value = 'None';
+            suffixSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (customSuffixInput) {
+            customSuffixInput.value = '';
+            customSuffixInput.required = false;
+            customSuffixInput.classList.remove('kkp-input-err', 'kkp-input-error', 'is-invalid', 'is-error');
+        }
+        if (customSuffixWrap) {
+            customSuffixWrap.classList.remove('show');
+        }
+
+        const emailInput = document.getElementById('kkpEmail');
+        if (emailInput) {
+            delete emailInput.dataset.emailExists;
+        }
+
+        if (typeof window.kkpRefreshSignatureName === 'function') {
+            window.kkpRefreshSignatureName();
+        }
+
+        if (typeof window.syncAssemblyFollowUp === 'function') {
+            window.syncAssemblyFollowUp();
+        }
+
         clearAllDocumentInputs();
         hideDocUploadError();
 
@@ -3325,8 +3690,32 @@
             sigInput.value = '';
         }
 
-        if (typeof window.kkpRestoreSignaturePreview === 'function') {
+        if (typeof window.kkpClearSavedSignature === 'function') {
+            window.kkpClearSavedSignature();
+        } else if (typeof window.kkpRestoreSignaturePreview === 'function') {
             window.kkpRestoreSignaturePreview('');
+        }
+
+        const clearSavedBtn = document.getElementById('kkpSignatureClearSaved');
+        if (clearSavedBtn) {
+            clearSavedBtn.hidden = true;
+        }
+
+        const sigPreview = document.getElementById('kkpSignaturePreview');
+        if (sigPreview) {
+            sigPreview.removeAttribute('src');
+        }
+
+        const sigOverlay = document.getElementById('kkpSignatureOverlay');
+        if (sigOverlay) {
+            sigOverlay.style.display = 'none';
+        }
+
+        const sigStatus = document.getElementById('kkpSignatureStatus');
+        if (sigStatus) {
+            sigStatus.textContent = '';
+            sigStatus.hidden = true;
+            sigStatus.classList.remove('is-invalid', 'is-valid');
         }
 
         if (displayEmail) {
@@ -3374,8 +3763,16 @@
             return;
         }
 
+        const originalConfirmLabel = clearDraftConfirmBtn?.textContent?.trim() || 'Clear All Data';
+
         if (clearDraftConfirmBtn) {
             clearDraftConfirmBtn.disabled = true;
+            clearDraftConfirmBtn.textContent = 'Clearing data…';
+            clearDraftConfirmBtn.setAttribute('aria-busy', 'true');
+        }
+
+        if (clearDraftCancelBtn) {
+            clearDraftCancelBtn.disabled = true;
         }
 
         try {
@@ -3388,6 +3785,11 @@
         } finally {
             if (clearDraftConfirmBtn) {
                 clearDraftConfirmBtn.disabled = false;
+                clearDraftConfirmBtn.textContent = originalConfirmLabel;
+                clearDraftConfirmBtn.removeAttribute('aria-busy');
+            }
+            if (clearDraftCancelBtn) {
+                clearDraftCancelBtn.disabled = false;
             }
         }
     }

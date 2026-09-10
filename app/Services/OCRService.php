@@ -812,10 +812,10 @@ class OCRService
         ?string $documentType = null,
         array $registrationFields = [],
     ): array {
-        $frontPath = $front->getRealPath();
-        $backPath = $back->getRealPath();
+        $frontPath = $front->getRealPath() ?: $front->getPathname();
+        $backPath = $back->getRealPath() ?: $back->getPathname();
 
-        if (! is_string($frontPath) || ! is_string($backPath)) {
+        if (! is_string($frontPath) || ! is_string($backPath) || ! is_file($frontPath) || ! is_file($backPath)) {
             return [
                 'success' => false,
                 'validation_error' => true,

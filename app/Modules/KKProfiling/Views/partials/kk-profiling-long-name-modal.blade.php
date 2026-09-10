@@ -17,23 +17,23 @@
                 <p>You have entered more than 50 characters. Are you sure you want to proceed and add more characters to your legal name?</p>
                 <p>Maximum allowed is 150 characters.</p>
                 <label class="kkp-long-name-confirm-label" for="kkpLongNameConfirmInput">
-                    Type <strong>yes</strong> to continue <span class="kkp-required" aria-hidden="true">*</span>
+                    Type <strong>YES</strong> to continue <span class="kkp-required" aria-hidden="true">*</span>
                 </label>
                 <input
                     type="text"
                     id="kkpLongNameConfirmInput"
                     class="kkp-long-name-confirm-input"
                     autocomplete="off"
-                    autocapitalize="none"
+                    autocapitalize="characters"
                     spellcheck="false"
-                    placeholder="yes"
+                    placeholder="YES"
                     maxlength="3"
                     required
                     aria-required="true"
                     aria-describedby="kkpLongNameConfirmHint"
                 >
                 <p class="kkp-long-name-confirm-hint" id="kkpLongNameConfirmHint" hidden role="alert">
-                    This field is required. Please type <strong>yes</strong> exactly to continue.
+                    This field is required. Please type <strong>YES</strong> exactly to continue.
                 </p>
             </section>
         </div>

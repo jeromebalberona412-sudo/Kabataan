@@ -198,7 +198,14 @@
                         </span>
                     </label>
                     <div class="kkp-wizard-dropzone-preview" id="{{ $inputId }}Preview" hidden>
-                        <img id="{{ $inputId }}PreviewImg" alt="{{ $doc['label'] }} {{ strtolower($sideLabel) }} preview">
+                        <button
+                            type="button"
+                            class="kkp-wizard-preview-thumb"
+                            data-kkp-view-preview="{{ $inputId }}"
+                            aria-label="View {{ $sideLabel }} ID photo"
+                        >
+                            <img id="{{ $inputId }}PreviewImg" alt="{{ $doc['label'] }} {{ strtolower($sideLabel) }} preview">
+                        </button>
                         <div class="kkp-wizard-dropzone-filemeta">
                             <span class="kkp-wizard-dropzone-filename" id="{{ $inputId }}FileName"></span>
                             <div class="kkp-wizard-dropzone-actions">
@@ -333,7 +340,14 @@
                         </span>
                     </label>
                     <div class="kkp-wizard-dropzone-preview" id="kkpSelfiePreview" hidden>
-                        <img id="kkpSelfiePreviewImg" alt="Selfie preview">
+                        <button
+                            type="button"
+                            class="kkp-wizard-preview-thumb"
+                            data-kkp-view-preview="kkpSelfie"
+                            aria-label="View selfie photo"
+                        >
+                            <img id="kkpSelfiePreviewImg" alt="Selfie preview">
+                        </button>
                         <div class="kkp-wizard-dropzone-filemeta">
                             <span class="kkp-wizard-dropzone-filename" id="kkpSelfieFileName"></span>
                             <button type="button" class="kkp-wizard-dropzone-remove" data-clear-input="kkpSelfie" aria-label="Remove selfie image">Remove</button>
@@ -343,5 +357,25 @@
             </div>
         </div>
 
+    </div>
+
+    <div
+        class="kkp-id-preview-lightbox"
+        id="kkpIdPreviewLightbox"
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-label="ID photo viewer"
+    >
+        <button type="button" class="kkp-id-preview-lightbox-backdrop" data-kkp-preview-close aria-label="Close image viewer"></button>
+        <button type="button" class="kkp-id-preview-lightbox-close" data-kkp-preview-close aria-label="Close">×</button>
+        <div class="kkp-id-preview-lightbox-toolbar" role="toolbar" aria-label="Zoom controls">
+            <button type="button" class="kkp-id-preview-lightbox-tool" id="kkpIdPreviewZoomOut" aria-label="Zoom out">−</button>
+            <span class="kkp-id-preview-lightbox-zoom-label" id="kkpIdPreviewZoomLabel">100%</span>
+            <button type="button" class="kkp-id-preview-lightbox-tool" id="kkpIdPreviewZoomIn" aria-label="Zoom in">+</button>
+        </div>
+        <div class="kkp-id-preview-lightbox-stage" id="kkpIdPreviewLightboxStage">
+            <img id="kkpIdPreviewLightboxImg" alt="Uploaded ID photo">
+        </div>
     </div>
 </section>

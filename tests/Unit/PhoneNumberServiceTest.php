@@ -26,6 +26,17 @@ class PhoneNumberServiceTest extends TestCase
         $this->assertSame($expected, $this->service->normalize('09-171-234-567'));
     }
 
+    public function test_to_local_mobile_stores_09_format_only(): void
+    {
+        $expected = '09171234567';
+
+        $this->assertSame($expected, $this->service->toLocalMobile('09171234567'));
+        $this->assertSame($expected, $this->service->toLocalMobile('+639171234567'));
+        $this->assertSame($expected, $this->service->toLocalMobile('639171234567'));
+        $this->assertSame($expected, $this->service->toLocalMobile('09 171 234 567'));
+        $this->assertNull($this->service->toLocalMobile('123'));
+    }
+
     public function test_rejects_invalid_inputs(): void
     {
         foreach (['', '123', 'abc', '09111111', '091111111', '0911111111', '091111111111'] as $input) {

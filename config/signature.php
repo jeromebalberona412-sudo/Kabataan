@@ -78,7 +78,7 @@ return [
         'too_big_dims' => 'Signature image is too large to process.',
         'non_white_bg' => 'Please upload an image with a plain white background.',
         'blank' => 'Please upload an image containing visible text or a signature.',
-        'name_required' => 'Name and Signature of Participant is required.',
+        'name_required' => 'Name of Participant is required.',
         'name_max' => 'Participant name must not exceed 255 characters.',
     ],
 ];

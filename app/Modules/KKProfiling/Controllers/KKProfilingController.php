@@ -210,26 +210,27 @@ class KKProfilingController extends Controller
             : $draftService->resolveCompletedRegistration((int) $barangayRecord->id);
 
         if ($completedSession) {
-            $registrationComplete = true;
-            $completedEmail = $completedSession['email'];
-
             $registration = KabataanRegistration::query()
                 ->where('barangay_id', $barangayRecord->id)
-                ->where('email', strtolower(trim($completedSession['email'])))
+                ->where('email', strtolower(trim((string) ($completedSession['email'] ?? ''))))
                 ->whereIn('status', ['password_set', 'active'])
                 ->latest('id')
                 ->first();
 
-            $registrationAutoApproved = $registration
-                ? RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status)
-                : (bool) ($completedSession['auto_approved'] ?? false);
-
-            if ($registration && $registrationAutoApproved) {
+            // Success UI only after password was set and the row exists in the database.
+            if ($registration) {
+                $registrationComplete = true;
+                $completedEmail = $completedSession['email'];
+                $registrationAutoApproved = RegistrationEvaluationService::isAutoApprovedStatus(
+                    $registration->evaluation_status
+                );
                 $draftService->markRegistrationComplete(
                     (string) $completedSession['email'],
                     (int) $barangayRecord->id,
                     $registration,
                 );
+            } else {
+                $draftService->clearCompletedRegistration();
             }
         }
 
@@ -359,13 +360,13 @@ class KKProfilingController extends Controller
             'signature.required' => config('signature.messages.required'),
         ] + ValidEmailAddress::profilingMessages());
 
-        $canonicalContact = app(PhoneNumberService::class)->normalize($validated['contact_number'] ?? null);
-        if ($canonicalContact === null) {
+        $localContact = app(PhoneNumberService::class)->toLocalMobile($validated['contact_number'] ?? null);
+        if ($localContact === null) {
             return $this->updateErrorResponse($request, [
                 'contact_number' => PhoneNumberService::MSG_INVALID,
             ]);
         }
-        $validated['contact_number'] = $canonicalContact;
+        $validated['contact_number'] = $localContact;
 
         $this->normalizeProfilingSuffix($validated);
 
@@ -700,13 +701,13 @@ class KKProfilingController extends Controller
             'signature.required' => config('signature.messages.required'),
         ] + ValidEmailAddress::profilingMessages());
 
-        $canonicalContact = app(PhoneNumberService::class)->normalize($validated['contact_number'] ?? null);
-        if ($canonicalContact === null) {
+        $localContact = app(PhoneNumberService::class)->toLocalMobile($validated['contact_number'] ?? null);
+        if ($localContact === null) {
             return $this->submitErrorResponse($request, [
                 'contact_number' => PhoneNumberService::MSG_INVALID,
             ]);
         }
-        $validated['contact_number'] = $canonicalContact;
+        $validated['contact_number'] = $localContact;
 
         if (($validated['suffix'] ?? null) === 'Others') {
             $customSuffix = trim((string) ($validated['custom_suffix'] ?? ''));
@@ -801,7 +802,7 @@ class KKProfilingController extends Controller
 
         if ($approvedRegistration) {
             return $this->submitErrorResponse($request, [
-                'email' => 'This email already has an approved KK Profiling record.',
+                'email' => 'This email is already taken. Please use another email.',
             ]);
         }
 
@@ -932,7 +933,7 @@ class KKProfilingController extends Controller
             $isPending = in_array($activeRegistration->status, ['pending_verification', 'password_set', 'pending', 'email_verified'], true);
             $msg = $isPending
                 ? 'You already have a KK Profiling application under review. Please wait for the SK Official\'s review.'
-                : 'This email is already registered. Please use a different email address.';
+                : 'This email is already taken. Please use another email.';
 
             return response()->json([
                 'exists' => true,
@@ -960,7 +961,7 @@ class KKProfilingController extends Controller
 
         return response()->json([
             'exists' => $existingApprovedUser,
-            'message' => $existingApprovedUser ? 'This email already exists. Please use a different email address.' : null,
+            'message' => $existingApprovedUser ? 'This email is already taken. Please use another email.' : null,
         ]);
     }
 

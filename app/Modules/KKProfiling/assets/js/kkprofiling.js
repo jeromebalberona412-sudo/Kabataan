@@ -74,8 +74,23 @@ function kkpValidateFirstName(value, touched) {
 
 let kkpNameMeasureEl = null;
 let kkpNameMaxHintTimers = new WeakMap();
-let kkpLongNameAllowed = false;
+const kkpLongNameAllowedByField = new WeakMap();
 let kkpPendingLongName = null;
+
+function kkpIsLongNameAllowed(el) {
+    return el ? kkpLongNameAllowedByField.get(el) === true : false;
+}
+
+function kkpSetLongNameAllowed(el, allowed) {
+    if (!el) {
+        return;
+    }
+    if (allowed) {
+        kkpLongNameAllowedByField.set(el, true);
+    } else {
+        kkpLongNameAllowedByField.delete(el);
+    }
+}
 
 function kkpGetNameMeasureEl() {
     if (!kkpNameMeasureEl) {
@@ -504,7 +519,25 @@ function kkpValidateContact(value, requireEmpty) {
         }
     }
 
+    function clearKkProfilingValidationUi(rootEl) {
+        const scope = rootEl && rootEl.querySelectorAll ? rootEl : document;
+        scope.querySelectorAll('.kkp-field-error, .kkp-demo-block-error, .kkp-section-error, .kkp-name-max-hint').forEach((node) => {
+            node.remove();
+        });
+        scope.querySelectorAll('.kkp-input-err, .kkp-input-error, .is-invalid, .is-error').forEach((el) => {
+            el.classList.remove('kkp-input-err', 'kkp-input-error', 'is-invalid', 'is-error');
+        });
+        const sigStatus = document.getElementById('kkpSignatureStatus');
+        if (sigStatus) {
+            sigStatus.classList.remove('is-invalid', 'is-valid');
+            if (!(sigStatus.textContent || '').trim()) {
+                sigStatus.hidden = true;
+            }
+        }
+    }
+
     window.showFieldError = showFieldError;
+    window.clearKkProfilingValidationUi = clearKkProfilingValidationUi;
 
     // ── Navigation Drawer ──
     const navHamburger = document.getElementById('navHamburger');
@@ -722,12 +755,12 @@ function kkpValidateContact(value, requireEmpty) {
     function syncLongNameConfirmFromTypedYes(options = {}) {
         const showRequiredOnEmpty = !!options.showRequiredOnEmpty;
         const input = document.getElementById('kkpLongNameConfirmInput');
-        const typed = (input?.value || '').trim().toLowerCase();
-        const ok = typed === 'yes';
+        const typed = (input?.value || '').trim().toUpperCase();
+        const ok = typed === 'YES';
 
         if (typed === '') {
             if (showRequiredOnEmpty) {
-                setLongNameConfirmError('This field is required. Please type <strong>yes</strong> exactly to continue.');
+                setLongNameConfirmError('This field is required. Please type <strong>YES</strong> exactly to continue.');
             } else {
                 clearLongNameConfirmError();
             }
@@ -735,7 +768,7 @@ function kkpValidateContact(value, requireEmpty) {
         }
 
         if (!ok) {
-            setLongNameConfirmError('Please type <strong>yes</strong> exactly to continue.');
+            setLongNameConfirmError('Please type <strong>YES</strong> exactly to continue.');
             return false;
         }
 
@@ -746,7 +779,7 @@ function kkpValidateContact(value, requireEmpty) {
     function openLongNameModal(el, nextValue, caret) {
         const modal = document.getElementById('kkpLongNameModal');
         if (!modal) {
-            kkpLongNameAllowed = true;
+            kkpSetLongNameAllowed(el, true);
             el.value = nextValue.slice(0, KKP_NAME_MAX_CHARS);
             kkpSyncNameMaxIndicator(el);
             return;
@@ -780,7 +813,7 @@ function kkpValidateContact(value, requireEmpty) {
             return;
         }
 
-        kkpLongNameAllowed = true;
+        kkpSetLongNameAllowed(kkpPendingLongName.el, true);
         const { el, value, caret } = kkpPendingLongName;
         el.value = value;
         const pos = Math.min(caret ?? value.length, value.length);
@@ -798,6 +831,7 @@ function kkpValidateContact(value, requireEmpty) {
     function cancelLongNameModal() {
         if (kkpPendingLongName?.el) {
             const el = kkpPendingLongName.el;
+            kkpSetLongNameAllowed(el, false);
             el.value = el.value.slice(0, KKP_NAME_SOFT_MAX);
             try {
                 el.setSelectionRange(KKP_NAME_SOFT_MAX, KKP_NAME_SOFT_MAX);
@@ -811,9 +845,17 @@ function kkpValidateContact(value, requireEmpty) {
     }
 
     document.getElementById('kkpLongNameConfirmInput')?.addEventListener('input', function () {
-        // Hard cap at 3 characters (yes).
-        if (this.value.length > 3) {
-            this.value = this.value.slice(0, 3);
+        // Hard cap at 3 characters (YES) and force uppercase.
+        const start = this.selectionStart;
+        const upper = String(this.value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+        if (this.value !== upper) {
+            this.value = upper;
+            try {
+                const pos = Math.min(start ?? upper.length, upper.length);
+                this.setSelectionRange(pos, pos);
+            } catch (_e) {
+                // ignore
+            }
         }
         syncLongNameConfirmFromTypedYes();
     });
@@ -857,7 +899,11 @@ function kkpValidateContact(value, requireEmpty) {
                 return;
             }
 
-            if (!kkpLongNameAllowed && next.length > KKP_NAME_SOFT_MAX) {
+            if (next.length <= KKP_NAME_SOFT_MAX) {
+                kkpSetLongNameAllowed(this, false);
+            }
+
+            if (!kkpIsLongNameAllowed(this) && next.length > KKP_NAME_SOFT_MAX) {
                 this.value = next.slice(0, KKP_NAME_SOFT_MAX);
                 openLongNameModal(this, next, caret);
                 kkpFitNameInputFont(this);
@@ -1183,7 +1229,7 @@ function kkpValidateContact(value, requireEmpty) {
                     }
                     if (!isWizardForm && result.exists) {
                         emailInput.dataset.emailExists = 'true';
-                        showFieldError(emailInput, result.message || 'This email already exists. Please use a different email address.');
+                        showFieldError(emailInput, result.message || 'This email is already taken. Please use another email.');
                     } else {
                         delete emailInput.dataset.emailExists;
                         clearFieldError(emailInput);
@@ -1567,8 +1613,8 @@ window.validateKkProfilingForm = async function (options = {}) {
         const originalEmail = (window.__KK_PROFILING_ORIGINAL_EMAIL || email?.dataset?.originalEmail || '').trim().toLowerCase();
         const emailUnchanged = originalEmail && (email?.value || '').trim().toLowerCase() === originalEmail;
         if (!skipEmailExistenceCheck && !emailUnchanged && email?.dataset.emailExists === 'true') {
-            errors.push('This email already exists. Please use a different email address.');
-            fieldError(email, 'This email already exists. Please use a different email address.');
+            errors.push('This email is already taken. Please use another email.');
+            fieldError(email, 'This email is already taken. Please use another email.');
         }
     }
 
@@ -1645,14 +1691,14 @@ window.validateKkProfilingForm = async function (options = {}) {
     const sigName = document.getElementById('kkpSignatureName');
     const sigNameVal = (sigName?.value || '').trim();
     if (!sigNameVal) {
-        errors.push('Name and Signature of Participant is required.');
+        errors.push('Name of Participant is required.');
         const sigSection = document.querySelector('.kkp-sig-section-left');
         if (sigSection) {
             let err = sigSection.querySelector('.kkp-field-error');
             if (!err) {
                 err = document.createElement('span');
                 err.className = 'kkp-field-error';
-                err.textContent = 'Name and Signature of Participant is required.';
+                err.textContent = 'Name of Participant is required.';
                 sigSection.appendChild(err);
             }
         }
@@ -1723,7 +1769,7 @@ window.validateKkProfilingForm = async function (options = {}) {
             }
             if (emailCheckResult.exists) {
                 emailField.dataset.emailExists = 'true';
-                fieldError(emailField, emailCheckResult.message || 'This email already exists. Please use a different email address.');
+                fieldError(emailField, emailCheckResult.message || 'This email is already taken. Please use another email.');
                 emailField.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
             }
@@ -2044,18 +2090,27 @@ function showEmailVerification(email) {
     const resendEmailBtn = document.getElementById('resendEmailBtn');
     if (resendEmailBtn) {
         resendEmailBtn.addEventListener('click', async function () {
-            if (this.disabled || document.body.classList.contains('kkp-wizard-registration-complete')) {
+            const btn = this;
+
+            if (btn.disabled || document.body.classList.contains('kkp-wizard-registration-complete')) {
                 return;
             }
 
             const wizardRoot = document.getElementById('kkpRegistrationWizard');
 
             if (wizardRoot && typeof window.kkpWizardSendVerification === 'function') {
-                await window.kkpWizardSendVerification(true);
+                btn.disabled = true;
+                try {
+                    await window.kkpWizardSendVerification(true);
+                } catch (_err) {
+                    // sendVerificationEmail handles enable/lock and status messages
+                    if (!document.body.classList.contains('kkp-wizard-registration-complete')) {
+                        btn.disabled = false;
+                    }
+                }
                 return;
             }
 
-            const btn = this;
             const displayEmail = document.getElementById('displayEmail');
             const email = (displayEmail && displayEmail.textContent.trim()) || '';
             const form = document.getElementById('kkProfilingForm');
@@ -2168,6 +2223,7 @@ function showEmailVerification(email) {
     }
 
     if (document.body.dataset.registrationAlreadyComplete === '1') {
+        // Already stored in DB after a successful password set — show success only then.
         showSuccessModal(
             'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.',
             document.body.dataset.autoApproved === '1',
@@ -2187,11 +2243,86 @@ function showEmailVerification(email) {
     const confirmPasswordError = document.getElementById('confirmPasswordError');
     const submitBtn = document.getElementById('setpwSubmitBtn');
     const finalizeUrl = form.dataset.finalizeUrl || '';
+    const linkStatusUrl = form.dataset.linkStatusUrl || '';
+    const emailHash = form.dataset.emailHash || '';
     const isWizardToken = Boolean(form.dataset.wizardToken);
     const isAccountInvite = form.dataset.accountInvite === '1';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     const originalBtnText = submitBtn?.querySelector('.setpw-btn-text')?.textContent?.trim()
         || (isAccountInvite ? 'Activate Account' : 'Complete Registration');
+    let setPasswordBusy = false;
+    let registrationFinished = false;
+    let linkSuperseded = false;
+    let linkStatusPollTimer = null;
+
+    function disableSetPasswordForm(message) {
+        linkSuperseded = true;
+        if (passwordInput) {
+            passwordInput.disabled = true;
+        }
+        if (confirmInput) {
+            confirmInput.disabled = true;
+        }
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+        if (message) {
+            setFieldError(passwordInput, passwordError, message);
+        }
+    }
+
+    async function checkSetPasswordLinkStatus() {
+        if (!isWizardToken || !linkStatusUrl || !emailHash || registrationFinished || linkSuperseded) {
+            return;
+        }
+
+        try {
+            const url = linkStatusUrl + (linkStatusUrl.includes('?') ? '&' : '?')
+                + 'hash=' + encodeURIComponent(emailHash);
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                cache: 'no-store',
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (data.completed) {
+                registrationFinished = true;
+                if (linkStatusPollTimer) {
+                    clearInterval(linkStatusPollTimer);
+                    linkStatusPollTimer = null;
+                }
+                showSuccessModal(
+                    data.message
+                        || 'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.',
+                    Boolean(data.auto_approved),
+                );
+                return;
+            }
+
+            if (data.expired || data.valid === false) {
+                if (linkStatusPollTimer) {
+                    clearInterval(linkStatusPollTimer);
+                    linkStatusPollTimer = null;
+                }
+                disableSetPasswordForm(
+                    data.message
+                        || 'This set-password link has expired because a newer email was sent. Please open the latest set-password email.',
+                );
+            }
+        } catch {
+            // Ignore transient network errors; next poll retries.
+        }
+    }
+
+    if (isWizardToken && linkStatusUrl && emailHash) {
+        checkSetPasswordLinkStatus();
+        linkStatusPollTimer = setInterval(checkSetPasswordLinkStatus, 4000);
+    }
 
     function syncPasswordEyeToggle(btn, input) {
         const isVisible = input.type === 'text';
@@ -2293,6 +2424,11 @@ function showEmailVerification(email) {
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
+
+        if (setPasswordBusy || registrationFinished || linkSuperseded) {
+            return;
+        }
+
         clearErrors();
 
         const password = passwordInput?.value || '';
@@ -2324,6 +2460,16 @@ function showEmailVerification(email) {
             return;
         }
 
+        if (isWizardToken && !emailHash) {
+            setFieldError(
+                passwordInput,
+                passwordError,
+                'Invalid set-password link. Please open the link from your email again.',
+            );
+            return;
+        }
+
+        setPasswordBusy = true;
         const btnText = submitBtn?.querySelector('.setpw-btn-text');
         if (submitBtn) submitBtn.disabled = true;
         if (btnText) btnText.textContent = isAccountInvite ? 'Activating account...' : 'Completing registration...';
@@ -2334,16 +2480,12 @@ function showEmailVerification(email) {
                 try {
                     turnstileToken = await window.kabataanTurnstileChallenge();
                 } catch {
-                    if (submitBtn) submitBtn.disabled = false;
-                    if (btnText) btnText.textContent = originalBtnText;
                     return;
                 }
             } else if (window.KabataanTurnstileGate?.challenge) {
                 try {
                     turnstileToken = await window.KabataanTurnstileGate.challenge();
                 } catch {
-                    if (submitBtn) submitBtn.disabled = false;
-                    if (btnText) btnText.textContent = originalBtnText;
                     return;
                 }
             }
@@ -2362,6 +2504,7 @@ function showEmailVerification(email) {
                     body: JSON.stringify({
                         password,
                         password_confirmation: confirmation,
+                        email_hash: emailHash,
                         'cf-turnstile-response': turnstileToken,
                     }),
                 });
@@ -2383,7 +2526,13 @@ function showEmailVerification(email) {
 
             const data = await response.json().catch(() => ({}));
 
-            if (response.ok) {
+            // Success modal only after server confirms DB commit / password set.
+            if (response.ok && (data.success || data.registration_completed || data.activated)) {
+                registrationFinished = true;
+                if (linkStatusPollTimer) {
+                    clearInterval(linkStatusPollTimer);
+                    linkStatusPollTimer = null;
+                }
                 showSuccessModal(
                     data.message || (isAccountInvite
                         ? 'Your email and password have been saved to your KK Profiling record. You can now sign in.'
@@ -2404,7 +2553,12 @@ function showEmailVerification(email) {
                 errorMessage = Object.values(data.errors).flat().join(' ');
             }
 
-            setFieldError(passwordInput, passwordError, errorMessage);
+            const expiredLink = /expired|newer email|latest set-password/i.test(errorMessage);
+            if (expiredLink) {
+                disableSetPasswordForm(errorMessage);
+            } else {
+                setFieldError(passwordInput, passwordError, errorMessage);
+            }
         } catch {
             setFieldError(
                 passwordInput,
@@ -2414,8 +2568,11 @@ function showEmailVerification(email) {
                     : 'Unable to complete registration. Please check your connection and try again.',
             );
         } finally {
-            if (submitBtn) submitBtn.disabled = false;
-            if (btnText) btnText.textContent = originalBtnText;
+            setPasswordBusy = false;
+            if (!registrationFinished) {
+                if (submitBtn) submitBtn.disabled = false;
+                if (btnText) btnText.textContent = originalBtnText;
+            }
         }
     });
 })();
@@ -2989,8 +3146,11 @@ function showEmailVerification(email) {
     if (saveBtn) saveBtn.addEventListener('click', saveSig);
     if (clearSavedBtn) clearSavedBtn.addEventListener('click', clearSavedSignature);
 
+    window.kkpClearSavedSignature = clearSavedSignature;
+
     window.kkpRestoreSignaturePreview = function (dataUrl) {
         if (!dataUrl || !sigInput) {
+            clearSavedSignature();
             return;
         }
         // Restore from draft — do not re-trigger autosave.

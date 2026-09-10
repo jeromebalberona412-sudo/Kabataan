@@ -601,19 +601,41 @@
     overflow: hidden;
 }
 
-/* â”€â”€ Set Password standalone page (login-style) â”€â”€ */
+/* ── Set Password standalone page (login-style) ── */
+/* Override sign-in.css html/body overflow:hidden so tall content can scroll. */
+html:has(body.kkp-setpw-page) {
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+body.kkp-setpw-page.youth-signin-page,
+body.kkp-setpw-page {
+    height: auto;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+body.kkp-setpw-page .youth-signin-container {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+}
+
+body.kkp-setpw-page .youth-signin-section,
+body.kkp-setpw-page .youth-branding-section,
+body.kkp-setpw-page .youth-signin-card {
+    overflow: visible;
+}
+
 .kkp-setpw-page .logo-wrapper::before {
     display: block;
 }
 
-.kkp-setpw-page .kkp-setpw-logo {
-    width: 220px;
-    height: 220px;
+/* Keep sign-in logo look; only light set-password extras below */
+.kkp-setpw-page .youth-logo {
     object-fit: cover;
-    border-radius: 50%;
-    border: 4px solid rgba(253, 192, 32, 0.6);
-    background: #fff;
-    filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.4));
 }
 
 .kkp-setpw-form .kkp-setpw-field {
@@ -622,14 +644,12 @@
 
 .kkp-setpw-form .kkp-setpw-field--confirm {
     margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
 }
 
-.kkp-setpw-page .youth-main-title {
-    white-space: nowrap;
-}
-
-.kkp-setpw-page .youth-tagline {
-    white-space: nowrap;
+.kkp-setpw-form .youth-submit-btn,
+.kkp-setpw-page .youth-submit-btn {
+    margin-top: 1.75rem;
 }
 
 .kkp-setpw-page .card-helper-text {
@@ -653,15 +673,15 @@
 }
 
 .kkp-setpw-branding-sub {
-    margin-top: 0.75rem;
-    font-size: 1.1rem;
-    color: rgba(255, 255, 255, 0.9);
+    margin-top: 0.85rem;
+    font-size: 1.15rem;
+    color: rgba(255, 255, 255, 0.92);
     font-weight: 600;
 }
 
 .kkp-setpw-card {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .kkp-setpw-card::before {
@@ -673,8 +693,8 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    margin: 0 0 1.25rem;
-    padding: 0.75rem 1rem;
+    margin: 0 0 1.15rem;
+    padding: 0.7rem 1rem;
     border-radius: 10px;
     background: #f0f7ff;
     border: 1px solid #cfe0f5;
@@ -689,6 +709,12 @@
     height: 18px;
     flex-shrink: 0;
     color: #0450a8;
+}
+
+@media (max-width: 768px) {
+    .kkp-setpw-branding-sub {
+        font-size: 1rem;
+    }
 }
 
 .kkp-setpw-alert {
@@ -733,33 +759,42 @@
     color: #64748b;
     margin: 0;
     position: relative;
-    padding-left: 1.2rem;
+    padding-left: 1.35rem;
     font-weight: 500;
+    transition: color 0.18s ease;
 }
 
 .kkp-setpw-page .pw-rule::before {
     content: '';
     position: absolute;
     left: 0;
-    top: 0.28rem;
-    width: 0.7rem;
-    height: 0.7rem;
+    top: 0.22rem;
+    width: 0.85rem;
+    height: 0.85rem;
     border: 1.5px solid #cbd5e1;
     border-radius: 50%;
     background: #fff;
     box-sizing: border-box;
+    transition: background 0.18s ease, border-color 0.18s ease;
 }
 
 .kkp-setpw-page .pw-rule.ok {
-    color: #0450a8;
+    color: #16a34a;
     font-weight: 600;
 }
 
 .kkp-setpw-page .pw-rule.ok::before {
-    content: '';
-    border-color: #0450a8;
-    background: #0450a8;
-    box-shadow: inset 0 0 0 1.5px #fff;
+    content: '✓';
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-color: #16a34a;
+    background: #16a34a;
+    color: #fff;
+    box-shadow: none;
+    font-size: 0.58rem;
+    font-weight: 700;
+    line-height: 1;
 }
 
 .kkp-setpw-field-error {
@@ -799,12 +834,6 @@
 .kkp-setpw-toggle .pw-eye {
     width: 20px;
     height: 20px;
-}
-
-@media (max-width: 640px) {
-    .kkp-setpw-page .youth-tagline {
-        white-space: normal;
-    }
 }
 
 @media (max-width: 600px) {
