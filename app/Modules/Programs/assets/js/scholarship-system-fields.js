@@ -750,6 +750,7 @@
                             </label>
                         `).join('')}
                     </div>
+                    <p class="sch-field-inline-error" hidden></p>
                 </div>`;
         }
 
@@ -1114,15 +1115,28 @@
         const values = collectAnswers(root, kkEducation);
         const errors = [];
 
+        if (root) {
+            root.querySelectorAll('[data-field-wrap]').forEach((wrap) => showInlineFieldError(wrap, ''));
+        }
+
         getAllFields().forEach((field) => {
-            if (!root.querySelector(`[data-field-wrap="${field.id}"]`)) {
+            const wrap = root?.querySelector(`[data-field-wrap="${field.id}"]`);
+            if (!wrap) {
                 return;
             }
             const visible = isFieldVisible(field, values, kkEducation);
-            // Skip suffix_other fields here — they're validated via isFieldVisible + validateField
             const err = validateField(field, values[field.id], visible, values);
-            if (err) errors.push({ field: field.id, label: field.label, message: err });
+            if (err) {
+                errors.push({ field: field.id, label: field.label, message: err });
+                showInlineFieldError(wrap, err);
+            }
         });
+
+        if (errors.length) {
+            const first = root?.querySelector(`[data-field-wrap="${errors[0].field}"]`);
+            first?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            first?.querySelector('input, select, textarea')?.focus?.();
+        }
 
         return { ok: errors.length === 0, errors, values };
     }

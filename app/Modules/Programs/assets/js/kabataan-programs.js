@@ -862,7 +862,7 @@
             actionLabel = 'View Response';
             statusLabel = 'Submitted';
         } else if (canRespond) {
-            actionLabel = 'Apply Now';
+            actionLabel = 'Answer Survey';
             statusLabel = 'Survey Open';
         } else if (survey) {
             statusLabel = survey.status === 'closed' ? 'Survey Closed' : 'Survey Scheduled';

@@ -12,6 +12,8 @@ use App\Modules\Profile\Services\ProfileImageService;
 use App\Services\BarangayLogoUrlService;
 use App\Services\CloudinaryService;
 use App\Services\FeedCommentRateLimiter;
+use App\Services\ProhibitedWordsService;
+use App\Services\SkOfficialsNotificationDispatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -30,6 +32,7 @@ class AnnouncementFeedController extends Controller
         private readonly ProfileImageService $profileImages,
         private readonly BarangayLogoUrlService $logoUrls,
         private readonly CloudinaryService $cloudinary,
+        private readonly ProhibitedWordsService $prohibitedWords,
     ) {}
 
     public function feed(Request $request): JsonResponse
@@ -259,6 +262,15 @@ class AnnouncementFeedController extends Controller
             });
         });
 
+        if ($userReaction !== null) {
+            $this->notifyOfficialsOfPostActivity(
+                $post,
+                $user,
+                $user->name.' reacted to your post',
+                $this->postActivityLabel($post),
+            );
+        }
+
         $reactions = AnnouncementReaction::with('user')
             ->where('community_feed_id', $id)
             ->latest()
@@ -303,6 +315,8 @@ class AnnouncementFeedController extends Controller
             'parent_id' => 'nullable|integer',
         ]);
 
+        $this->prohibitedWords->assertClean((string) $request->input('body'), 'body');
+
         $post = Announcement::query()->active()->findOrFail($id);
         abort_unless($this->canEngageWithPost($user, $post), 403, 'You can only comment on posts from your barangay.');
 
@@ -330,6 +344,14 @@ class AnnouncementFeedController extends Controller
         $comment->load(['user', 'reactions']);
         $limiter->hit(self::USER_TYPE, (int) $user->id);
 
+        $preview = Str::limit(trim((string) $request->body), 160);
+        $this->notifyOfficialsOfPostActivity(
+            $post,
+            $user,
+            ($authorName !== '' ? $authorName : $user->name).' commented on your post',
+            $preview !== '' ? $preview : $this->postActivityLabel($post),
+        );
+
         return response()->json($this->formatComment($comment, $user->id), 201);
     }
 
@@ -339,6 +361,8 @@ class AnnouncementFeedController extends Controller
         $request->validate([
             'body' => 'required|string|max:'.FeedCommentRateLimiter::MAX_BODY_LENGTH,
         ]);
+
+        $this->prohibitedWords->assertClean((string) $request->input('body'), 'body');
 
         $comment = $this->ownedComment($id, $commentId, $user);
         $comment->update(['body' => $request->body]);
@@ -931,5 +955,33 @@ class AnnouncementFeedController extends Controller
     private function uiAvatarUrl(string $name): string
     {
         return 'https://ui-avatars.com/api/?name='.urlencode($name).'&background=1a56db&color=fff&size=80';
+    }
+
+    private function postActivityLabel(Announcement $post): string
+    {
+        $title = trim((string) $post->title);
+        if ($title !== '') {
+            return Str::limit($title, 80);
+        }
+
+        return Str::limit(trim(strip_tags((string) $post->body)), 80, '…') ?: 'your post';
+    }
+
+    private function notifyOfficialsOfPostActivity(
+        Announcement $post,
+        User $actor,
+        string $title,
+        string $body,
+    ): void {
+        if ((int) $post->user_id === (int) $actor->id) {
+            return;
+        }
+
+        app(SkOfficialsNotificationDispatcher::class)->notifyCommunityFeedPostActivity(
+            (int) $post->user_id,
+            (int) $post->id,
+            $title,
+            $body,
+        );
     }
 }

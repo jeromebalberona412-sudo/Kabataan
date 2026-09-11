@@ -45,6 +45,8 @@ export default defineConfig({
                 'app/Modules/Dashboard/assets/css/notif.css',
                 'app/Modules/Dashboard/assets/js/dashboard.js',
                 'app/Modules/Dashboard/assets/js/community-feed-comment-preview.js',
+                'app/Modules/Dashboard/assets/js/prohibited-words.js',
+                'app/Modules/Dashboard/assets/js/comment-spam-guard.js',
                 'app/Modules/Dashboard/assets/js/barangay-profile.js',
                 'app/Modules/Dashboard/assets/js/notif.js',
 

@@ -1904,7 +1904,8 @@ body.comms-messages-page .comms-page-main.container-fluid {
 .comms-remote-video {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    object-position: center;
     background: #0b0b0b;
 }
 
@@ -1914,12 +1915,14 @@ body.comms-messages-page .comms-page-main.container-fluid {
     top: 1rem;
     bottom: auto;
     width: min(28vw, 180px);
-    aspect-ratio: 3 / 4;
-    object-fit: cover;
+    aspect-ratio: 4 / 3;
+    object-fit: contain;
+    object-position: center;
     border-radius: 12px;
     border: 2px solid rgba(255, 255, 255, 0.35);
     background: #011e3c;
     z-index: 3;
+    transform: scaleX(-1);
 }
 
 .comms-call-center {

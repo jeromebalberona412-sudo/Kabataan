@@ -91,6 +91,65 @@ class SkOfficialsNotificationDispatcher
         );
     }
 
+    /**
+     * Notify the post owner (SK Official). One unread notification per post —
+     * later activity updates the same row.
+     */
+    public function notifyCommunityFeedPostActivity(
+        int $ownerUserId,
+        int $postId,
+        string $title,
+        string $body,
+    ): void {
+        if (! Schema::hasTable('sk_officials_notifications') || $ownerUserId <= 0 || $postId <= 0) {
+            return;
+        }
+
+        $owner = DB::table('users')
+            ->where('id', $ownerUserId)
+            ->where('role', 'sk_official')
+            ->where('status', 'ACTIVE')
+            ->first();
+
+        if (! $owner) {
+            return;
+        }
+
+        $actionUrl = '/community-feed/comments/'.$postId;
+        $now = now();
+
+        $existingId = DB::table('sk_officials_notifications')
+            ->where('user_id', $ownerUserId)
+            ->where('category', 'announcement')
+            ->where('action_url', $actionUrl)
+            ->whereNull('read_at')
+            ->orderByDesc('id')
+            ->value('id');
+
+        if ($existingId) {
+            DB::table('sk_officials_notifications')
+                ->where('id', $existingId)
+                ->update([
+                    'title' => $title,
+                    'body' => $body,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+            return;
+        }
+
+        DB::table('sk_officials_notifications')->insert([
+            'user_id' => $ownerUserId,
+            'category' => 'announcement',
+            'title' => $title,
+            'body' => $body,
+            'action_url' => $actionUrl,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+    }
+
     private function insertForBarangayOfficials(
         int $barangayId,
         string $category,

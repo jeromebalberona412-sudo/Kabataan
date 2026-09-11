@@ -33,7 +33,11 @@ class KabataanProgramService
     private const YOUTH_PROGRAM_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
     /** @var list<string> */
-    private const SCHOLARSHIP_EDUCATION_LEVELS = ['High School Level', 'College Level'];
+    private const SCHOLARSHIP_EDUCATION_LEVELS = [
+        'High School Level',
+        'High School Grad',
+        'College Level',
+    ];
 
     /** @var list<string> */
     private const ELIGIBILITY_YOUTH_CLASSIFICATIONS = [
@@ -898,13 +902,28 @@ class KabataanProgramService
             return ['eligible' => true, 'message' => ''];
         }
 
+        $age = $this->resolveUserAge($user);
+        if ($age === null) {
+            return [
+                'eligible' => false,
+                'message' => 'Your age could not be verified from KK Profiling. Please complete your profile.',
+            ];
+        }
+
+        if ($age < 15 || $age > 30) {
+            return [
+                'eligible' => false,
+                'message' => 'Scholarship programs are open to Kabataan members aged 15–30 only.',
+            ];
+        }
+
         $profile = $this->resolveKkProfile($user, ['education', 'youth_classification', 'youth_age_group']);
         $education = $this->normalizeScholarshipEducation((string) ($profile['education'] ?? ''));
 
         if ($education === '' || ! in_array($education, self::SCHOLARSHIP_EDUCATION_LEVELS, true)) {
             return [
                 'eligible' => false,
-                'message' => 'Scholarship applications are only open to Senior High School and College students.',
+                'message' => 'Scholarship applications are only open to High School Level, High School Grad, and College Level Kabataan.',
             ];
         }
 
@@ -937,9 +956,9 @@ class KabataanProgramService
         if ($allowedEducationLevels !== [] && ! in_array($education, $allowedEducationLevels, true)) {
             $message = 'Your educational background does not meet this scholarship program\'s eligibility requirements.';
             if (in_array('senior_high', $targetLevels, true) && in_array('college', $targetLevels, true)) {
-                $message = 'This scholarship is open to In School Youth with High School Level or College Level educational background only.';
+                $message = 'This scholarship is open to In School Youth with High School Level, High School Grad, or College Level educational background only.';
             } elseif (in_array('senior_high', $targetLevels, true)) {
-                $message = 'This scholarship is open to In School Youth with High School Level educational background only.';
+                $message = 'This scholarship is open to In School Youth with High School Level or High School Grad educational background only.';
             } elseif (in_array('college', $targetLevels, true)) {
                 $message = 'This scholarship is open to In School Youth with College Level educational background only.';
             }
@@ -1142,15 +1161,16 @@ class KabataanProgramService
             return '';
         }
 
-        if (strcasecmp($trimmed, 'High school level') === 0 || strcasecmp($trimmed, 'High School Level') === 0) {
-            return 'High School Level';
-        }
+        $normalized = preg_replace('/\s+/', ' ', $trimmed) ?? $trimmed;
+        $map = [
+            'high school level' => 'High School Level',
+            'high school grad' => 'High School Grad',
+            'college level' => 'College Level',
+        ];
 
-        if (strcasecmp($trimmed, 'College Level') === 0) {
-            return 'College Level';
-        }
+        $key = strtolower($normalized);
 
-        return $trimmed;
+        return $map[$key] ?? $trimmed;
     }
 
     /**

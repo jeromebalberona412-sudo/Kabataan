@@ -522,7 +522,9 @@
     window.CommunityFeedConfig = {
         commentsPageUrl: @json(url('/barangay/'.$slug.'/__ID__')),
         feedPollMs: 5000,
+        prohibitedWords: @json(config('prohibited_words', [])),
     };
+    window.__skProhibitedWords = window.CommunityFeedConfig.prohibitedWords;
     window.CommentPreviewConfig = {
         post: @json($commentPreviewPost ?? null),
         defaultLogo: @json(asset('images/SK_OnePortal_logo.png')),
@@ -531,6 +533,7 @@
         feedUrl: @json(url('/barangay/'.$slug)),
         viewOnly: @json(! ($canEngage ?? false)),
         syncUrl: true,
+        prohibitedWords: window.__skProhibitedWords,
     };
     window.BarangayProfileConfig = {
         canEngage: @json((bool) ($canEngage ?? false)),
@@ -539,6 +542,8 @@
     };
     </script>
     @vite([
+        'app/Modules/Dashboard/assets/js/prohibited-words.js',
+        'app/Modules/Dashboard/assets/js/comment-spam-guard.js',
         'app/Modules/Dashboard/assets/js/community-feed-comment-preview.js',
         'app/Modules/Dashboard/assets/js/barangay-profile.js',
     ])

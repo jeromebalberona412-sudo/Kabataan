@@ -345,7 +345,7 @@
                     <div class="program-action">
                         <button class="apply-now-button" id="applyNowBtnAntiDrugs" onclick="goToPreSurvey('anti-drugs')" disabled>
                             <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>
-                            Apply Now
+                            Answer Survey
                         </button>
                         <p class="apply-note">Please read and agree to the Terms & Conditions to continue</p>
                     </div>
@@ -869,7 +869,7 @@
                 <button type="button" class="modal-close" onclick="closeEditCommentModal()" aria-label="Close"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg></button>
             </div>
             <div class="modal-body">
-                <textarea id="editCommentBody" class="edit-comment-textarea" maxlength="500" placeholder="Write a comment..."></textarea>
+                <textarea id="editCommentBody" class="edit-comment-textarea" maxlength="2000" placeholder="Write a comment..."></textarea>
             </div>
             <div class="modal-footer-btns" style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid #e0e0e0;">
                 <button type="button" class="btn-secondary" onclick="closeEditCommentModal()">Cancel</button>
@@ -914,13 +914,16 @@
         userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
         commentsPageUrl: @json(url('/dashboard/comments/__ID__')),
         feedPollMs: 5000,
+        prohibitedWords: @json(config('prohibited_words', [])),
     };
+    window.__skProhibitedWords = window.CommunityFeedConfig.prohibitedWords;
     window.CommentPreviewConfig = {
         post: @json($commentPreviewPost ?? null),
         defaultLogo: @json(asset('images/SK_OnePortal_logo.png')),
         userAvatar: @json($userAvatarUrl ?? ''),
         userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
         feedUrl: @json(route('dashboard')),
+        prohibitedWords: window.__skProhibitedWords,
     };
     </script>
 
@@ -1881,8 +1884,13 @@
         const isReply = pendingCommentAction.isReply;
         const body = document.getElementById('editCommentBody')?.value.trim();
         if (!body) return;
-        if (body.length > 500) {
-            notifyFeed('Comments and replies are limited to 500 characters.', 'error');
+        if (body.length > 2000) {
+            notifyFeed('Comments and replies are limited to 2,000 characters.', 'error');
+            return;
+        }
+        const prohibited = window.ProhibitedWords?.assertClean?.(body);
+        if (prohibited) {
+            notifyFeed(prohibited, 'error');
             return;
         }
         const btn = document.getElementById('confirmEditCommentBtn');
@@ -2084,8 +2092,18 @@
     async function feedSubmitComment(id, input) {
         const text = input.value.trim();
         if (!text) return;
-        if (text.length > 500) {
-            notifyFeed('Comments and replies are limited to 500 characters.', 'error');
+        const cooldownError = window.FeedCommentGuard?.assertCanComment?.();
+        if (cooldownError) {
+            notifyFeed(cooldownError, 'error');
+            return;
+        }
+        if (text.length > 2000) {
+            notifyFeed('Comments and replies are limited to 2,000 characters.', 'error');
+            return;
+        }
+        const prohibited = window.ProhibitedWords?.assertClean?.(text);
+        if (prohibited) {
+            notifyFeed(prohibited, 'error');
             return;
         }
         if (input.dataset.sending === '1') return;
@@ -2126,12 +2144,17 @@
                     parent_id: parentId,
                 }),
             });
-            const payload = await r.json();
+            const payload = await r.json().catch(() => ({}));
             if (!r.ok) {
                 const cached = postCache.get(Number(id));
                 if (cached) removeCachedComment(cached.comments || [], tempId);
                 refreshFeedCommentUi(id);
-                notifyFeed(parentId ? 'Unable to add your reply. Please try again.' : 'Unable to add your comment. Please try again.', 'error');
+                if (r.status === 429) {
+                    window.FeedCommentGuard?.applyFromPayload?.(payload);
+                }
+                const msg = payload.errors?.body?.[0] || payload.message
+                    || (parentId ? 'Unable to add your reply. Please try again.' : 'Unable to add your comment. Please try again.');
+                notifyFeed(msg, 'error');
                 input.value = text;
                 return;
             }
@@ -2384,6 +2407,10 @@
     </script>
 
     @include('programs::scholarship.partials.data-privacy-modal')
-    @vite(['app/Modules/Dashboard/assets/js/community-feed-comment-preview.js'])
+    @vite([
+        'app/Modules/Dashboard/assets/js/prohibited-words.js',
+        'app/Modules/Dashboard/assets/js/comment-spam-guard.js',
+        'app/Modules/Dashboard/assets/js/community-feed-comment-preview.js',
+    ])
 </body>
 </html>

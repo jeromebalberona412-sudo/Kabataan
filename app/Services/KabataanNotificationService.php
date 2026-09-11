@@ -110,7 +110,7 @@ class KabataanNotificationService
             'category' => $category,
             'title' => $title,
             'body' => $body,
-            'action_url' => $actionUrl,
+            'action_url' => $this->normalizeActionUrl($actionUrl) ?? $actionUrl,
         ]);
     }
 
@@ -121,7 +121,7 @@ class KabataanNotificationService
             self::CATEGORY_KK_PROFILING,
             'KK Profiling Updated',
             "Congratulations! You've successfully updated your KK Profiling for {$profilingYear} in {$barangayName}.",
-            route('profile'),
+            '/profile',
         );
     }
 
@@ -132,7 +132,7 @@ class KabataanNotificationService
             self::CATEGORY_KK_PROFILING,
             'KK Profiling Approved',
             "Your KK Profiling registration for {$barangayName} has been approved. You can now access all SK OnePortal services.",
-            route('dashboard'),
+            '/dashboard',
         );
     }
 
@@ -159,7 +159,7 @@ class KabataanNotificationService
             'text' => $this->stripEmoji($notification->body),
             'time' => $this->formatTime($notification->created_at),
             'unread' => $notification->isUnread(),
-            'action_url' => $notification->action_url,
+            'action_url' => $this->normalizeActionUrl($notification->action_url),
         ];
     }
 
@@ -192,6 +192,25 @@ class KabataanNotificationService
         $cleaned = preg_replace('/[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{FE0F}\x{200D}]/u', '', $value) ?? $value;
 
         return trim(preg_replace('/\s+/u', ' ', $cleaned) ?? $cleaned);
+    }
+
+    private function normalizeActionUrl(?string $url): ?string
+    {
+        if ($url === null || $url === '') {
+            return $url;
+        }
+
+        if (str_starts_with($url, '/')) {
+            return $url;
+        }
+
+        $path = parse_url($url, PHP_URL_PATH);
+        $query = parse_url($url, PHP_URL_QUERY);
+        if (! is_string($path) || $path === '') {
+            return $url;
+        }
+
+        return is_string($query) && $query !== '' ? $path.'?'.$query : $path;
     }
 
     private static ?bool $tableExistsCache = null;

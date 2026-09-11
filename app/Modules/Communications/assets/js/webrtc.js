@@ -512,8 +512,9 @@
                 },
                 video: videoEnabled ? {
                     facingMode: 'user',
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    width: { ideal: 640, max: 1280 },
+                    height: { ideal: 480, max: 720 },
+                    aspectRatio: { ideal: 4 / 3 }
                 } : false
             });
         } catch (err) {

@@ -574,7 +574,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
                 const error = shell?.querySelector(`[data-file-error="${question.id}"]`);
                 if (error) {
                     error.hidden = false;
-                    error.textContent = 'Please upload the required PDF document.';
+                    error.textContent = 'This field is required.';
                 }
             }
         });
@@ -754,43 +754,63 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         if (currentStep === 1) {
             const personalErrors = getPersonalInfoErrors();
             if (personalErrors.length) {
-                alert(`Please complete your KK Profiling information before applying:\n${personalErrors.map((e) => e.message).join('\n')}`);
+                const list = shell?.querySelector('#personalInfoErrorList')
+                    || shell?.querySelector('#systemPersonalInformation');
+                if (list && !list.querySelector('.sch-field-inline-error, .schol-field-error')) {
+                    let banner = list.querySelector('.sch-step-field-error');
+                    if (!banner) {
+                        banner = document.createElement('p');
+                        banner.className = 'sch-step-field-error schol-field-error';
+                        list.prepend(banner);
+                    }
+                    banner.textContent = personalErrors[0]?.message || 'This field is required.';
+                    banner.hidden = false;
+                }
                 return false;
             }
             return true;
         }
         if (currentStep === 2) {
             const c = shell?.querySelector('#systemEducationalBackground');
-            const r = SF?.validateAnswers(c, kkEducation) || { ok: true };
-            if (!r.ok) { alert(`Please complete Educational Background:\n${r.errors.map((e) => e.message).join('\n')}`); return false; }
-            return true;
+            return (SF?.validateAnswers(c, kkEducation) || { ok: true }).ok;
         }
         if (currentStep === 3) {
             const c = shell?.querySelector('#systemBackgroundInformation');
-            const r = SF?.validateAnswers(c, kkEducation) || { ok: true };
-            if (!r.ok) { alert(`Please complete Background Information:\n${r.errors.map((e) => e.message).join('\n')}`); return false; }
-            return true;
+            return (SF?.validateAnswers(c, kkEducation) || { ok: true }).ok;
         }
         if (currentStep === 4) {
             const c = shell?.querySelector('#systemAdditionalInformation');
-            const r = SF?.validateAnswers(c, kkEducation) || { ok: true };
-            if (!r.ok) { alert(`Please complete Additional Information:\n${r.errors.map((e) => e.message).join('\n')}`); return false; }
-            return true;
+            return (SF?.validateAnswers(c, kkEducation) || { ok: true }).ok;
         }
         if (currentStep === 5) return validateRequirements();
         if (currentStep === 6) {
             if (!isApplicationComplete()) {
-                alert('Please complete all required sections before submitting.');
                 renderReviewStep();
                 return false;
             }
-            const checks = ['confirmInfoTrue', 'confirmDocsValid', 'confirmFalseInfo'].map((id) => shell?.querySelector(`#${id}`)?.checked);
-            if (!checks.every(Boolean)) {
-                alert('Please confirm all statements before submitting your application.');
-                updateSubmitButtonState();
-                return false;
-            }
-            return true;
+            const checks = ['confirmInfoTrue', 'confirmDocsValid', 'confirmFalseInfo'].map((id) => shell?.querySelector(`#${id}`));
+            let ok = true;
+            checks.forEach((el) => {
+                const wrap = el?.closest('label') || el?.parentElement;
+                let errorEl = wrap?.querySelector('.sch-field-inline-error');
+                if (el && !el.checked) {
+                    ok = false;
+                    if (wrap && !errorEl) {
+                        errorEl = document.createElement('p');
+                        errorEl.className = 'sch-field-inline-error';
+                        wrap.appendChild(errorEl);
+                    }
+                    if (errorEl) {
+                        errorEl.textContent = 'This field is required.';
+                        errorEl.hidden = false;
+                    }
+                } else if (errorEl) {
+                    errorEl.textContent = '';
+                    errorEl.hidden = true;
+                }
+            });
+            if (!ok) updateSubmitButtonState();
+            return ok;
         }
         return true;
     }

@@ -17,13 +17,21 @@ let viewerBound = false;
 let syncingUrl = false;
 let expandedReplies = new Set();
 
-const COMMENT_MAX_CHARS = 500;
-const COMMENT_LIMIT_MSG = 'Comments and replies are limited to 500 characters.';
+const COMMENT_MAX_CHARS = window.FeedCommentGuard?.COMMENT_MAX_CHARS || 2000;
+const COMMENT_LIMIT_MSG = 'Comments and replies are limited to 2,000 characters.';
 
 const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 const cfg = () => window.CommentPreviewConfig || {};
 const REACTION_SOUND_URL = '/sounds/reactions_ux.mp3';
 let reactionAudio = null;
+
+function commentBodyError(text) {
+    if (!text) return 'Please write a comment.';
+    const cooldownError = window.FeedCommentGuard?.assertCanComment?.();
+    if (cooldownError) return cooldownError;
+    if (text.length > COMMENT_MAX_CHARS) return COMMENT_LIMIT_MSG;
+    return window.ProhibitedWords?.assertClean?.(text) || null;
+}
 
 function playReactionSound() {
     if (typeof window.playFeedReactionSound === 'function') {
@@ -95,8 +103,19 @@ async function apiFetch(url, options = {}) {
     });
     if (!res.ok) {
         let message = 'Request failed.';
-        try { message = (await res.json()).message || message; } catch (_) { /* ignore */ }
-        throw new Error(message);
+        let payload = null;
+        try {
+            payload = await res.json();
+            message = payload.errors?.body?.[0]
+                || payload.errors?.title?.[0]
+                || payload.message
+                || message;
+        } catch (_) { /* ignore */ }
+        const error = new Error(message);
+        error.status = res.status;
+        error.retry_after = payload?.retry_after ?? payload?.rate_limit?.retry_after ?? null;
+        error.payload = payload;
+        throw error;
     }
     return res.json();
 }
@@ -288,7 +307,7 @@ function commentHtml(comment, isReply) {
             </div>
             ${viewReplies}
             ${isViewOnly() ? '' : `<div class="cp-reply-box" id="cp-reply-${comment.id}">
-                <input type="text" maxlength="500" placeholder="Write a reply..." data-reply-input="${comment.id}">
+                <input type="text" maxlength="2000" placeholder="Write a reply..." data-reply-input="${comment.id}">
                 <button type="button" class="cp-send-btn" data-reply-send="${comment.id}" disabled aria-label="Send reply">${SEND_SVG}</button>
             </div>`}
             ${replies.length ? `<div class="cp-replies" id="cp-replies-${comment.id}"${repliesOpen ? '' : ' hidden'}>${replies.map((r) => commentHtml(r, true)).join('')}</div>` : ''}
@@ -562,8 +581,9 @@ function refreshPreview(focusId) {
 
 async function submitComment(body, parentId = null) {
     if (isViewOnly() || sending || !body) return;
-    if (body.length > COMMENT_MAX_CHARS) {
-        notifyPreview(COMMENT_LIMIT_MSG, 'error');
+    const bodyError = commentBodyError(body);
+    if (bodyError) {
+        notifyPreview(bodyError, 'error');
         return;
     }
     sending = true;
@@ -620,7 +640,10 @@ async function submitComment(body, parentId = null) {
         };
         removeTemp(post.comments);
         refreshPreview(parentId ? threadRootId(parentId) : null);
-        notifyPreview(parentId ? 'Unable to add your reply. Please try again.' : 'Unable to add your comment. Please try again.', 'error');
+        if (err?.status === 429) {
+            window.FeedCommentGuard?.applyFromPayload?.(err.payload || { retry_after: err.retry_after, locked: true });
+        }
+        notifyPreview(err?.message || (parentId ? 'Unable to add your reply. Please try again.' : 'Unable to add your comment. Please try again.'), 'error');
     } finally {
         sending = false;
     }
