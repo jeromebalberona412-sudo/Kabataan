@@ -61,23 +61,23 @@ body.kabataan-has-view-only-banner {
 .kabataan-header__center-toast {
     position: absolute;
     left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    max-width: min(520px, calc(100vw - 280px));
+    top: calc(100% + 8px);
+    transform: translateX(-50%);
+    max-width: min(520px, calc(100vw - 32px));
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 2px;
     padding: 8px 16px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.16);
+    background: rgba(33, 63, 153, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.28);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     text-align: center;
     pointer-events: none;
     animation: kabHeaderToastIn 0.35s ease;
-    z-index: 2;
+    z-index: 40;
 }
 
 .kabataan-header__center-toast.is-hiding {
@@ -99,13 +99,13 @@ body.kabataan-has-view-only-banner {
 }
 
 @keyframes kabHeaderToastIn {
-    from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); }
-    to { opacity: 1; transform: translate(-50%, -50%); }
+    from { opacity: 0; transform: translate(-50%, -6px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 @keyframes kabHeaderToastOut {
-    from { opacity: 1; transform: translate(-50%, -50%); }
-    to { opacity: 0; transform: translate(-50%, calc(-50% - 6px)); }
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, -6px); }
 }
 
 @media (max-width: 900px) {

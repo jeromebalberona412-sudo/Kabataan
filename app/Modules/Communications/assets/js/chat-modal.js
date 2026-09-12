@@ -2010,6 +2010,12 @@ window.onCommsHeaderMessageInsert = function (message) {
         && message.sender_type === boot.dataset.portalUserType;
     message.mine = !!mine;
     if (!message.reactions) message.reactions = [];
+    if (!Array.isArray(message.attachments)) message.attachments = [];
+
+    var needsReload = message.message_type === 'image'
+        || message.message_type === 'file'
+        || (message.attachments && message.attachments.length > 0);
+
     if (message.message_type === 'automation') {
         var autoTempIdx = headerChatState.messages.findIndex(function (m) {
             return String(m.id).indexOf('local-auto-') === 0;
@@ -2030,6 +2036,9 @@ window.onCommsHeaderMessageInsert = function (message) {
         messages: headerChatState.messages,
         reactionEmojis: headerChatState.reactionEmojis
     });
+    if (needsReload && typeof window.reloadHeaderChatMessages === 'function') {
+        window.reloadHeaderChatMessages(headerChatState.conversationId);
+    }
     if (typeof window.refreshMessagesPopover === 'function') {
         window.refreshMessagesPopover();
     }

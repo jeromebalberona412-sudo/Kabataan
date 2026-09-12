@@ -164,14 +164,22 @@
         getActiveId: function () {
             return (window.__COMMS_HEADER_ACTIVE_ID__ != null) ? window.__COMMS_HEADER_ACTIVE_ID__ : null;
         },
-        reloadActiveMessages: function () {},
+        reloadActiveMessages: function () {
+            if (typeof window.reloadHeaderChatMessages === 'function') {
+                window.reloadHeaderChatMessages();
+            }
+        },
         reloadConversations: function () {
             if (typeof window.refreshMessagesPopover === 'function') {
                 window.refreshMessagesPopover();
             }
         },
         onReactionChange: function () {},
-        appendMessage: function () {},
+        appendMessage: function (message) {
+            if (typeof window.onCommsHeaderMessageInsert === 'function') {
+                window.onCommsHeaderMessageInsert(message);
+            }
+        },
         setTyping: function (visible, meta) {
             var el = document.getElementById('commsChatModalTyping');
             if (!el) return;

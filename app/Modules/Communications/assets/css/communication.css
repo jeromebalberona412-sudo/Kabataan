@@ -2795,8 +2795,8 @@ body.comms-officials-page .main-content {
     line-height: 1.35;
     cursor: pointer;
     text-align: left;
-    width: 100%;
-    max-width: 100%;
+    width: auto;
+    max-width: max-content;
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -2916,7 +2916,8 @@ body.comms-officials-page .main-content {
     gap: 8px;
     min-width: 0;
     width: 100%;
-    height: 2rem;
+    height: auto;
+    min-height: 2rem;
 }
 .comms-faq-quick-replies__count {
     display: none !important;
@@ -2931,7 +2932,7 @@ body.comms-officials-page .main-content {
     gap: 8px;
     overflow-x: auto;
     overflow-y: hidden;
-    max-height: 2rem !important;
+    max-height: none !important;
     min-width: 0;
     padding: 0 2px;
     -webkit-overflow-scrolling: touch;
@@ -2952,7 +2953,8 @@ body.comms-officials-page .main-content {
     flex-direction: row;
     align-items: center;
     gap: 0;
-    max-width: none;
+    width: auto !important;
+    max-width: max-content !important;
     height: auto;
     min-height: 1.85rem;
     padding: 0.35rem 12px;
@@ -2973,6 +2975,8 @@ body.comms-officials-page .main-content {
 }
 .comms-faq-chip-text {
     min-width: 0;
+    width: auto;
+    max-width: none;
     overflow: visible;
     text-overflow: clip;
     white-space: nowrap;

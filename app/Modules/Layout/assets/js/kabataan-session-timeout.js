@@ -20,7 +20,14 @@
     }
 
     function redirectToSignIn() {
-        window.location.replace(signInUrl());
+        var url = signInUrl();
+        try {
+            // Replace history so Back from sign-in does not re-hit expired dashboard.
+            if (window.history && typeof window.history.replaceState === 'function') {
+                window.history.replaceState(null, '', url);
+            }
+        } catch (_) { /* ignore */ }
+        window.location.replace(url);
     }
 
     function initFetchGuard() {

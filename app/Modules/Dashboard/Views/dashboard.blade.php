@@ -1625,33 +1625,48 @@
 
     function buildFeedPost(p) {
         const images = feedPostImages(p);
+        const videos = Array.isArray(p?.videos) ? p.videos.filter(Boolean) : [];
+        const hasLegacyDrive = !!(p?.google_drive_video) && videos.length === 0;
         let media = '';
-        if (images.length) {
+        let videoHtml = '';
+
+        // 1 image + 1 video → shared side-by-side grid
+        if (images.length === 1 && (videos.length === 1 || hasLegacyDrive)) {
             const encoded = feedEscape(JSON.stringify(images));
-            const imgTag = (src, index) =>
-                `<img src="${feedEscape(src)}" loading="lazy" alt="" data-image-index="${index}" onerror="this.style.display='none'">`;
-            if (images.length === 1) {
-                media = `<div class="post-image" data-all-images="${encoded}">${imgTag(images[0], 0)}</div>`;
-            } else if (images.length === 2) {
-                media = `<div class="post-images-grid grid-2" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
-            } else if (images.length === 3) {
-                media = `<div class="post-images-grid grid-3" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
-            } else if (images.length === 4) {
-                media = `<div class="post-images-grid grid-4" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
-            } else {
-                const remaining = images.length - 4;
-                media = `<div class="post-images-grid grid-4" data-all-images="${encoded}">
-                    ${images.slice(0, 3).map((img, i) => imgTag(img, i)).join('')}
-                    <div class="image-more-overlay" data-image-index="3">
-                        <img src="${feedEscape(images[3])}" loading="lazy" alt="">
-                        <div class="more-overlay-text">+${remaining} more</div>
-                    </div>
-                </div>`;
+            const imgTag = `<img src="${feedEscape(images[0])}" loading="lazy" alt="" data-image-index="0" onerror="this.style.display='none'">`;
+            const singleVideoHtml = window.KabataanFeedVideos?.buildPostVideosHtml(p) || '';
+            media = `<div class="post-media-mixed grid-2" data-all-images="${encoded}">
+                <div class="post-media-mixed-item post-media-mixed-image">${imgTag}</div>
+                <div class="post-media-mixed-item post-media-mixed-video">${singleVideoHtml}</div>
+            </div>`;
+        } else {
+            if (images.length) {
+                const encoded = feedEscape(JSON.stringify(images));
+                const imgTag = (src, index) =>
+                    `<img src="${feedEscape(src)}" loading="lazy" alt="" data-image-index="${index}" onerror="this.style.display='none'">`;
+                if (images.length === 1) {
+                    media = `<div class="post-image" data-all-images="${encoded}">${imgTag(images[0], 0)}</div>`;
+                } else if (images.length === 2) {
+                    media = `<div class="post-images-grid grid-2" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
+                } else if (images.length === 3) {
+                    media = `<div class="post-images-grid grid-3" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
+                } else if (images.length === 4) {
+                    media = `<div class="post-images-grid grid-4" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
+                } else {
+                    const remaining = images.length - 4;
+                    media = `<div class="post-images-grid grid-4" data-all-images="${encoded}">
+                        ${images.slice(0, 3).map((img, i) => imgTag(img, i)).join('')}
+                        <div class="image-more-overlay" data-image-index="3">
+                            <img src="${feedEscape(images[3])}" loading="lazy" alt="">
+                            <div class="more-overlay-text">+${remaining} more</div>
+                        </div>
+                    </div>`;
+                }
             }
+            videoHtml = window.KabataanFeedVideos?.buildPostVideosHtml(p) || '';
         }
 
-        const videoHtml = window.KabataanFeedVideos?.buildPostVideosHtml(p) || '';
-        const link = (!videoHtml && p.link_url && !p.google_drive_video)
+        const link = (!videoHtml && !media.includes('post-media-mixed') && p.link_url && !p.google_drive_video)
             ? `<a href="${feedEscape(p.link_url)}" target="_blank" rel="noopener" class="post-link-preview">${feedEscape(p.link_url)}</a>`
             : '';
         const reactionsSummary = renderReactionsSummary(p);
@@ -2425,12 +2440,13 @@
 
     function startFeedPolling() {
         if (feedPollTimer) clearTimeout(feedPollTimer);
-        const delay = Number(window.CommunityFeedConfig?.feedPollMs || 5000);
+        const baseDelay = Number(window.CommunityFeedConfig?.feedPollMs || 5000);
         const tick = async function () {
             await pollFeedUpdates();
-            feedPollTimer = setTimeout(tick, delay);
+            const openDelay = commentPreviewIsOpen() ? Math.min(2000, baseDelay) : baseDelay;
+            feedPollTimer = setTimeout(tick, openDelay);
         };
-        feedPollTimer = setTimeout(tick, delay);
+        feedPollTimer = setTimeout(tick, baseDelay);
     }
 
     document.addEventListener('DOMContentLoaded', () => {

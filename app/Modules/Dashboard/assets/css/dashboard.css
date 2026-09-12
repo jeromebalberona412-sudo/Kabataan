@@ -647,6 +647,76 @@ body.youth-dashboard {
     height: 150px;
 }
 
+/* 1 image + 1 video side-by-side */
+.post-media-mixed.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    width: 100%;
+    margin: 8px 0 0;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #0f172a;
+    min-height: 180px;
+    max-height: 280px;
+}
+
+.post-media-mixed-item {
+    position: relative;
+    min-width: 0;
+    min-height: 180px;
+    max-height: 280px;
+    overflow: hidden;
+    background: #111827;
+}
+
+.post-media-mixed-image img {
+    width: 100%;
+    height: 100%;
+    min-height: 180px;
+    max-height: 280px;
+    object-fit: cover;
+    display: block;
+    cursor: pointer;
+}
+
+.post-media-mixed-video .post-video-grid,
+.post-media-mixed-video .cf-drive-video,
+.post-media-mixed-video .cf-cloud-video,
+.post-media-mixed-video [data-drive-video],
+.post-media-mixed-video [data-cloud-video] {
+    width: 100%;
+    height: 100%;
+    min-height: 180px;
+    max-height: 280px;
+    margin: 0;
+}
+
+.post-media-mixed-video iframe,
+.post-media-mixed-video video,
+.post-media-mixed-video img {
+    width: 100%;
+    height: 100%;
+    min-height: 180px;
+    max-height: 280px;
+    object-fit: cover;
+}
+
+@media (max-width: 560px) {
+    .post-media-mixed.grid-2 {
+        grid-template-columns: 1fr;
+        max-height: none;
+    }
+    .post-media-mixed-item,
+    .post-media-mixed-image img,
+    .post-media-mixed-video .post-video-grid,
+    .post-media-mixed-video .cf-drive-video,
+    .post-media-mixed-video .cf-cloud-video {
+        min-height: 160px;
+        max-height: 220px;
+    }
+}
+
 .post-images-grid.grid-3 {
     grid-template-columns: 2fr 1fr;
     grid-template-rows: 1fr 1fr;
@@ -2796,9 +2866,10 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
 
 .feed-toast {
     position: fixed;
-    bottom: 24px;
+    top: max(0.85rem, calc(var(--kab-nav-h, 68px) + 0.55rem));
+    bottom: auto;
     left: 50%;
-    transform: translateX(-50%) translateY(16px);
+    transform: translateX(-50%) translateY(-8px);
     padding: 12px 20px;
     border-radius: 10px;
     font-size: 14px;

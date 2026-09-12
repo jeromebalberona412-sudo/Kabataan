@@ -9,12 +9,29 @@
     const historyTable = document.getElementById('pslHistoryTable');
     const viewModal = document.getElementById('pslViewModal');
     const viewClose = document.getElementById('pslViewClose');
+    const viewMaximize = document.getElementById('pslViewMaximize');
+    const viewContainer = document.getElementById('pslViewContainer');
     const viewTitle = document.getElementById('pslViewTitle');
     const viewMeta = document.getElementById('pslViewMeta');
     const viewAnswers = document.getElementById('pslViewAnswers');
 
     let currentSurvey = null;
     let surveyHistory = [];
+    let viewIsFullscreen = false;
+
+    function setViewFullscreen(isFullscreen) {
+        viewIsFullscreen = !!isFullscreen;
+        viewContainer?.classList.toggle('is-fullscreen', viewIsFullscreen);
+        viewModal?.classList.toggle('is-fullscreen', viewIsFullscreen);
+        if (viewMaximize) {
+            const maxIcon = viewMaximize.querySelector('.sl-modal-icon-maximize');
+            const restoreIcon = viewMaximize.querySelector('.sl-modal-icon-restore');
+            if (maxIcon) maxIcon.hidden = viewIsFullscreen;
+            if (restoreIcon) restoreIcon.hidden = !viewIsFullscreen;
+            viewMaximize.title = viewIsFullscreen ? 'Restore down' : 'Fullscreen';
+            viewMaximize.setAttribute('aria-label', viewIsFullscreen ? 'Restore down' : 'Fullscreen');
+        }
+    }
 
     function getCsrfToken() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -204,6 +221,7 @@
 
     function closeResponseView() {
         if (viewModal) viewModal.hidden = true;
+        setViewFullscreen(false);
         document.body.style.overflow = '';
     }
 
@@ -246,6 +264,13 @@
         init();
         startBtn?.addEventListener('click', handleStartSurvey);
         viewClose?.addEventListener('click', closeResponseView);
+        viewMaximize?.addEventListener('click', () => setViewFullscreen(!viewIsFullscreen));
         viewModal?.querySelector('.sl-view-modal-overlay')?.addEventListener('click', closeResponseView);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && viewModal && !viewModal.hidden) {
+                if (viewIsFullscreen) setViewFullscreen(false);
+                else closeResponseView();
+            }
+        });
     });
 })();
