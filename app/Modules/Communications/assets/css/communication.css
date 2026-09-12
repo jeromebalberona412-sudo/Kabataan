@@ -1162,6 +1162,20 @@ body.comms-messages-page .comms-page-main.container-fluid {
 }
 
 
+.comms-composer-dock {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    background: #fff;
+    box-shadow: 0 -4px 18px rgba(15, 23, 42, 0.06);
+}
+
 .comms-composer {
     display: flex !important;
     align-items: flex-end;
@@ -1169,12 +1183,12 @@ body.comms-messages-page .comms-page-main.container-fluid {
     padding: 10px 12px;
     border-top: 1px solid var(--comms-border);
     background: #fff;
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 30;
-    min-height: var(--comms-composer-h, 64px);
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: 1;
+    min-height: 56px;
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
@@ -1310,12 +1324,6 @@ body.comms-messages-page .comms-page-main.container-fluid {
     height: 40px;
 }
 
-.comms-composer-end .comms-faq-suggestions {
-    right: 0;
-    left: auto;
-    z-index: 80;
-}
-
 .comms-send-btn[hidden],
 .comms-faq-menu[hidden] {
     display: none !important;
@@ -1414,11 +1422,11 @@ body.comms-messages-page .comms-page-main.container-fluid {
     overflow-y: hidden;
     border: 0;
     border-radius: 18px;
-    padding: 0.85rem 1rem;
-    min-height: calc(1.45em + 1.7rem);
-    max-height: calc(1.45em * 5 + 1.7rem);
-    max-height: calc(5lh + 1.7rem);
-    height: calc(1.45em + 1.7rem);
+    padding: 0.65rem 1rem;
+    min-height: calc(1.45em + 1.3rem);
+    max-height: calc(1.45em * 5 + 1.3rem);
+    max-height: calc(5lh + 1.3rem);
+    height: calc(1.45em + 1.3rem);
     font: inherit;
     font-size: 0.98rem;
     line-height: 1.45;
@@ -1571,6 +1579,15 @@ body.comms-messages-page .comms-page-main.container-fluid {
     font-weight: 600;
     color: #4b5563;
     opacity: 1;
+}
+
+.comms-bubble-file-action {
+    display: inline-block;
+    margin-top: 0.15rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #1d4ed8;
+    text-decoration: underline;
 }
 
 .comms-bubble-image {
@@ -1898,31 +1915,60 @@ body.comms-messages-page .comms-page-main.container-fluid {
     height: 100%;
     display: grid;
     place-items: center;
-    overflow: visible;
+    overflow: hidden;
+    background: #0b0b0b;
 }
 
 .comms-remote-video {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    object-position: center;
+    object-position: center center;
     background: #0b0b0b;
 }
 
 .comms-local-video {
     position: absolute;
-    right: 1rem;
-    top: 1rem;
-    bottom: auto;
-    width: min(28vw, 180px);
-    aspect-ratio: 4 / 3;
+    right: max(0.75rem, env(safe-area-inset-right, 0px));
+    bottom: max(6.75rem, calc(env(safe-area-inset-bottom, 0px) + 5.75rem));
+    top: auto;
+    width: min(34vw, 132px);
+    max-height: 40vh;
+    aspect-ratio: 3 / 4;
     object-fit: contain;
-    object-position: center;
-    border-radius: 12px;
-    border: 2px solid rgba(255, 255, 255, 0.35);
+    object-position: center center;
+    border-radius: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
     background: #011e3c;
     z-index: 3;
     transform: scaleX(-1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    transition: width 0.18s ease, bottom 0.18s ease, right 0.18s ease, aspect-ratio 0.18s ease;
+}
+.comms-local-video.is-cam-landscape {
+    aspect-ratio: 16 / 9;
+    width: min(42vw, 168px);
+}
+.comms-call-overlay.is-desktop-call .comms-local-video {
+    width: min(18vw, 220px);
+    max-height: 34vh;
+    bottom: max(6.5rem, calc(env(safe-area-inset-bottom, 0px) + 5.5rem));
+}
+.comms-call-overlay.is-desktop-call .comms-local-video.is-cam-landscape {
+    aspect-ratio: 16 / 9;
+    width: min(22vw, 280px);
+}
+@media (orientation: landscape) and (max-height: 520px) {
+    .comms-local-video {
+        right: max(0.75rem, env(safe-area-inset-right, 0px));
+        bottom: max(5rem, calc(env(safe-area-inset-bottom, 0px) + 4.25rem));
+        width: min(24vw, 150px);
+        max-height: 42vh;
+    }
+    .comms-local-video.is-cam-landscape {
+        aspect-ratio: 16 / 9;
+        width: min(28vw, 180px);
+    }
 }
 
 .comms-call-center {
@@ -1933,12 +1979,75 @@ body.comms-messages-page .comms-page-main.container-fluid {
     text-align: center;
     z-index: 2;
     width: min(92vw, 420px);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.comms-call-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.comms-call-overlay.is-connected.has-remote-video .comms-call-center {
+    top: max(0.65rem, env(safe-area-inset-top, 0px));
+    left: max(0.65rem, env(safe-area-inset-left, 0px));
+    right: auto;
+    transform: none;
+    width: auto;
+    max-width: min(72vw, 320px);
+    flex-direction: row;
+    align-items: center;
+    gap: 0.55rem;
+    text-align: left;
+    padding: 0.4rem 0.7rem 0.4rem 0.4rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.comms-call-overlay.is-connected.has-remote-video .comms-call-avatar {
+    width: 34px;
+    height: 34px;
+    margin: 0;
+    font-size: 0.8rem;
+    box-shadow: none;
+    flex: 0 0 auto;
+}
+
+.comms-call-overlay.is-connected.has-remote-video .comms-call-meta {
+    align-items: flex-start;
+}
+
+.comms-call-overlay.is-connected.has-remote-video .comms-call-peer-name {
+    font-size: 0.92rem;
+    font-weight: 700;
+    margin: 0;
+    line-height: 1.15;
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.comms-call-overlay.is-connected.has-remote-video .comms-call-status,
+.comms-call-overlay.is-connected.has-remote-video .comms-call-timer {
+    margin: 0;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.82);
 }
 
 .comms-call-avatar {
     width: 112px;
     height: 112px;
-    margin: 0 auto 1rem;
+    margin: 0 auto 0.35rem;
     border-radius: 50%;
     background: #fff;
     color: #0450a8;
@@ -1960,7 +2069,7 @@ body.comms-messages-page .comms-page-main.container-fluid {
     font-size: clamp(1.35rem, 3vw, 1.85rem);
     font-weight: 800;
     letter-spacing: -0.02em;
-    margin-bottom: 0.35rem;
+    margin-bottom: 0;
 }
 
 .comms-call-status {
@@ -1975,7 +2084,7 @@ body.comms-messages-page .comms-page-main.container-fluid {
 }
 
 .comms-call-timer {
-    margin-top: 0.35rem;
+    margin-top: 0;
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.7);
     font-variant-numeric: tabular-nums;
@@ -2264,9 +2373,10 @@ body.comms-messages-page .comms-page-main.container-fluid {
     }
 
     .comms-composer textarea {
-        min-height: calc(1.45em + 1.4rem);
-        max-height: calc(1.45em * 5 + 1.4rem);
-        padding: 0.7rem 0.85rem;
+        min-height: calc(1.45em + 1.2rem);
+        max-height: calc(1.45em * 5 + 1.2rem);
+        max-height: calc(5lh + 1.2rem);
+        padding: 0.65rem 0.85rem;
     }
 
     .comms-send-btn {
@@ -2509,6 +2619,85 @@ body.comms-officials-page .main-content {
     display: none !important;
 }
 
+/* Recommended Questions panel — top of full Messages thread. */
+.comms-faq-top-panel {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--comms-border);
+    background: #f5f9fd;
+    padding: 0.7rem 0.85rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+    z-index: 5;
+}
+
+.comms-faq-top-panel[hidden] {
+    display: none !important;
+}
+
+.comms-faq-top-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.comms-faq-top-panel__title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #0450a8;
+    line-height: 1.3;
+}
+
+.comms-faq-top-panel__subtitle {
+    margin: 0;
+    font-size: 0.74rem;
+    color: var(--comms-muted);
+    line-height: 1.35;
+}
+
+.comms-faq-top-panel__close {
+    border: 0;
+    background: transparent;
+    color: #64748b;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.comms-faq-top-panel__close:hover,
+.comms-faq-top-panel__close:focus-visible {
+    background: #e8f1fb;
+    color: #033f86;
+    outline: none;
+}
+
+.comms-faq-top-panel .comms-faq-suggestions-list {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.4rem;
+    max-height: min(36vh, 240px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding-right: 2px;
+    min-width: 0;
+}
+
 .comms-faq-menu-toggle {
     position: relative;
     width: 40px;
@@ -2701,5 +2890,169 @@ body.comms-officials-page .main-content {
     .comms-date-sep-text {
         font-size: 0.68rem;
         max-width: min(100%, 300px);
+    }
+}
+
+/* === FAQ quick replies: one horizontal numbered row === */
+.comms-faq-quick-replies {
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 8px 12px 6px;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    border-bottom: none;
+}
+.comms-faq-quick-replies[hidden] { display: none !important; }
+.comms-faq-quick-replies__row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+    height: 2rem;
+}
+.comms-faq-quick-replies__count {
+    display: none !important;
+}
+.comms-faq-quick-replies__title { display: none !important; }
+.comms-faq-quick-replies .comms-faq-suggestions-list {
+    flex: 1 1 auto;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-height: 2rem !important;
+    min-width: 0;
+    padding: 0 2px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #93c5fd transparent;
+}
+.comms-faq-quick-replies .comms-faq-suggestions-list::-webkit-scrollbar {
+    height: 4px;
+}
+.comms-faq-quick-replies .comms-faq-suggestions-list::-webkit-scrollbar-thumb {
+    background: #93c5fd;
+    border-radius: 999px;
+}
+.comms-faq-quick-replies .comms-faq-chip {
+    flex: 0 0 auto;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0;
+    max-width: none;
+    height: auto;
+    min-height: 1.85rem;
+    padding: 0.35rem 12px;
+    border-radius: 999px;
+    border: 1.5px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: visible;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.comms-faq-chip-num {
+    display: none !important;
+}
+.comms-faq-chip-text {
+    min-width: 0;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: nowrap;
+    color: #0f172a;
+}
+.comms-faq-quick-replies .comms-faq-chip:hover,
+.comms-faq-quick-replies .comms-faq-chip:focus-visible {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
+    outline: none;
+}
+.comms-faq-quick-replies .comms-faq-chip:disabled,
+.comms-faq-quick-replies .comms-faq-chip.is-cooldown {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.comms-faq-quick-replies .comms-faq-cooldown-hint {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0 8px;
+    height: 1.55rem;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1;
+}
+.comms-faq-quick-replies .comms-faq-cooldown-hint[hidden] {
+    display: none !important;
+}
+.comms-chat-fs-active .comms-faq-quick-replies,
+.comms-thread-active .comms-faq-quick-replies {
+    position: relative;
+    z-index: 5;
+}
+.comms-composer-end .comms-send-btn,
+.comms-chat-composer-end .comms-chat-modal-send {
+    display: inline-flex !important;
+}
+.comms-send-btn[hidden],
+.comms-chat-modal-send[hidden] {
+    display: inline-flex !important;
+}
+.comms-faq-menu,
+.comms-faq-menu-toggle {
+    display: none !important;
+}
+
+/* Send status under latest outgoing bubble */
+.comms-send-status,
+.comms-chat-bubble-wrap .comms-send-status {
+    display: block;
+    margin: 2px 4px 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    text-align: right;
+    color: #64748b;
+}
+.comms-bubble-wrap.is-mine .comms-send-status,
+.comms-chat-bubble-wrap.is-mine .comms-send-status {
+    text-align: right;
+    padding-right: 2px;
+}
+.comms-send-status.is-sending { color: #64748b; }
+.comms-send-status.is-sent { color: #2563eb; }
+.comms-send-status.is-failed { color: #dc2626; }
+
+@media (max-width: 575.98px) {
+    .comms-faq-quick-replies {
+        padding: 6px 10px 4px;
+    }
+    .comms-faq-quick-replies .comms-faq-chip {
+        max-width: none;
+        font-size: 12px;
+        padding: 0.32rem 10px;
     }
 }

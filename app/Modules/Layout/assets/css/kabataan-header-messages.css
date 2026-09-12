@@ -71,10 +71,12 @@
     top: calc(100% + 8px);
     right: 0;
     left: auto;
-    width: 320px;
+    width: min(360px, calc(100vw - 24px));
     max-width: calc(100vw - 24px);
-    max-height: min(440px, calc(100vh - 72px));
-    height: min(440px, calc(100vh - 72px));
+    /* Taller dock so Chats / Search / All / Unread + list stay readable */
+    max-height: min(72vh, calc(100dvh - var(--kab-nav-h, 68px) - 16px));
+    height: min(72vh, calc(100dvh - var(--kab-nav-h, 68px) - 16px));
+    min-height: min(520px, calc(100dvh - var(--kab-nav-h, 68px) - 16px));
     display: flex;
     flex-direction: column;
     background: #fff;
@@ -106,7 +108,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    background: linear-gradient(135deg, #011e3c 0%, #0450a8 60%, #1a6fd4 100%);
+    background: #0039A8;
     min-height: 40px;
     box-sizing: border-box;
 }
@@ -391,10 +393,11 @@ button.comms-msg-item {
         bottom: auto;
         left: auto;
         right: 8px;
-        width: min(280px, calc(100vw - 16px));
+        width: min(320px, calc(100vw - 16px));
         max-width: calc(100vw - 16px);
-        max-height: min(58vh, 340px);
-        height: auto;
+        max-height: min(75vh, calc(100dvh - var(--kab-nav-h, 68px) - 12px));
+        height: min(75vh, calc(100dvh - var(--kab-nav-h, 68px) - 12px));
+        min-height: min(480px, calc(100dvh - var(--kab-nav-h, 68px) - 12px));
         border-radius: 12px;
         transform: translateY(-8px);
         box-shadow: 0 8px 32px rgba(2, 42, 84, 0.18), 0 2px 8px rgba(0,0,0,0.08);
@@ -409,8 +412,10 @@ button.comms-msg-item {
 @media (max-width: 320px) {
     .comms-msg-popover {
         right: 6px;
-        width: min(280px, calc(100vw - 12px));
+        width: min(300px, calc(100vw - 12px));
         max-width: calc(100vw - 12px);
-        max-height: min(58vh, 340px);
+        max-height: min(78vh, calc(100dvh - var(--kab-nav-h, 68px) - 10px));
+        height: min(78vh, calc(100dvh - var(--kab-nav-h, 68px) - 10px));
+        min-height: min(460px, calc(100dvh - var(--kab-nav-h, 68px) - 10px));
     }
 }

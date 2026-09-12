@@ -6,12 +6,14 @@ use App\Models\Announcement;
 use App\Models\AnnouncementComment;
 use App\Models\AnnouncementCommentReaction;
 use App\Models\AnnouncementReaction;
+use App\Models\AnnouncementVideo;
 use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Modules\Profile\Services\ProfileImageService;
 use App\Services\BarangayLogoUrlService;
 use App\Services\CloudinaryService;
 use App\Services\FeedCommentRateLimiter;
+use App\Services\GoogleDriveVideoUrlService;
 use App\Services\ProhibitedWordsService;
 use App\Services\SkOfficialsNotificationDispatcher;
 use Illuminate\Http\JsonResponse;
@@ -33,6 +35,7 @@ class AnnouncementFeedController extends Controller
         private readonly BarangayLogoUrlService $logoUrls,
         private readonly CloudinaryService $cloudinary,
         private readonly ProhibitedWordsService $prohibitedWords,
+        private readonly GoogleDriveVideoUrlService $googleDriveVideoUrl,
     ) {}
 
     public function feed(Request $request): JsonResponse
@@ -48,6 +51,7 @@ class AnnouncementFeedController extends Controller
                 'barangay',
                 'user',
                 'images',
+                'videos',
                 'reactions',
             ])
                 ->withCount(['reactions', 'comments'])
@@ -88,6 +92,7 @@ class AnnouncementFeedController extends Controller
             'barangay',
             'user',
             'images',
+            'videos',
             'reactions',
         ])
             ->withCount(['reactions', 'comments'])
@@ -138,6 +143,7 @@ class AnnouncementFeedController extends Controller
             'barangay',
             'user',
             'images',
+            'videos',
             'reactions.user',
             'comments.user',
             'comments.reactions.user',
@@ -165,6 +171,7 @@ class AnnouncementFeedController extends Controller
             'barangay',
             'user',
             'images',
+            'videos',
             'reactions.user',
             'comments.user',
             'comments.reactions.user',
@@ -504,6 +511,12 @@ class AnnouncementFeedController extends Controller
             ->values()
             ->all();
 
+        $videoItems = $this->formatVideos($post);
+        $primaryDrive = collect($videoItems)->first(
+            fn ($v) => ($v['provider'] ?? null) === AnnouncementVideo::PROVIDER_GOOGLE_DRIVE
+        );
+        $legacyDrive = $primaryDrive ?: $this->googleDriveVideoUrl->present($post->link_url);
+
         $comments = $commentsLoaded ? $post->comments : collect();
         $reactionsSummary = $commentsLoaded && $post->relationLoaded('reactions')
             ? $this->formatReactionsSummary(
@@ -521,7 +534,9 @@ class AnnouncementFeedController extends Controller
             'body' => $post->body,
             'image_url' => $images[0] ?? null,
             'images' => $images,
+            'videos' => $videoItems,
             'link_url' => $post->link_url,
+            'google_drive_video' => $legacyDrive,
             'is_federation_wide' => (bool) $post->is_federation_wide,
             'barangay_name' => $post->barangay?->name,
             'barangay_logo_url' => $this->logoUrls->resolve($post->barangay_id),
@@ -543,6 +558,60 @@ class AnnouncementFeedController extends Controller
                 ? $this->formatCommentTree($comments, $userId)
                 : [],
         ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function formatVideos(Announcement $post): array
+    {
+        $records = $post->relationLoaded('videos') ? $post->videos : collect();
+
+        return $records
+            ->filter(static fn (AnnouncementVideo $video): bool => ($video->status ?: 'active') === 'active')
+            ->map(function (AnnouncementVideo $video) {
+                if ($video->provider === AnnouncementVideo::PROVIDER_GOOGLE_DRIVE) {
+                    $drive = $this->googleDriveVideoUrl->present(
+                        $video->video_url ?: ('https://drive.google.com/file/d/'.$video->google_drive_file_id.'/view')
+                    );
+
+                    return [
+                        'id' => $video->id,
+                        'provider' => AnnouncementVideo::PROVIDER_GOOGLE_DRIVE,
+                        'video_url' => $drive['media_url'] ?? $video->video_url,
+                        'public_id' => null,
+                        'google_drive_file_id' => $drive['external_id'] ?? $video->google_drive_file_id,
+                        'google_drive_folder_id' => $video->google_drive_folder_id,
+                        'name' => $video->name,
+                        'preview_url' => $drive['preview_url'] ?? null,
+                        'open_url' => $drive['open_url'] ?? ($video->web_view_link ?: null),
+                        'mime_type' => $video->mime_type,
+                        'bytes' => $video->bytes,
+                        'status' => $video->status ?: 'active',
+                        'media_type' => 'google_drive_video',
+                        'external_provider' => 'google_drive',
+                        'external_id' => $drive['external_id'] ?? $video->google_drive_file_id,
+                    ];
+                }
+
+                return [
+                    'id' => $video->id,
+                    'provider' => AnnouncementVideo::PROVIDER_CLOUDINARY,
+                    'video_url' => $video->video_url,
+                    'public_id' => $video->public_id,
+                    'google_drive_file_id' => null,
+                    'google_drive_folder_id' => null,
+                    'name' => $video->name,
+                    'preview_url' => null,
+                    'open_url' => null,
+                    'mime_type' => $video->mime_type,
+                    'bytes' => $video->bytes,
+                    'status' => $video->status ?: 'active',
+                    'media_type' => 'cloudinary_video',
+                    'external_provider' => 'cloudinary',
+                    'external_id' => $video->public_id,
+                ];
+            })->values()->all();
     }
 
     /**

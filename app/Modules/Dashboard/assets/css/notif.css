@@ -24,7 +24,7 @@
     font-weight: 700;
     line-height: 16px;
     text-align: center;
-    box-shadow: 0 0 0 2px rgba(4, 80, 168, 0.9);
+    box-shadow: 0 0 0 2px #0039A8;
     white-space: nowrap;
     box-sizing: border-box;
     font-variant-numeric: tabular-nums;
@@ -68,7 +68,7 @@
     right: var(--np-arrow-right, 16px);
     width: 16px;
     height: 8px;
-    background: linear-gradient(135deg, #022a54 0%, #0450a8 100%);
+    background: #0039A8;
     clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
     z-index: 1;
 }
@@ -97,7 +97,7 @@
     justify-content: space-between;
     gap: 10px;
     padding: 14px 16px 12px;
-    background: linear-gradient(135deg, #022a54 0%, #0450a8 100%);
+    background: #0039A8;
     flex-shrink: 0;
 }
 
@@ -169,11 +169,19 @@
 .np-close-btn:hover { background: rgba(255,255,255,0.3); }
 .np-close-btn svg { width: 14px; height: 14px; }
 
-/* Body */
+/* Body — scrollable without a visible scrollbar indicator */
 .np-body {
     flex: 1;
     overflow-y: auto;
     max-height: 360px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.np-body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
 }
 
 /* Empty state */

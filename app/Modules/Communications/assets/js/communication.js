@@ -1089,7 +1089,7 @@
     var FAQ_CACHE_FRESH_MS = 15 * 1000;
 
     function faqSuggestionsCacheKey(conversationId) {
-        return 'comms_faq_sugg_v6_' + String(conversationId || '0');
+        return 'comms_faq_sugg_v8_' + String(conversationId || '0');
     }
 
     function readFaqSuggestionsCache(conversationId) {

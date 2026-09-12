@@ -2,10 +2,10 @@
  * Reusable Kabataan header — user menu, overlay exclusivity, logout modal & mobile helpers
  */
 import '../css/kabataan-header-messages.css';
-import '../css/chat-modal.css';
+import '../../../Communications/assets/css/chat-modal.css';
 import '../css/kabataan-messages.css';
 import '../css/kabataan-call.css';
-import './chat-modal.js';
+import '../../../Communications/assets/js/chat-modal.js';
 
 (function () {
     'use strict';
@@ -225,8 +225,23 @@ import './chat-modal.js';
     function wireSeeAllMessagesLinks() {
         document.querySelectorAll('.comms-msg-see-all-link').forEach(function (link) {
             if (link.dataset.returnWired === '1') return;
-            link.addEventListener('click', function () {
+            link.addEventListener('mouseenter', function () {
+                try {
+                    var warm = document.createElement('link');
+                    warm.rel = 'prefetch';
+                    warm.href = '/communications';
+                    document.head.appendChild(warm);
+                } catch (e) { /* ignore */ }
+            }, { once: true });
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                var activeId = window.__COMMS_HEADER_ACTIVE_ID__ || null;
+                if (typeof window.goToSeeAllMessages === 'function') {
+                    window.goToSeeAllMessages(activeId);
+                    return;
+                }
                 storeMessagesReturnUrl();
+                window.location.replace('/communications' + (activeId ? ('?conversation=' + encodeURIComponent(activeId)) : ''));
             });
             link.dataset.returnWired = '1';
         });
@@ -337,6 +352,7 @@ import './chat-modal.js';
         officials = Array.isArray(officials) ? officials : [];
         const items = conversations.slice(0, 8);
         window.__COMMS_HEADER_CONVERSATIONS__ = conversations;
+        window.__COMMS_HEADER_OFFICIALS__ = officials;
 
         const chatPeerIds = {};
         conversations.forEach(function (c) {
@@ -409,6 +425,15 @@ import './chat-modal.js';
 
         if (typeof window.renderFullscreenChatList === 'function') {
             window.renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__);
+        }
+
+        // Prefetch Officials FAQ automations so chips appear instantly when a chat opens.
+        if (window.Comms && typeof window.Comms.prefetchFaqSuggestions === 'function') {
+            conversations.slice(0, 8).forEach(function (c) {
+                if (c && c.id) {
+                    window.Comms.prefetchFaqSuggestions(c.id, '/api/communications/conversations/__ID__/faq-suggestions');
+                }
+            });
         }
 
         const unreadTotal = items.reduce(function (sum, c) { return sum + Number(c.unread_count || 0); }, 0);
@@ -512,6 +537,7 @@ import './chat-modal.js';
 
     window.toggleMessagesPopover = toggleMessagesPopover;
     window.refreshMessagesPopover = refreshMessagesPopover;
+    window.__COMMS_PAINT_MESSAGES_POPOVER__ = paintMessagesPopover;
     hydrateMessagesPopoverFromCache();
     wireSeeAllMessagesLinks();
     syncMessagesPageHeaderBtn();

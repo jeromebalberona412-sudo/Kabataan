@@ -210,25 +210,27 @@ class ChatAutomationService
         // (Officials + Kabataan are separate apps with separate cache stores).
         $automation = ChatAutomation::query()
             ->where('sk_official_id', $skOfficialId)
-            ->whereRaw('is_enabled IS TRUE')
             ->first();
 
-        if ($automation === null) {
+        if ($automation === null || ! filter_var($automation->is_enabled, FILTER_VALIDATE_BOOLEAN)) {
             return [];
         }
 
         return ChatAutomationFaq::query()
             ->where('chat_automation_id', $automation->id)
-            ->whereRaw('is_active IS TRUE')
             ->orderBy('sort_order')
             ->orderBy('id')
             ->limit(self::MAX_FAQS)
-            ->get(['id', 'question', 'automated_response'])
+            ->get(['id', 'question', 'automated_response', 'is_active'])
+            ->filter(fn (ChatAutomationFaq $faq) => filter_var($faq->is_active, FILTER_VALIDATE_BOOLEAN))
+            ->values()
             ->map(fn (ChatAutomationFaq $faq) => [
                 'id' => (int) $faq->id,
-                'question' => (string) $faq->question,
+                'question' => trim((string) $faq->question),
                 'automated_response' => (string) $faq->automated_response,
             ])
+            ->filter(fn (array $faq) => $faq['question'] !== '')
+            ->values()
             ->all();
     }
 
@@ -246,19 +248,19 @@ class ChatAutomationService
     {
         $automation = ChatAutomation::query()
             ->where('sk_official_id', $skOfficialId)
-            ->whereRaw('is_enabled IS TRUE')
             ->first();
 
-        if ($automation === null) {
+        if ($automation === null || ! filter_var($automation->is_enabled, FILTER_VALIDATE_BOOLEAN)) {
             return collect();
         }
 
         return ChatAutomationFaq::query()
             ->where('chat_automation_id', $automation->id)
-            ->whereRaw('is_active IS TRUE')
             ->orderBy('sort_order')
             ->orderBy('id')
             ->limit(self::MAX_FAQS)
-            ->get();
+            ->get()
+            ->filter(fn (ChatAutomationFaq $faq) => filter_var($faq->is_active, FILTER_VALIDATE_BOOLEAN))
+            ->values();
     }
 }

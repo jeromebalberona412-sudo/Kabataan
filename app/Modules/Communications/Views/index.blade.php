@@ -117,7 +117,16 @@
                 </div>
                 <div class="comms-typing" id="commsTyping" hidden aria-live="polite"></div>
 
-                <form class="comms-composer" id="commsComposer" autocomplete="off">
+                <div class="comms-composer-dock" id="commsComposerDock">
+                    {{-- SK Official FAQ chips: one horizontal scroll row --}}
+                    <div class="comms-faq-quick-replies" id="commsFaqSuggestions" hidden>
+                        <div class="comms-faq-quick-replies__row">
+                            <span class="comms-faq-cooldown-hint" id="commsFaqCooldownHint" hidden role="status"></span>
+                            <div class="comms-faq-suggestions-list" id="commsFaqSuggestionsList" role="list" aria-label="Suggested questions"></div>
+                        </div>
+                    </div>
+
+                    <form class="comms-composer" id="commsComposer" autocomplete="off">
                     <input type="file" id="commsPhotoInput" class="visually-hidden" accept="image/jpeg,image/png,image/webp,image/gif" multiple aria-hidden="true" tabindex="-1">
                     <input type="file" id="commsFileInput" class="visually-hidden" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-hidden="true" tabindex="-1">
                     <div class="comms-composer-tools">
@@ -147,31 +156,12 @@
                         <textarea id="commsMessageInput" rows="1" placeholder="Type a message"></textarea>
                     </div>
                     <div class="comms-composer-end">
-                        <div class="comms-faq-menu" id="commsFaqMenu" hidden>
-                            <button
-                                type="button"
-                                class="comms-faq-menu-toggle"
-                                id="commsFaqMenuToggle"
-                                aria-expanded="false"
-                                aria-controls="commsFaqSuggestions"
-                                title="Suggested questions"
-                                aria-label="Suggested questions"
-                            >
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                    <line x1="4" y1="7" x2="20" y2="7"/>
-                                    <line x1="4" y1="12" x2="20" y2="12"/>
-                                    <line x1="4" y1="17" x2="20" y2="17"/>
-                                </svg>
-                            </button>
-                            <div class="comms-faq-suggestions" id="commsFaqSuggestions" hidden>
-                                <div class="comms-faq-suggestions-list" id="commsFaqSuggestionsList" role="list"></div>
-                            </div>
-                        </div>
-                        <button type="submit" class="comms-send-btn" id="commsSendBtn" title="Send" aria-label="Send message" hidden>
+                        <button type="submit" class="comms-send-btn" id="commsSendBtn" title="Send" aria-label="Send message">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                         </button>
                     </div>
-                </form>
+                    </form>
+                </div>
             </div>
         </section>
     </div>

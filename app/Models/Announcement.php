@@ -56,6 +56,11 @@ class Announcement extends Model
         return $this->hasMany(AnnouncementImage::class, 'community_feed_id')->orderBy('sort_order');
     }
 
+    public function videos(): HasMany
+    {
+        return $this->hasMany(AnnouncementVideo::class, 'community_feed_id')->orderBy('sort_order');
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereRaw('"is_archived" = false');

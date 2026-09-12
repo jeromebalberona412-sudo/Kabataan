@@ -46,7 +46,8 @@ import './communication.js';
         faqKnownEmpty: false,
         faqCooldownUntil: {},
         faqCooldownTimer: null,
-        peerRefreshTimer: null
+        peerRefreshTimer: null,
+        openRequestId: 0
     };
 
     var els = {
@@ -692,7 +693,7 @@ import './communication.js';
             html += '</div>';
         }
         files.forEach(function (att) {
-            html += '<a class="comms-bubble-file' + fileKindClass(att) + '" href="' + Comms.escapeHtml(att.download_url) + '" target="_blank" rel="noopener noreferrer">' +
+            html += '<a class="comms-bubble-file' + fileKindClass(att) + '" href="' + Comms.escapeHtml(att.download_url || '#') + '" download="' + Comms.escapeHtml(att.file_name || 'document') + '" target="_blank" rel="noopener noreferrer" title="' + Comms.escapeHtml(att.file_name || 'document') + '">' +
                 '<span class="comms-bubble-file-ext">' + Comms.escapeHtml(fileExtLabel(att.file_name)) + '</span>' +
                 '<span class="comms-bubble-file-meta">' +
                 '<span class="comms-bubble-file-name">' + Comms.escapeHtml(att.file_name || 'Document') + '</span>' +
@@ -890,6 +891,24 @@ import './communication.js';
         pushPendingFiles([file], isImageFile(file) ? 'image' : 'file');
     }
 
+    function latestMineMessageId(items) {
+        for (var i = items.length - 1; i >= 0; i -= 1) {
+            if (items[i] && items[i].mine && items[i].message_type !== 'call' && items[i].message_type !== 'system') {
+                return String(items[i].id);
+            }
+        }
+        return null;
+    }
+
+    function renderSendStatus(msg, isLatestMine) {
+        if (!msg || !msg.mine || !isLatestMine) return '';
+        var status = msg.send_status || '';
+        if (!status && String(msg.id || '').indexOf('local-') === 0) status = 'sending';
+        if (status !== 'sending' && status !== 'sent' && status !== 'failed') return '';
+        var label = status === 'sending' ? 'Sending...' : (status === 'sent' ? 'Sent' : 'Failed');
+        return '<div class="comms-send-status is-' + status + '" role="status">' + label + '</div>';
+    }
+
     function renderMessages(opts) {
         opts = opts || {};
         hidePageReactionPicker();
@@ -907,6 +926,7 @@ import './communication.js';
         var skipUntil = -1;
         var prevCreatedAt = null;
         var latestIndex = items.length - 1;
+        var latestMineId = latestMineMessageId(items);
         items.forEach(function (m, index) {
             if (index <= skipUntil) return;
 
@@ -1021,6 +1041,7 @@ import './communication.js';
                 '</div>' +
                 '</div>' +
                 renderReactionChips(m.reactions, m.id) +
+                renderSendStatus(m, latestMineId != null && String(m.id) === latestMineId) +
                 '</div>');
             prevCreatedAt = m.created_at;
         });
@@ -1577,68 +1598,30 @@ import './communication.js';
         });
     }
 
-    function setFaqMenuOpen(open) {
-        if (!els.faqSuggestions || !els.faqMenuToggle) return;
-        var isOpen = !!open;
-        els.faqSuggestions.hidden = !isOpen;
-        els.faqMenuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        els.faqMenuToggle.classList.toggle('is-open', isOpen);
+    function setFaqMenuOpen() {
+        // Burger removed — quick replies stay visible when FAQs exist.
+        renderFaqSuggestions();
     }
 
     function syncComposerEndControls() {
         var hasText = !!(els.input && String(els.input.value || '').trim());
         var hasFile = !!(state.pendingAttachments && state.pendingAttachments.length) || !!state.pendingAttachment;
-        var showSend = hasText || hasFile;
-        var faqs = state.faqSuggestions || [];
-        var hasFaqs = faqs.length > 0;
-        // Same end-slot: burger when empty, send when typing/attaching.
-        var showFaq = !showSend && (hasFaqs || (!!state.faqLoading && !state.faqKnownEmpty));
+        var canSend = hasText || hasFile;
 
         if (els.sendBtn) {
-            els.sendBtn.hidden = !showSend;
-            els.sendBtn.disabled = state.sendInFlight || !showSend;
-            els.sendBtn.setAttribute('aria-hidden', showSend ? 'false' : 'true');
-        }
-        if (els.faqMenu) {
-            if (!showFaq) {
-                els.faqMenu.hidden = true;
-                setFaqMenuOpen(false);
-            } else {
-                els.faqMenu.hidden = false;
-                els.faqMenu.removeAttribute('data-no-faqs');
-            }
-        }
-        if (els.faqMenuToggle) {
-            var coolLeft = faqCooldownRemaining();
-            els.faqMenuToggle.disabled = !hasFaqs && !state.faqLoading;
-            els.faqMenuToggle.classList.toggle('is-loading', !!state.faqLoading && !hasFaqs);
-            els.faqMenuToggle.classList.toggle('is-cooldown', coolLeft > 0);
-            els.faqMenuToggle.setAttribute('aria-busy', (state.faqLoading && !hasFaqs) ? 'true' : 'false');
-            els.faqMenuToggle.setAttribute('aria-hidden', showFaq ? 'false' : 'true');
-            els.faqMenuToggle.title = coolLeft > 0
-                ? ('Suggested questions available in ' + coolLeft + 's')
-                : 'Suggested questions';
-            var timerBadge = els.faqMenuToggle.querySelector('.comms-faq-toggle-timer');
-            if (coolLeft > 0) {
-                if (!timerBadge) {
-                    timerBadge = document.createElement('span');
-                    timerBadge.className = 'comms-faq-toggle-timer';
-                    timerBadge.setAttribute('aria-hidden', 'true');
-                    els.faqMenuToggle.appendChild(timerBadge);
-                }
-                timerBadge.textContent = String(coolLeft);
-            } else if (timerBadge) {
-                timerBadge.remove();
-            }
+            els.sendBtn.hidden = false;
+            els.sendBtn.removeAttribute('hidden');
+            els.sendBtn.disabled = state.sendInFlight || !canSend;
+            els.sendBtn.setAttribute('aria-hidden', 'false');
         }
         if (els.composerEnd) {
-            els.composerEnd.classList.toggle('has-send', showSend);
-            els.composerEnd.classList.toggle('has-faq', showFaq);
+            els.composerEnd.classList.add('has-send');
+            els.composerEnd.classList.remove('has-faq');
         }
     }
 
     function faqCacheKey(conversationId) {
-        return 'comms_faq_sugg_v6_' + String(conversationId || '0');
+        return 'comms_faq_sugg_v8_' + String(conversationId || '0');
     }
 
     function readFaqCache(conversationId) {
@@ -1731,63 +1714,6 @@ import './communication.js';
         }
     }
 
-    function startFaqCooldown(seconds) {
-        var cid = String(state.activeId || '');
-        if (!cid) return;
-        var secs = Math.max(1, Number(seconds) || 10);
-        state.faqCooldownUntil[cid] = Date.now() + (secs * 1000);
-        stopFaqCooldownTimer();
-        renderFaqSuggestions();
-        state.faqCooldownTimer = window.setInterval(function () {
-            if (faqCooldownRemaining() <= 0) {
-                stopFaqCooldownTimer();
-                delete state.faqCooldownUntil[String(state.activeId || '')];
-            }
-            renderFaqSuggestions();
-        }, 250);
-    }
-
-    function renderFaqSuggestions() {
-        if (!els.faqSuggestions || !els.faqSuggestionsList) return;
-        var faqs = state.faqSuggestions || [];
-        var showMenu = faqs.length > 0 || (state.faqLoading && !state.faqKnownEmpty);
-        if (!showMenu) {
-            els.faqSuggestionsList.innerHTML = '';
-            var oldHint = els.faqSuggestions.querySelector(':scope > .comms-faq-cooldown-hint');
-            if (oldHint) oldHint.remove();
-            syncComposerEndControls();
-            return;
-        }
-        var remaining = faqCooldownRemaining();
-        var cooling = remaining > 0;
-        els.faqSuggestionsList.innerHTML = faqs.map(function (faq) {
-            var q = String(faq.question || '');
-            var answer = String(faq.automated_response || '');
-            var faqId = Number(faq.id) || 0;
-            return '<button type="button" class="comms-faq-chip' + (cooling ? ' is-cooldown' : '') + '"' +
-                (cooling ? ' disabled aria-disabled="true"' : '') +
-                ' role="listitem" title="' + Comms.escapeHtml(q) + '"' +
-                (faqId ? ' data-faq-id="' + faqId + '"' : '') +
-                ' data-faq-question="' + Comms.escapeHtml(q) + '"' +
-                (answer ? ' data-faq-response="' + Comms.escapeHtml(answer) + '"' : '') +
-                '>' + Comms.escapeHtml(q) + '</button>';
-        }).join('');
-
-        var hint = els.faqSuggestions.querySelector(':scope > .comms-faq-cooldown-hint');
-        if (cooling) {
-            if (!hint) {
-                hint = document.createElement('p');
-                hint.className = 'comms-faq-cooldown-hint';
-                hint.setAttribute('role', 'status');
-                els.faqSuggestions.insertBefore(hint, els.faqSuggestionsList);
-            }
-            hint.textContent = 'Suggested questions locked — wait ' + remaining + 's';
-        } else if (hint) {
-            hint.remove();
-        }
-        syncComposerEndControls();
-    }
-
     function loadFaqSuggestions(conversationId) {
         if (!routes.faqSuggestions || !conversationId) {
             state.faqSuggestions = [];
@@ -1807,7 +1733,6 @@ import './communication.js';
         } else {
             state.faqLoading = true;
             state.faqKnownEmpty = false;
-            if (els.faqMenu) els.faqMenu.hidden = false;
             renderFaqSuggestions();
         }
         // Always refresh so Official FAQ edits show up quickly.
@@ -1849,12 +1774,47 @@ import './communication.js';
         window.CommsRealtime.broadcastTyping(state.activeId);
     }
 
+    function clearHeaderUnreadForConversation(conversationId) {
+        var cid = Number(conversationId);
+        if (!cid) return;
+        var list = Array.isArray(window.__COMMS_HEADER_CONVERSATIONS__)
+            ? window.__COMMS_HEADER_CONVERSATIONS__
+            : null;
+        var cleared = 0;
+        if (list) {
+            list.forEach(function (c) {
+                if (Number(c.id) !== cid) return;
+                cleared = Number(c.unread_count || 0);
+                c.unread_count = 0;
+            });
+            if (window.Comms && typeof window.Comms.writeInboxCache === 'function') {
+                window.Comms.writeInboxCache(list);
+            }
+            if (typeof window.__COMMS_PAINT_MESSAGES_POPOVER__ === 'function') {
+                window.__COMMS_PAINT_MESSAGES_POPOVER__(list, window.__COMMS_HEADER_OFFICIALS__ || []);
+            }
+        }
+        var badge = document.getElementById('commsMsgBadge');
+        if (badge && cleared > 0) {
+            var next = Math.max(0, Number(badge.dataset.unreadTotal || 0) - cleared);
+            badge.dataset.unreadTotal = String(next);
+            badge.textContent = next > 99 ? '99+' : String(next);
+            badge.style.display = next > 0 ? '' : 'none';
+        } else if (typeof window.CommsRealtime !== 'undefined'
+            && typeof window.CommsRealtime.refreshUnreadBadge === 'function') {
+            window.CommsRealtime.refreshUnreadBadge();
+        }
+    }
+
     function openConversation(id, opts) {
         opts = opts || {};
-        if (state.activeId && Number(state.activeId) !== Number(id)) {
+        var switching = !!(state.activeId && Number(state.activeId) !== Number(id));
+        if (switching) {
             stopLocalTyping();
         }
         state.activeId = Number(id);
+        state.openRequestId = (state.openRequestId || 0) + 1;
+        var openRequestId = state.openRequestId;
         window.__COMMS_PAGE_ACTIVE_ID__ = state.activeId;
         setThreadOpen(true);
         els.threadEmpty.hidden = true;
@@ -1875,18 +1835,30 @@ import './communication.js';
         });
         if (listConv && listConv.other_user) {
             updatePeerHeader(listConv);
+            state.activeConversation = listConv;
+        } else if (switching) {
+            state.activeConversation = null;
         }
         if (els.composer) {
             els.composer.hidden = false;
             els.composer.removeAttribute('hidden');
             els.composer.style.display = 'flex';
         }
-        // Show FAQ burger immediately while suggestions load (empty composer slot).
-        state.faqLoading = true;
-        state.faqKnownEmpty = false;
-        if (els.faqMenu) {
-            els.faqMenu.hidden = false;
-            els.faqMenu.removeAttribute('data-no-faqs');
+
+        // Prefer FAQ cache for the new thread so chips do not flash hide/show.
+        if (switching) {
+            var faqCached = readFaqCache(id);
+            var faqCachedList = (faqCached && Array.isArray(faqCached.faqs)) ? faqCached.faqs : null;
+            if (faqCachedList && faqCachedList.length) {
+                state.faqSuggestions = faqCachedList;
+                state.faqLoading = false;
+                state.faqKnownEmpty = false;
+            } else {
+                state.faqSuggestions = [];
+                state.faqLoading = true;
+                state.faqKnownEmpty = false;
+            }
+            renderFaqSuggestions();
         }
         syncComposerEndControls();
         resizeComposer();
@@ -1903,43 +1875,57 @@ import './communication.js';
                 updatePeerHeader(cached.conversation);
             }
             renderMessages({ stickBottom: true });
+        } else {
+            // Paint empty thread immediately — no "Loading messages…" delay.
+            state.messages = [];
+            if (els.messages) {
+                els.messages.innerHTML = '<p class="comms-empty">No messages yet. Say hello.</p>';
+            }
         }
+
+        // Instant unread clear (0s) then confirm with API.
+        if (listConv) {
+            listConv.unread_count = 0;
+            renderConversations('');
+        }
+        clearHeaderUnreadForConversation(id);
+        Comms.api(Comms.route(routes.read, id), { method: 'POST', body: '{}' }).catch(function () {});
 
         var convPromise = Comms.api(Comms.route(routes.showConversation, id));
         var msgPromise = Comms.api(Comms.route(routes.messages, id));
-        renderFaqSuggestions();
         loadFaqSuggestions(id);
 
         convPromise.then(function (data) {
             if (!data || !data.conversation) return;
-            if (Number(state.activeId) !== Number(id)) return;
+            if (Number(state.activeId) !== Number(id) || openRequestId !== state.openRequestId) return;
             state.activeConversation = data.conversation;
             updatePeerHeader(data.conversation);
             persistActiveThreadCache();
         }).catch(function () { /* non-fatal */ });
 
         return msgPromise.then(function (data) {
-            var freshMessages = mergePreservedReactions(data.messages || []);
+            if (Number(state.activeId) !== Number(id) || openRequestId !== state.openRequestId) return;
+            var freshMessages = mergePendingLocalMessages(mergePreservedReactions(data.messages || []));
             var freshEmojis = Array.isArray(data.reaction_emojis) ? data.reaction_emojis : [];
-            if (Number(state.activeId) === Number(id)) {
-                var changed = messagesFingerprint(freshMessages) !== messagesFingerprint(state.messages);
-                if (freshEmojis.length) state.reactionEmojis = freshEmojis;
-                if (changed || !hadCache) {
-                    state.messages = freshMessages;
-                    renderMessages({ stickBottom: true });
-                } else {
-                    // Unchanged cache — still pin to newest messages at the bottom.
-                    jumpToLatestMessages();
-                }
+            var changed = messagesFingerprint(freshMessages) !== messagesFingerprint(state.messages);
+            if (freshEmojis.length) state.reactionEmojis = freshEmojis;
+            if (changed || !hadCache) {
+                state.messages = freshMessages;
+                renderMessages({ stickBottom: true });
+            } else {
+                jumpToLatestMessages();
             }
-            saveMsgCache(id, Number(state.activeId) === Number(id) ? state.messages : freshMessages, freshEmojis.length ? freshEmojis : state.reactionEmojis);
-            Comms.api(Comms.route(routes.read, id), { method: 'POST', body: '{}' }).catch(function () {});
+            saveMsgCache(id, state.messages, state.reactionEmojis);
             if (!opts.skipReloadList) {
                 scheduleReloadConversations();
             }
             jumpToLatestMessages();
         }).catch(function (err) {
+            if (Number(state.activeId) !== Number(id) || openRequestId !== state.openRequestId) return;
             if (!hadCache) {
+                if (els.messages) {
+                    els.messages.innerHTML = '<p class="comms-empty">Unable to load messages.</p>';
+                }
                 Comms.showToast(err.message || 'Unable to open conversation.', 'error');
             }
         });
@@ -1960,6 +1946,37 @@ import './communication.js';
             if (!Array.isArray(local.reactions)) return m;
             return Object.assign({}, m, { reactions: cloneReactions(local.reactions) });
         });
+    }
+
+    /** Keep in-flight optimistic bubbles (FAQ send + auto-reply) across message reloads. */
+    function mergePendingLocalMessages(serverMessages) {
+        var locals = (state.messages || []).filter(function (m) {
+            return String(m.id || '').indexOf('local-') === 0;
+        });
+        if (!locals.length) return serverMessages || [];
+        var merged = (serverMessages || []).slice();
+        locals.forEach(function (local) {
+            var lid = String(local.id || '');
+            if (lid.indexOf('local-auto-') === 0) {
+                var hasAuto = merged.some(function (m) {
+                    return String(m.message_type) === 'automation'
+                        && String(m.body || '') === String(local.body || '');
+                });
+                if (!hasAuto) merged.push(local);
+                return;
+            }
+            if (lid.indexOf('local-att-') === 0) {
+                merged.push(local);
+                return;
+            }
+            var hasText = merged.some(function (m) {
+                return !!m.mine
+                    && Number(m.id)
+                    && String(m.body || '') === String(local.body || '');
+            });
+            if (!hasText) merged.push(local);
+        });
+        return merged;
     }
 
     function appendMessage(message) {
@@ -1986,7 +2003,7 @@ import './communication.js';
     function reloadActiveMessages() {
         if (!state.activeId) return Promise.resolve();
         return Comms.api(Comms.route(routes.messages, state.activeId)).then(function (data) {
-            state.messages = mergePreservedReactions(data.messages || []);
+            state.messages = mergePendingLocalMessages(mergePreservedReactions(data.messages || []));
             if (Array.isArray(data.reaction_emojis) && data.reaction_emojis.length) {
                 state.reactionEmojis = data.reaction_emojis;
             }
@@ -2007,19 +2024,131 @@ import './communication.js';
     }
 
     function syncComposerHeightVar() {
-        if (!els.composer || !els.app) return;
-        var h = Math.ceil(els.composer.getBoundingClientRect().height || els.composer.offsetHeight || 64);
+        if (!els.app) return;
+        var dock = document.getElementById('commsComposerDock') || els.composer;
+        if (!dock) return;
+        var h = Math.ceil(dock.getBoundingClientRect().height || dock.offsetHeight || 64);
         els.app.style.setProperty('--comms-composer-h', Math.max(64, h) + 'px');
+    }
+
+    function updateFaqCooldownUiOnly() {
+        if (!els.faqSuggestions || !els.faqSuggestionsList) return;
+        var remaining = faqCooldownRemaining();
+        var cooling = remaining > 0;
+        var hint = document.getElementById('commsFaqCooldownHint')
+            || els.faqSuggestions.querySelector('.comms-faq-cooldown-hint');
+        if (hint) {
+            if (cooling) {
+                hint.hidden = false;
+                hint.removeAttribute('hidden');
+                hint.textContent = 'Wait ' + remaining + 's';
+            } else {
+                hint.hidden = true;
+                hint.setAttribute('hidden', '');
+                hint.textContent = '';
+            }
+        }
+        els.faqSuggestionsList.querySelectorAll('.comms-faq-chip').forEach(function (chip) {
+            chip.classList.toggle('is-cooldown', cooling);
+            chip.disabled = cooling;
+            if (cooling) chip.setAttribute('aria-disabled', 'true');
+            else chip.removeAttribute('aria-disabled');
+        });
+    }
+
+    function startFaqCooldown(seconds) {
+        var cid = String(state.activeId || '');
+        if (!cid) return;
+        var secs = Math.max(1, Number(seconds) || 10);
+        state.faqCooldownUntil[cid] = Date.now() + (secs * 1000);
+        stopFaqCooldownTimer();
+        updateFaqCooldownUiOnly();
+        state.faqCooldownTimer = window.setInterval(function () {
+            if (faqCooldownRemaining() <= 0) {
+                stopFaqCooldownTimer();
+                delete state.faqCooldownUntil[String(state.activeId || '')];
+                updateFaqCooldownUiOnly();
+                return;
+            }
+            updateFaqCooldownUiOnly();
+        }, 200);
+    }
+
+    function composerHasDraftText() {
+        return !!(els.input && String(els.input.value || '').trim());
+    }
+
+    function syncFaqVisibilityForComposer() {
+        if (!els.faqSuggestions) return;
+        var faqs = state.faqSuggestions || [];
+        if (!faqs.length || composerHasDraftText()) {
+            els.faqSuggestions.hidden = true;
+            els.faqSuggestions.setAttribute('hidden', '');
+        } else {
+            els.faqSuggestions.hidden = false;
+            els.faqSuggestions.removeAttribute('hidden');
+        }
+        syncComposerHeightVar();
+    }
+
+    function renderFaqSuggestions() {
+        if (!els.faqSuggestions || !els.faqSuggestionsList) return;
+        var faqs = state.faqSuggestions || [];
+        var hint = document.getElementById('commsFaqCooldownHint')
+            || els.faqSuggestions.querySelector('.comms-faq-cooldown-hint');
+        if (!faqs.length) {
+            els.faqSuggestionsList.innerHTML = '';
+            els.faqSuggestions.hidden = true;
+            els.faqSuggestions.setAttribute('hidden', '');
+            if (hint) {
+                hint.hidden = true;
+                hint.textContent = '';
+            }
+            syncComposerEndControls();
+            syncComposerHeightVar();
+            return;
+        }
+        var remaining = faqCooldownRemaining();
+        var cooling = remaining > 0;
+        els.faqSuggestionsList.innerHTML = faqs.map(function (faq) {
+            var q = String(faq.question || '').trim();
+            var answer = String(faq.automated_response || '');
+            var faqId = Number(faq.id) || 0;
+            return '<button type="button" class="comms-faq-chip' + (cooling ? ' is-cooldown' : '') + '"' +
+                (cooling ? ' disabled aria-disabled="true"' : '') +
+                ' role="listitem" title="' + Comms.escapeHtml(q) + '"' +
+                (faqId ? ' data-faq-id="' + faqId + '"' : '') +
+                ' data-faq-question="' + Comms.escapeHtml(q) + '"' +
+                (answer ? ' data-faq-response="' + Comms.escapeHtml(answer) + '"' : '') +
+                '><span class="comms-faq-chip-text">' + Comms.escapeHtml(q) + '</span></button>';
+        }).join('');
+
+        if (hint) {
+            if (cooling) {
+                hint.hidden = false;
+                hint.removeAttribute('hidden');
+                hint.textContent = 'Wait ' + remaining + 's';
+            } else {
+                hint.hidden = true;
+                hint.setAttribute('hidden', '');
+                hint.textContent = '';
+            }
+        }
+        syncFaqVisibilityForComposer();
+        syncComposerEndControls();
+        syncComposerHeightVar();
     }
 
     function resizeComposer() {
         if (!els.input) return;
         if (Comms.resizeGrowTextarea) {
-            Comms.resizeGrowTextarea(els.input, 5);
+            // ChatGPT-style: start 1 line, grow up to 8, then scroll.
+            Comms.resizeGrowTextarea(els.input, 5, 1);
         } else {
             els.input.style.height = 'auto';
-            var next = Math.min(Math.max(els.input.scrollHeight, 44), 140);
+            var next = Math.min(Math.max(els.input.scrollHeight, 40), 200);
             els.input.style.height = next + 'px';
+            els.input.style.overflowY = els.input.scrollHeight > 200 ? 'auto' : 'hidden';
         }
         syncComposerHeightVar();
     }
@@ -2069,6 +2198,7 @@ import './communication.js';
                 body: text,
                 message_type: 'text',
                 mine: true,
+                send_status: 'sending',
                 created_at: new Date().toISOString(),
                 reactions: [],
                 attachments: []
@@ -2086,36 +2216,40 @@ import './communication.js';
                 });
                 startFaqCooldown(10);
             }
-            persistActiveThreadCache();
-            renderMessages({ stickBottom: true });
             if (els.input) els.input.value = '';
-            resizeComposer();
-            syncComposerEndControls();
             var payload = { body: text };
             if (faqId) payload.faq_id = faqId;
+            // Fire POST immediately (before paint) so FAQ replies feel realtime.
             jobs.push(Comms.api(Comms.route(routes.messages, state.activeId), {
                 method: 'POST',
                 body: JSON.stringify(payload),
                 dedupe: false
             }).then(function (data) {
                 var tempIdx = state.messages.findIndex(function (m) { return String(m.id) === String(textTempId); });
-                if (tempIdx !== -1 && data.message) state.messages[tempIdx] = data.message;
-                else if (data.message) appendMessage(data.message);
+                if (tempIdx !== -1 && data.message) {
+                    state.messages[tempIdx] = Object.assign({}, data.message, { send_status: 'sent', mine: true });
+                } else if (data.message) {
+                    appendMessage(Object.assign({}, data.message, { send_status: 'sent', mine: true }));
+                }
                 if (data.automated_message) {
                     var autoTempIdx = state.messages.findIndex(function (m) {
                         return String(m.id).indexOf('local-auto-') === 0;
                     });
                     if (autoTempIdx !== -1) state.messages[autoTempIdx] = data.automated_message;
                     else appendMessage(data.automated_message);
-                    renderMessages({ stickBottom: true });
-                    persistActiveThreadCache();
                 } else if (!expectAutoReply) {
                     state.messages = state.messages.filter(function (m) {
                         return String(m.id).indexOf('local-auto-') !== 0;
                     });
-                    renderMessages({ stickBottom: true });
                 }
+                persistActiveThreadCache();
+                renderMessages({ stickBottom: true });
             }));
+            persistActiveThreadCache();
+            renderMessages({ stickBottom: true });
+            resizeComposer();
+            syncComposerEndControls();
+            syncFaqVisibilityForComposer();
         }
 
         if (files.length) {
@@ -2136,6 +2270,7 @@ import './communication.js';
                     body: '',
                     message_type: isImage ? 'image' : 'file',
                     mine: true,
+                    send_status: 'sending',
                     created_at: new Date().toISOString(),
                     reactions: [],
                     batch_id: batchId,
@@ -2166,9 +2301,9 @@ import './communication.js';
                                 try { URL.revokeObjectURL(a.url); } catch (e) { /* ignore */ }
                             }
                         });
-                        state.messages[tempIdx] = Object.assign({}, data.message, { batch_id: batchId });
+                        state.messages[tempIdx] = Object.assign({}, data.message, { batch_id: batchId, send_status: 'sent', mine: true });
                     } else if (data.message) {
-                        appendMessage(Object.assign({}, data.message, { batch_id: batchId }));
+                        appendMessage(Object.assign({}, data.message, { batch_id: batchId, send_status: 'sent', mine: true }));
                     }
                 }));
             });
@@ -2394,32 +2529,12 @@ import './communication.js';
             var faqId = Number(chip.getAttribute('data-faq-id') || 0) || null;
             var faqResponse = chip.getAttribute('data-faq-response') || '';
             if (question) {
-                setFaqMenuOpen(false);
                 sendMessage(question, {
                     fromFaq: true,
                     faqId: faqId,
                     faqResponse: faqResponse
                 });
             }
-        });
-    }
-
-    if (els.faqMenuToggle) {
-        els.faqMenuToggle.addEventListener('click', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!els.faqMenu || els.faqMenu.hidden) return;
-            var open = els.faqMenuToggle.getAttribute('aria-expanded') !== 'true';
-            setFaqMenuOpen(open);
-            if (open && state.activeId) loadFaqSuggestions(state.activeId);
-        });
-        document.addEventListener('click', function (e) {
-            if (!els.faqMenu || els.faqMenu.hidden) return;
-            if (els.faqMenu.contains(e.target)) return;
-            setFaqMenuOpen(false);
-        });
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') setFaqMenuOpen(false);
         });
     }
 
@@ -2530,6 +2645,7 @@ import './communication.js';
     els.input.addEventListener('input', function () {
         resizeComposer();
         syncComposerEndControls();
+        syncFaqVisibilityForComposer();
         syncComposerLimit();
         notifyComposerTyping(els.input.value);
     });
@@ -2673,6 +2789,12 @@ import './communication.js';
     }
     Promise.all([loadConversations(), loadBarangayOfficials()]).then(function () {
         var initial = root.dataset.initialConversation;
+        if (!initial) {
+            try {
+                initial = sessionStorage.getItem('comms_boot_conversation') || '';
+                if (initial) sessionStorage.removeItem('comms_boot_conversation');
+            } catch (e) { initial = ''; }
+        }
         if (initial) openConversation(initial);
     });
 })();

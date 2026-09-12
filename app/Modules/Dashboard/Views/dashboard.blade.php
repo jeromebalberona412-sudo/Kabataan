@@ -16,7 +16,7 @@
         'app/Modules/Layout/assets/css/kabataan-responsive.css',
         'app/Modules/Layout/assets/css/kabataan-header.css',
         'app/Modules/Layout/assets/css/kabataan-header-messages.css',
-        'app/Modules/Layout/assets/css/chat-modal.css',
+        'app/Modules/Communications/assets/css/chat-modal.css',
         'app/Modules/Layout/assets/css/kabataan-call.css',
         'app/Modules/Layout/assets/css/programs-drawer.css',
         'app/Modules/Layout/assets/css/kabataan-logout.css',
@@ -24,8 +24,10 @@
         'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
         'app/Modules/Layout/assets/js/kabataan-logout.js',
         'app/Modules/Dashboard/assets/css/dashboard.css',
+        'app/Modules/Dashboard/assets/css/feed-videos.css',
         'app/Modules/Dashboard/assets/css/community-feed-comment-preview.css',
         'app/Modules/Dashboard/assets/js/dashboard.js',
+        'app/Modules/Dashboard/assets/js/feed-videos.js',
         'app/Modules/Programs/assets/js/programs.js',
         'app/Modules/Programs/assets/css/scholarship-quick-guidelines.css',
         'app/Modules/Programs/assets/js/scholarship-quick-guidelines.js',
@@ -199,6 +201,9 @@
                     <div class="post-card feed-loading-card">Loading community feed…</div>
                 </div>
                 <div id="feedInfiniteSentinel" class="feed-infinite-sentinel" aria-hidden="true"></div>
+                <div id="feedEndState" class="feed-end-state" hidden>
+                    <p>No more posts</p>
+                </div>
             </div>
 
             <!-- Right Sidebar - Barangay SK Profiles -->
@@ -412,6 +417,16 @@
         </div>
         <button type="button" id="lightboxNext" class="lightbox-nav lightbox-next" aria-label="Next">&#10095;</button>
         <div id="lightboxCounter" class="lightbox-counter"></div>
+    </div>
+
+    <div id="videoLightbox" class="image-lightbox video-lightbox" aria-hidden="true">
+        <button type="button" id="videoLightboxClose" class="lightbox-close" aria-label="Close">&times;</button>
+        <button type="button" id="videoLightboxPrev" class="lightbox-nav lightbox-prev" aria-label="Previous video" hidden>&#10094;</button>
+        <div class="lightbox-viewport video-lightbox-viewport" id="videoLightboxViewport">
+            <div id="videoLightboxFrame" class="video-lightbox-frame"></div>
+        </div>
+        <button type="button" id="videoLightboxNext" class="lightbox-nav lightbox-next" aria-label="Next video" hidden>&#10095;</button>
+        <div id="videoLightboxCounter" class="lightbox-counter" hidden></div>
     </div>
 
     <script>
@@ -1082,7 +1097,36 @@
         }
         bindFeedReactionControls(el);
         bindPostImageClicks(el);
+        window.KabataanFeedVideos?.bindFeedVideos(el);
         return el;
+    }
+
+    let feedEndConfirmed = false;
+
+    function updateFeedStatusUi() {
+        const container = document.getElementById('feed-posts');
+        const endEl = document.getElementById('feedEndState');
+        const sentinel = document.getElementById('feedInfiniteSentinel');
+        if (!container || !endEl) return;
+
+        const postCount = container.querySelectorAll('.post-card[data-post-id]').length;
+        const isEmpty = postCount === 0;
+        if (isEmpty) {
+            feedEndConfirmed = false;
+            endEl.hidden = true;
+            if (sentinel) sentinel.hidden = false;
+            return;
+        }
+
+        const reachedEnd = feedPage >= feedLastPage && feedLastPage >= 1;
+        if (reachedEnd) {
+            feedEndConfirmed = true;
+        } else if (!feedLoading) {
+            feedEndConfirmed = false;
+        }
+
+        endEl.hidden = !feedEndConfirmed;
+        if (sentinel) sentinel.hidden = false;
     }
 
     async function loadFeed(reset = true, options = {}) {
@@ -1092,6 +1136,8 @@
         const requestToken = ++feedRequestToken;
         if (reset) {
             feedPage = 1;
+            feedEndConfirmed = false;
+            updateFeedStatusUi();
         }
 
         const params = new URLSearchParams({ page: feedPage, filter: feedFilter });
@@ -1124,6 +1170,8 @@
             if (reset && items.length === 0) {
                 container.innerHTML =
                     '<div class="post-card" style="text-align:center;color:#64748b;padding:32px;">No community feed posts yet. Posts from your barangay SK and SK Federation will appear here.</div>';
+                feedEndConfirmed = false;
+                updateFeedStatusUi();
                 return;
             }
 
@@ -1144,8 +1192,12 @@
                 fragment.appendChild(el);
                 bindFeedReactionControls(el);
                 bindPostImageClicks(el);
+                window.KabataanFeedVideos?.bindFeedVideos(el);
             });
             container.appendChild(fragment);
+            if (feedPage >= feedLastPage && feedLastPage >= 1) {
+                feedEndConfirmed = true;
+            }
         } catch (error) {
             console.error('Feed error:', error);
             if (reset && requestToken === feedRequestToken) {
@@ -1155,12 +1207,18 @@
         } finally {
             if (requestToken === feedRequestToken) {
                 feedLoading = false;
+                updateFeedStatusUi();
             }
         }
     }
 
     function loadMorePosts() {
-        if (feedLoading || feedPage >= feedLastPage) return;
+        if (feedLoading) return;
+        if (feedPage >= feedLastPage) {
+            feedEndConfirmed = feedLastPage >= 1 && document.querySelectorAll('#feed-posts .post-card[data-post-id]').length > 0;
+            updateFeedStatusUi();
+            return;
+        }
         feedPage++;
         loadFeed(false);
     }
@@ -1591,8 +1649,11 @@
                 </div>`;
             }
         }
-        
-        const link   = p.link_url  ? `<a href="${feedEscape(p.link_url)}" target="_blank" rel="noopener" class="post-link-preview">${feedEscape(p.link_url)}</a>` : '';
+
+        const videoHtml = window.KabataanFeedVideos?.buildPostVideosHtml(p) || '';
+        const link = (!videoHtml && p.link_url && !p.google_drive_video)
+            ? `<a href="${feedEscape(p.link_url)}" target="_blank" rel="noopener" class="post-link-preview">${feedEscape(p.link_url)}</a>`
+            : '';
         const reactionsSummary = renderReactionsSummary(p);
 
         return `
@@ -1609,7 +1670,7 @@
           <div class="post-content">
             ${p.title ? `<h2 class="post-title">${feedEscape(p.title)}</h2>` : ''}
             <p class="post-text">${feedEscape(p.body)}</p>
-            ${media}${link}
+            ${media}${videoHtml}${link}
           </div>
           ${reactionsSummary}
           <div class="post-actions">

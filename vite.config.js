@@ -26,7 +26,8 @@ export default defineConfig({
                 // Layout (shared header & footer)
                 'app/Modules/Layout/assets/css/kabataan-header.css',
                 'app/Modules/Layout/assets/css/kabataan-header-messages.css',
-                'app/Modules/Layout/assets/css/chat-modal.css',
+                'app/Modules/Communications/assets/css/chat-modal.css',
+                'app/Modules/Communications/assets/js/chat-modal.js',
                 'app/Modules/Layout/assets/css/kabataan-messages.css',
                 'app/Modules/Layout/assets/css/kabataan-call.css',
                 'app/Modules/Layout/assets/css/programs-drawer.css',
@@ -40,10 +41,12 @@ export default defineConfig({
 
                 // Dashboard
                 'app/Modules/Dashboard/assets/css/dashboard.css',
+                'app/Modules/Dashboard/assets/css/feed-videos.css',
                 'app/Modules/Dashboard/assets/css/community-feed-comment-preview.css',
                 'app/Modules/Dashboard/assets/css/barangay-profile.css',
                 'app/Modules/Dashboard/assets/css/notif.css',
                 'app/Modules/Dashboard/assets/js/dashboard.js',
+                'app/Modules/Dashboard/assets/js/feed-videos.js',
                 'app/Modules/Dashboard/assets/js/community-feed-comment-preview.js',
                 'app/Modules/Dashboard/assets/js/prohibited-words.js',
                 'app/Modules/Dashboard/assets/js/comment-spam-guard.js',

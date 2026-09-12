@@ -52,9 +52,20 @@ class ChatFaqSuggestionController extends Controller
     {
         $conversation->loadMissing('participants');
 
+        $officialTypes = [
+            ParticipantTypeResolver::SK_OFFICIAL,
+            'sk_official',
+            'SK_OFFICIAL',
+            'official',
+        ];
+
         /** @var ConversationParticipant|null $official */
         $official = $conversation->participants->first(
-            fn (ConversationParticipant $p) => $p->user_type === ParticipantTypeResolver::SK_OFFICIAL
+            function (ConversationParticipant $p) use ($officialTypes) {
+                $type = strtolower(trim((string) $p->user_type));
+
+                return in_array($type, array_map('strtolower', $officialTypes), true);
+            }
         );
 
         if ($official !== null) {

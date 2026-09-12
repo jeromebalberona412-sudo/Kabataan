@@ -130,7 +130,7 @@
 @include('kkprofiling::partials.kk-profiling-update-mandatory-modal')
 
 @auth
-@include('layout::chat-modal')
+@include('communications::partials.chat-modal')
 @include('communications::partials.incoming-call-modal')
 @include('communications::partials.in-call-ui')
 <div
