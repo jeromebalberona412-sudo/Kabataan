@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Abyip extends Model
 {
@@ -20,6 +21,8 @@ class Abyip extends Model
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_APPROVED = 'approved';
+
+    public const STATUS_PUBLISHED = 'published';
 
     public const STATUS_REJECTED = 'rejected';
 
@@ -64,12 +67,17 @@ class Abyip extends Model
         'approved_position',
         'approved_by_position',
         'status',
+        'current_version',
+        'published_at',
+        'published_by_user_id',
     ];
 
     protected function casts(): array
     {
         return [
             'fiscal_year' => 'integer',
+            'current_version' => 'integer',
+            'published_at' => 'datetime',
             'mooe' => 'decimal:2',
             'co' => 'decimal:2',
             'total' => 'decimal:2',
@@ -111,5 +119,22 @@ class Abyip extends Model
             ->where('row_type', self::ROW_ACTIVITY)
             ->orderBy('sort_order')
             ->orderBy('id');
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(AbyipVersion::class, 'abyip_id')->orderByDesc('version_number');
+    }
+
+    public function publishedVersion(): HasOne
+    {
+        return $this->hasOne(AbyipVersion::class, 'abyip_id')
+            ->where('status', 'published')
+            ->latestOfMany('version_number');
+    }
+
+    public function publisher(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'published_by_user_id');
     }
 }

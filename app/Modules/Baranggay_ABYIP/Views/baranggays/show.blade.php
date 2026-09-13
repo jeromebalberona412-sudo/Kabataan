@@ -61,11 +61,19 @@
     <section class="baranggay-abyip-doc-section">
         <div class="container accomplishments-shell">
             <div class="baranggay-abyip-gate" id="barangayAbyipGate">
+                <div class="baranggay-abyip-meta-badge" id="barangayAbyipMetaBadge" style="margin-bottom: 12px; display: none; align-items: center; justify-content: center; gap: 8px;">
+                    <span class="status-badge status-approved" id="barangayAbyipStatusBadge" style="padding: 3px 10px; border-radius: 9999px; font-weight: 600; font-size: 12px; background-color: #dcfce7; color: #166534;">Published</span>
+                    <span id="barangayAbyipPublishedDate" style="font-size: 13px; color: #64748b;"></span>
+                </div>
                 <p id="barangayAbyipStatus" class="baranggay-abyip-status" role="status">Choose a fiscal year, then open the ABYIP document.</p>
-                <div class="baranggay-abyip-actions">
+                <div class="baranggay-abyip-actions" style="display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap;">
                     <button type="button" class="baranggay-abyip-view-btn" id="barangayAbyipViewBtn" disabled>
                         View full ABYIP
                     </button>
+                    <a href="#" class="baranggay-abyip-view-btn" id="barangayAbyipDownloadBtn" style="text-decoration: none; display: none; align-items: center; gap: 6px; background-color: #059669; border-color: #059669;" target="_blank" download>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download PDF
+                    </a>
                     <button type="button" class="baranggay-abyip-hide-btn" id="barangayAbyipHideBtn" hidden>
                         Hide
                     </button>

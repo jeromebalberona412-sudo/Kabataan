@@ -27,3 +27,14 @@ it('returns 404 for unknown barangay slugs in barangay abyip', function () {
     $this->get(route('baranggay_abyip.show', 'does-not-exist'))
         ->assertNotFound();
 });
+
+it('blocks any non-GET write requests to barangay abyip routes with 403 forbidden', function () {
+    $this->post('/barangay-abyip/save-draft', ['title' => 'test'])
+        ->assertForbidden();
+
+    $this->put('/barangay-abyip/1/update', ['title' => 'test'])
+        ->assertForbidden();
+
+    $this->delete('/barangay-abyip/1')
+        ->assertForbidden();
+});

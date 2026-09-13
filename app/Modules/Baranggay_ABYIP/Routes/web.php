@@ -19,3 +19,8 @@ Route::get('/barangay-abyip/{barangay:slug}/file/{document}', [Baranggay_ABYIPCo
 Route::get('/barangay-abyip/{barangay:slug}/legacy-file/{legacy}', [Baranggay_ABYIPController::class, 'legacyFile'])
     ->whereNumber('legacy')
     ->name('baranggay_abyip.legacy_file');
+
+// Strict read-only protection: Kabataan users cannot write/edit/delete ABYIP documents
+Route::match(['post', 'put', 'patch', 'delete'], '/barangay-abyip/{any?}', function () {
+    abort(403, 'Unauthorized. ABYIP documents are read-only for Kabataan youth.');
+})->where('any', '.*');

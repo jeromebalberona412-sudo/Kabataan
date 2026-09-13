@@ -42,6 +42,16 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
+        $mailRoot = \App\Support\MailUrl::root();
+        if ($mailRoot !== '' && filter_var($mailRoot, FILTER_VALIDATE_URL)) {
+            URL::forceRootUrl($mailRoot);
+            if (str_starts_with(strtolower($mailRoot), 'https://')) {
+                URL::forceScheme('https');
+            } elseif (str_starts_with(strtolower($mailRoot), 'http://')) {
+                URL::forceScheme('http');
+            }
+        }
+
         View::composer(['layout::kabataan-header', 'dashboard::notification'], function ($view) {
             $user = Auth::user();
             $notificationService = app(KabataanNotificationService::class);

@@ -28,7 +28,7 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
-    'sk_officials_app_url' => env('SK_OFFICIALS_APP_URL', 'http://localhost:8000'),
+    'sk_officials_app_url' => env('SK_OFFICIALS_APP_URL'),
 
     'cloudinary' => [
         'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),

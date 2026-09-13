@@ -7,6 +7,7 @@ use App\Models\Barangay;
 use App\Modules\Baranggay_ABYIP\Services\Baranggay_ABYIPService;
 use App\Services\BarangayLogoUrlService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
@@ -87,28 +88,32 @@ class Baranggay_ABYIPController extends Controller
         ]);
     }
 
-    public function file(Barangay $barangay, int $document): Response
+    public function file(Request $request, Barangay $barangay, int $document): Response
     {
         $pdf = $this->abyipService->pdfBinary($barangay, $document);
 
         abort_if($pdf === null, 404);
 
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
         return response($pdf['content'], 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$pdf['filename'].'"',
+            'Content-Disposition' => $disposition.'; filename="'.$pdf['filename'].'"',
             'Cache-Control' => 'private, max-age=3600',
         ]);
     }
 
-    public function legacyFile(Barangay $barangay, int $legacy): Response
+    public function legacyFile(Request $request, Barangay $barangay, int $legacy): Response
     {
         $pdf = $this->abyipService->legacyPdfBinary($barangay, $legacy);
 
         abort_if($pdf === null, 404);
 
+        $disposition = $request->boolean('download') ? 'attachment' : 'inline';
+
         return response($pdf['content'], 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$pdf['filename'].'"',
+            'Content-Disposition' => $disposition.'; filename="'.$pdf['filename'].'"',
             'Cache-Control' => 'private, max-age=3600',
         ]);
     }

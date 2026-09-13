@@ -14,14 +14,28 @@ return new class extends Migration
 
         Schema::create('program_evaluation_responses', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('evaluation_id')->constrained('program_evaluations')->cascadeOnDelete();
-            $table->foreignId('registration_id')->constrained('kabataan_registrations')->cascadeOnDelete();
+            $table->unsignedBigInteger('evaluation_id');
+            $table->unsignedBigInteger('registration_id');
             $table->json('answers')->nullable();
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('created_at')->useCurrent();
 
             $table->unique(['evaluation_id', 'registration_id']);
             $table->index(['registration_id']);
+
+            if (Schema::hasTable('program_evaluations')) {
+                $table->foreign('evaluation_id')
+                    ->references('id')
+                    ->on('program_evaluations')
+                    ->cascadeOnDelete();
+            }
+
+            if (Schema::hasTable('kabataan_registrations')) {
+                $table->foreign('registration_id')
+                    ->references('id')
+                    ->on('kabataan_registrations')
+                    ->cascadeOnDelete();
+            }
         });
     }
 

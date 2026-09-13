@@ -76,6 +76,31 @@ function initBarangayAbyipViewer() {
         });
     };
 
+    const updateDocumentMeta = (year) => {
+        const item = documentsByYear.get(String(year));
+        const metaBadge = document.getElementById('barangayAbyipMetaBadge');
+        const statusBadge = document.getElementById('barangayAbyipStatusBadge');
+        const pubDateEl = document.getElementById('barangayAbyipPublishedDate');
+        const downloadBtn = document.getElementById('barangayAbyipDownloadBtn');
+
+        if (item && item.has_pdf) {
+            if (metaBadge) metaBadge.style.display = 'inline-flex';
+            if (statusBadge) {
+                statusBadge.textContent = item.status === 'published' ? 'Published' : 'Approved';
+            }
+            if (pubDateEl) {
+                pubDateEl.textContent = item.published_at ? `Published: ${item.published_at}` : '';
+            }
+            if (downloadBtn) {
+                downloadBtn.href = item.download_url || (item.file_url + '?download=1');
+                downloadBtn.style.display = 'inline-flex';
+            }
+        } else {
+            if (metaBadge) metaBadge.style.display = 'none';
+            if (downloadBtn) downloadBtn.style.display = 'none';
+        }
+    };
+
     const fillYearOptions = () => {
         const years = Array.from(documentsByYear.keys()).sort((a, b) => Number(b) - Number(a));
         yearSelect.innerHTML = '';
@@ -84,6 +109,7 @@ function initBarangayAbyipViewer() {
             yearSelect.innerHTML = '<option value="">No years available</option>';
             yearSelect.disabled = true;
             viewBtn.disabled = true;
+            updateDocumentMeta(null);
             return;
         }
 
@@ -97,6 +123,7 @@ function initBarangayAbyipViewer() {
         yearSelect.disabled = false;
         yearSelect.value = years[0];
         viewBtn.disabled = false;
+        updateDocumentMeta(years[0]);
     };
 
     const showGate = () => {
@@ -207,6 +234,7 @@ function initBarangayAbyipViewer() {
     });
 
     yearSelect.addEventListener('change', () => {
+        updateDocumentMeta(yearSelect.value);
         if (!isViewing) {
             return;
         }

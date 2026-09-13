@@ -20,7 +20,7 @@ class Baranggay_ABYIPService
             $query = Abyip::query()->documents();
 
             if (Schema::hasColumn('abyip', 'status')) {
-                $query->where('status', Abyip::STATUS_APPROVED);
+                $query->whereIn('status', [Abyip::STATUS_APPROVED, Abyip::STATUS_PUBLISHED]);
             }
 
             if (Schema::hasColumn('abyip', 'pdf_data')) {
@@ -58,22 +58,31 @@ class Baranggay_ABYIPService
                 ->where('barangay_id', $barangay->id);
 
             if (Schema::hasColumn('abyip', 'status')) {
-                $query->where('status', Abyip::STATUS_APPROVED);
+                $query->whereIn('status', [Abyip::STATUS_APPROVED, Abyip::STATUS_PUBLISHED]);
             }
 
             if (Schema::hasColumn('abyip', 'pdf_data')) {
                 $query->whereNotNull('pdf_data')->where('pdf_data', '!=', '');
             }
 
+            $selectColumns = ['id', 'fiscal_year', 'document_title', 'source_type', 'status'];
+            if (Schema::hasColumn('abyip', 'published_at')) {
+                $selectColumns[] = 'published_at';
+            }
+            if (Schema::hasColumn('abyip', 'current_version')) {
+                $selectColumns[] = 'current_version';
+            }
+
             $documents = $query
                 ->orderByDesc('fiscal_year')
                 ->orderByDesc('id')
-                ->get(['id', 'fiscal_year', 'document_title', 'source_type', 'status']);
+                ->get($selectColumns);
 
             foreach ($documents as $document) {
 
                 $year = (int) ($document->fiscal_year ?: 0);
                 $title = trim((string) ($document->document_title ?: ''));
+                $publishedAt = ! empty($document->published_at) ? date('F j, Y', strtotime((string) $document->published_at)) : null;
 
                 $items->push([
                     'id' => 'abyip-'.$document->id,
@@ -81,7 +90,11 @@ class Baranggay_ABYIPService
                     'document_id' => (int) $document->id,
                     'year' => $year,
                     'title' => $title !== '' ? $title : ('ABYIP CY '.$year),
+                    'status' => $document->status ?: 'published',
+                    'version' => (int) ($document->current_version ?? 1),
+                    'published_at' => $publishedAt,
                     'file_url' => route('baranggay_abyip.file', [$barangay->slug, $document->id]),
+                    'download_url' => route('baranggay_abyip.file', [$barangay->slug, $document->id]).'?download=1',
                     'has_pdf' => true,
                 ]);
             }
@@ -132,7 +145,7 @@ class Baranggay_ABYIPService
             ->where('barangay_id', $barangay->id);
 
         if (Schema::hasColumn('abyip', 'status')) {
-            $query->where('status', Abyip::STATUS_APPROVED);
+            $query->whereIn('status', [Abyip::STATUS_APPROVED, Abyip::STATUS_PUBLISHED]);
         }
 
         $document = $query->first();

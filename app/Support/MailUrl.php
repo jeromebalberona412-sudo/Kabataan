@@ -14,13 +14,33 @@ class MailUrl
 {
     public static function root(): string
     {
-        $public = trim((string) config('app.public_url'));
+        $preferred = null;
 
-        if ($public !== '' && filter_var($public, FILTER_VALIDATE_URL)) {
-            return rtrim($public, '/');
+        foreach ([config('app.public_url'), config('app.url')] as $candidate) {
+            $value = trim((string) $candidate);
+            if ($value === '' || ! filter_var($value, FILTER_VALIDATE_URL)) {
+                continue;
+            }
+
+            $host = strtolower((string) parse_url($value, PHP_URL_HOST));
+            $isLoopback = $host === ''
+                || $host === 'localhost'
+                || $host === '127.0.0.1'
+                || $host === '[::1]'
+                || str_ends_with($host, '.localhost');
+
+            if (! $isLoopback) {
+                return rtrim($value, '/');
+            }
+
+            $preferred ??= rtrim($value, '/');
         }
 
-        return rtrim((string) config('app.url'), '/');
+        if (app()->environment('local', 'testing') && $preferred !== null) {
+            return $preferred;
+        }
+
+        return $preferred ?? rtrim((string) config('app.url'), '/');
     }
 
     public static function route(string $name, array $parameters = []): string
