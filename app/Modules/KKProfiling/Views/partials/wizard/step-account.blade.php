@@ -12,11 +12,11 @@
         <p class="verify-message">We sent a set password link to:</p>
         <p class="verify-email" id="displayEmail">{{ $wizardDraftEmail ?? 'your-email@example.com' }}</p>
         <p class="kkp-wizard-email-recommend" id="kkpEmailRecommendNote">
-            <strong>Email Verification Recommended.</strong>
-            Your email address has been saved. We highly recommend verifying your email now so you can access your account faster and avoid delays when using SK programs and services.
+            <strong>Email verification is required.</strong>
+            Your email address has been saved. Open the set-password email now to create your password and finish registration. This also lets you access SK programs and services without delay.
         </p>
         <p class="verify-instruction">
-            Open your inbox and click the <strong>Set Password</strong> link to continue your registration.
+            Open your inbox and click the <strong>Set Password</strong> link to create your password and complete registration.
         </p>
         <p class="kkp-wizard-email-error" id="kkpWizardEmailError" hidden></p>
         <div class="verify-help">

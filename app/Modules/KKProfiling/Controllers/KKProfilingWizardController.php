@@ -632,17 +632,6 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        try {
-            $this->draftService->assertEmailAvailable($email, (int) $wizard['barangay_id']);
-        } catch (ValidationException $e) {
-            $slug = $this->barangaySlugFromId((int) $wizard['barangay_id']);
-
-            return redirect()
-                ->route('kkprofiling', ['barangay' => $slug])
-                ->withErrors($e->errors())
-                ->with('kk_wizard_email_conflict', true);
-        }
-
         $wizard = $this->draftService->markEmailVerified($wizard);
         $this->draftService->syncWizardSession($wizard);
 
@@ -801,6 +790,7 @@ class KKProfilingWizardController extends Controller
                 'token' => $token,
                 'email' => $email,
                 'error' => $e->getMessage(),
+                'class' => $e::class,
             ]);
 
             throw ValidationException::withMessages([

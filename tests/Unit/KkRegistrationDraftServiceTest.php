@@ -133,3 +133,21 @@ test('completed step 1 still advances current step while preserving fields', fun
     expect($wizard['current_step'])->toBeGreaterThanOrEqual(2)
         ->and($wizard['step1_data']['email'])->toBe('juan.complete@gmail.com');
 });
+
+test('completed wizard token is readable after finalize even if cache fails', function () {
+    $service = app(KkRegistrationDraftService::class);
+    $registration = new \App\Models\KabataanRegistration;
+    $registration->id = 99;
+    $registration->email = 'youth.setpassword@gmail.com';
+    $registration->barangay_id = 1;
+    $registration->evaluation_status = 'pending';
+
+    $service->rememberCompletedWizardToken('abc123token', $registration);
+
+    $resolved = $service->resolveCompletedByWizardToken('abc123token');
+
+    expect($resolved)->not->toBeNull()
+        ->and($resolved['email'])->toBe('youth.setpassword@gmail.com')
+        ->and($resolved['registration_id'])->toBe(99)
+        ->and($resolved['barangay_id'])->toBe(1);
+});

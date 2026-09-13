@@ -7,9 +7,9 @@ use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Support\SupportingDocumentTypes;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -515,115 +515,158 @@ class KkRegistrationDraftService
         $step1 = $wizard['step1_data'];
         $email = strtolower(trim($step1['email'] ?? $wizard['email'] ?? ''));
 
-        $this->assertEmailAvailable($email, $barangay->id);
+        $existingRegistration = KabataanRegistration::query()
+            ->where('barangay_id', $barangay->id)
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->whereIn('status', ['pending_verification', 'email_verified', 'password_set', 'pending'])
+            ->latest('id')
+            ->first();
 
-        if (app(DuplicateKabataanRegistrationService::class)->hasApprovedDuplicate((int) $barangay->id, $step1)) {
+        if (! $existingRegistration && app(DuplicateKabataanRegistrationService::class)->hasApprovedDuplicate((int) $barangay->id, $step1)) {
             throw ValidationException::withMessages([
                 'registration' => [KkProfilingValidationMessages::DUPLICATE_IDENTITY],
             ]);
         }
 
-        return DB::transaction(function () use ($wizard, $barangay, $step1, $email, $password) {
-            $formData = $this->buildFormData($step1, $wizard);
-            try {
-                $formData['supporting_documents'] = $this->promoteDocuments($wizard);
-            } catch (Throwable $e) {
-                report($e);
-                Log::error('KK wizard document promote failed', [
-                    'email' => $email,
-                    'error' => $e->getMessage(),
-                ]);
-                $formData['supporting_documents'] = $wizard['step2_data']['documents'] ?? [];
-            }
+        $namePreview = new KabataanRegistration([
+            'first_name' => mb_substr((string) ($step1['first_name'] ?? ''), 0, 100),
+            'last_name' => mb_substr((string) ($step1['last_name'] ?? ''), 0, 100),
+            'middle_name' => ($step1['middle_name'] ?? null)
+                ? mb_substr((string) $step1['middle_name'], 0, 100)
+                : null,
+            'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
+        ]);
 
-            $previousRejected = KabataanRegistration::where('email', $email)
+        // Create/update the youth login first, outside a DB transaction.
+        // PostgreSQL aborts the whole transaction after a failed INSERT, so
+        // role/unique retries cannot run inside the same transaction.
+        $user = $this->upsertYouthUser(
+            $email,
+            $password,
+            $namePreview->full_name,
+            $barangay->tenant_id,
+            $barangay->id,
+        );
+
+        $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
+        try {
+            $formData['supporting_documents'] = $this->promoteDocuments($wizard);
+        } catch (Throwable $e) {
+            report($e);
+            $formData['supporting_documents'] = $wizard['step2_data']['documents'] ?? [];
+        }
+        $formData = $this->jsonSafeFormData($formData);
+
+        $contactNumber = app(PhoneNumberService::class)->toLocalMobile((string) ($step1['contact_number'] ?? ''))
+            ?: mb_substr(preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? '')) ?: '', 0, 15);
+
+        $registrationPayload = [
+            'tenant_id' => $barangay->tenant_id,
+            'barangay_id' => $barangay->id,
+            'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
+            'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
+            'middle_name' => ($step1['middle_name'] ?? null)
+                ? mb_substr((string) $step1['middle_name'], 0, 100)
+                : null,
+            'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
+            'email' => $email,
+            'contact_number' => $contactNumber !== '' ? $contactNumber : null,
+            'profile_photo_path' => null,
+            'form_data' => $formData,
+            'status' => 'password_set',
+            'profiling_year' => now()->year,
+            'email_verified_at' => $wizard['email_verified_at'] ?? now(),
+            'submitted_at' => now(),
+            'user_id' => $user->id,
+            'password_set_at' => now(),
+        ];
+
+        if (! empty($wizard['respondent_number'])) {
+            $registrationPayload['respondent_number'] = mb_substr((string) $wizard['respondent_number'], 0, 32);
+        }
+
+        if (Schema::hasColumn('kabataan_registrations', 'previous_application_id')) {
+            $previousRejected = KabataanRegistration::query()
+                ->whereRaw('LOWER(email) = ?', [$email])
                 ->where('barangay_id', $barangay->id)
                 ->where('status', 'rejected')
                 ->latest('id')
                 ->first();
+            $registrationPayload['previous_application_id'] = $previousRejected?->id;
+        }
 
-            $contactNumber = app(PhoneNumberService::class)->toLocalMobile((string) ($step1['contact_number'] ?? ''))
-                ?: mb_substr(preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? '')) ?: '', 0, 15);
+        $registrationPayload = array_filter(
+            $registrationPayload,
+            static fn (string $column): bool => Schema::hasColumn('kabataan_registrations', $column),
+            ARRAY_FILTER_USE_KEY
+        );
 
-            $registrationPayload = [
-                'tenant_id' => $barangay->tenant_id,
-                'barangay_id' => $barangay->id,
-                'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
-                'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
-                'middle_name' => ($step1['middle_name'] ?? null)
-                    ? mb_substr((string) $step1['middle_name'], 0, 100)
-                    : null,
-                'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
-                'email' => $email,
-                'contact_number' => $contactNumber !== '' ? $contactNumber : null,
-                'profile_photo_path' => null,
-                'form_data' => $formData,
-                'status' => 'password_set',
-                'profiling_year' => now()->year,
-                'email_verified_at' => $wizard['email_verified_at'] ?? now(),
-                'submitted_at' => now(),
-            ];
-
-            if (Schema::hasColumn('kabataan_registrations', 'previous_application_id')) {
-                $registrationPayload['previous_application_id'] = $previousRejected?->id;
-            }
-
-            $registrationPayload = array_filter(
-                $registrationPayload,
-                static fn (string $column): bool => Schema::hasColumn('kabataan_registrations', $column),
-                ARRAY_FILTER_USE_KEY
-            );
-
-            $registration = KabataanRegistration::create($registrationPayload);
-
-            $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
-            $userPayload = $this->wizardUserPayload($registration, $email, $password);
-
-            if ($user) {
-                $user->update($userPayload);
+        $registration = $existingRegistration;
+        try {
+            if ($registration) {
+                $registration->fill($registrationPayload);
+                $registration->save();
             } else {
-                $user = User::create($userPayload);
+                $registration = KabataanRegistration::create($registrationPayload);
+            }
+        } catch (QueryException $e) {
+            $registration = KabataanRegistration::query()
+                ->where('barangay_id', $barangay->id)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->latest('id')
+                ->first();
+
+            if (! $registration) {
+                throw $e;
             }
 
-            $registration->markPasswordSet();
-            $registration->linkUser($user->id);
+            $registration->fill($registrationPayload);
+            $registration->save();
+        }
 
-            try {
-                (new RegistrationEvaluationService)->evaluate($registration->fresh());
-            } catch (Throwable $e) {
-                report($e);
-            }
+        $registration->markPasswordSet();
+        $registration->linkUser($user->id);
+        $registration = $registration->fresh() ?? $registration;
 
-            try {
-                (new SkOfficialsNotificationDispatcher)->notifyKkProfilingSubmission(
-                    (int) $barangay->id,
-                    $registration->full_name,
-                );
-            } catch (Throwable $e) {
-                report($e);
-            }
+        try {
+            (new RegistrationEvaluationService)->evaluate($registration->fresh() ?? $registration);
+        } catch (Throwable $e) {
+            report($e);
+        }
 
-            try {
-                (new KkSurveyResponseService)->syncFromRegistration(
-                    $registration->fresh(),
-                    'pending'
-                );
-            } catch (Throwable $e) {
-                report($e);
-            }
+        try {
+            (new SkOfficialsNotificationDispatcher)->notifyKkProfilingSubmission(
+                (int) $barangay->id,
+                $registration->full_name,
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
 
-            $registration = $registration->fresh();
-            try {
-                $this->rememberCompletedWizardToken($wizard['token'], $registration);
-            } catch (Throwable $e) {
-                report($e);
-            }
+        try {
+            (new KkSurveyResponseService)->syncFromRegistration(
+                $registration->fresh() ?? $registration,
+                'pending'
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        $registration = $registration->fresh() ?? $registration;
+        try {
+            $this->rememberCompletedWizardToken($wizard['token'], $registration);
+        } catch (Throwable $e) {
+            report($e);
+        }
+        try {
             $this->deletePendingFiles($wizard['token']);
-            $this->clearSessionDraft();
-            $this->markRegistrationComplete($email, (int) $barangay->id, $registration);
+        } catch (Throwable $e) {
+            report($e);
+        }
+        $this->clearSessionDraft();
+        $this->markRegistrationComplete($email, (int) $barangay->id, $registration);
 
-            return $registration;
-        });
+        return $registration;
     }
 
     public function markRegistrationComplete(string $email, int $barangayId, ?KabataanRegistration $registration = null): void
@@ -656,16 +699,27 @@ class KkRegistrationDraftService
 
     public function rememberCompletedWizardToken(string $token, KabataanRegistration $registration): void
     {
+        $payload = [
+            'registration_id' => $registration->id,
+            'email' => strtolower(trim((string) $registration->email)),
+            'barangay_id' => (int) $registration->barangay_id,
+            'auto_approved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
+            'evaluation_status' => $registration->evaluation_status,
+        ];
+
+        try {
+            Storage::disk(self::PENDING_DISK)->put(
+                $this->completedFilePath($token),
+                json_encode($payload) ?: '{}'
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+
         try {
             Cache::put(
                 self::COMPLETED_TOKEN_CACHE_PREFIX.$token,
-                [
-                    'registration_id' => $registration->id,
-                    'email' => strtolower(trim($registration->email)),
-                    'barangay_id' => (int) $registration->barangay_id,
-                    'auto_approved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
-                    'evaluation_status' => $registration->evaluation_status,
-                ],
+                $payload,
                 now()->addHours(24),
             );
         } catch (Throwable $e) {
@@ -678,9 +732,23 @@ class KkRegistrationDraftService
      */
     public function resolveCompletedByWizardToken(string $token): ?array
     {
-        $data = Cache::get(self::COMPLETED_TOKEN_CACHE_PREFIX.$token);
+        try {
+            $data = Cache::get(self::COMPLETED_TOKEN_CACHE_PREFIX.$token);
+            if (is_array($data) && ! empty($data['email'])) {
+                return $data;
+            }
+        } catch (Throwable $e) {
+            report($e);
+        }
 
-        return is_array($data) ? $data : null;
+        $path = $this->completedFilePath($token);
+        if (! Storage::disk(self::PENDING_DISK)->exists($path)) {
+            return null;
+        }
+
+        $data = json_decode((string) Storage::disk(self::PENDING_DISK)->get($path), true);
+
+        return is_array($data) && ! empty($data['email']) ? $data : null;
     }
 
     public function resolveCompletedRegistration(?int $barangayId = null): ?array
@@ -715,6 +783,7 @@ class KkRegistrationDraftService
             ->where('barangay_id', $barangayId)
             ->where('email', $email)
             ->whereIn('status', ['password_set', 'active'])
+            ->whereNotNull('user_id')
             ->exists();
     }
 
@@ -882,6 +951,11 @@ class KkRegistrationDraftService
         return self::PENDING_ROOT.'/'.$token.'.json';
     }
 
+    private function completedFilePath(string $token): string
+    {
+        return self::PENDING_ROOT.'/'.$token.'.completed.json';
+    }
+
     private function wizardDirectory(string $token): string
     {
         return self::TEMP_ROOT.'/'.$token;
@@ -943,26 +1017,139 @@ class KkRegistrationDraftService
 
         unset($data['custom_suffix'], $data['data_agreement']);
 
-        return $data;
+        return $this->jsonSafeFormData($data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function jsonSafeFormData(array $data): array
+    {
+        $data = $this->stripHugeFormValues($data);
+        $encoded = json_encode($data, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
+        if (! is_string($encoded) || $encoded === '') {
+            unset($data['supporting_documents']);
+            $encoded = json_encode($data, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE) ?: '{}';
+        }
+
+        $decoded = json_decode($encoded, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function stripHugeFormValues(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            foreach ($value as $key => $item) {
+                $value[$key] = $this->stripHugeFormValues($item);
+            }
+
+            return $value;
+        }
+
+        if (is_string($value) && strlen($value) > 200000 && str_starts_with($value, 'data:')) {
+            return null;
+        }
+
+        return $value;
+    }
+
+    /**
+     * Shared users table stores youth accounts as role "user" (fallback: "kabataan").
+     */
+    private function upsertYouthUser(
+        string $email,
+        string $password,
+        string $name,
+        mixed $tenantId,
+        mixed $barangayId,
+    ): User {
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        $existingRole = strtolower(trim((string) ($user?->role ?? '')));
+
+        if ($user && in_array($existingRole, ['admin', 'sk_fed', 'sk_official'], true)) {
+            throw ValidationException::withMessages([
+                'email' => ['This email is already taken. Please use another email.'],
+            ]);
+        }
+
+        $attempts = [
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'user', true),
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'kabataan', true),
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'user', false),
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'kabataan', false),
+        ];
+
+        $lastException = null;
+
+        foreach ($attempts as $payload) {
+            try {
+                if ($user) {
+                    $user->forceFill($payload)->save();
+
+                    return $user->fresh() ?? $user;
+                }
+
+                $created = new User;
+                $created->forceFill($payload)->save();
+
+                return $created;
+            } catch (QueryException $e) {
+                $lastException = $e;
+                $existing = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+                if ($existing && ! in_array(strtolower(trim((string) $existing->role)), ['admin', 'sk_fed', 'sk_official'], true)) {
+                    try {
+                        $existing->forceFill($payload)->save();
+
+                        return $existing->fresh() ?? $existing;
+                    } catch (QueryException $updateException) {
+                        $lastException = $updateException;
+                        $user = $existing;
+                    }
+                }
+            }
+        }
+
+        if ($lastException) {
+            throw $lastException;
+        }
+
+        throw ValidationException::withMessages([
+            'password' => ['Unable to create your account. Please try again or contact SK Officials.'],
+        ]);
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function wizardUserPayload(KabataanRegistration $registration, string $email, string $password): array
-    {
+    private function wizardUserPayload(
+        string $email,
+        string $password,
+        string $name,
+        mixed $tenantId,
+        mixed $barangayId,
+        string $role,
+        bool $full,
+    ): array {
         $payload = [
-            'name' => $registration->full_name,
+            'name' => $name !== '' ? $name : $email,
             'email' => $email,
             'password' => $password,
             'email_verified_at' => now(),
-            'tenant_id' => $registration->tenant_id,
-            'barangay_id' => $registration->barangay_id,
-            'role' => 'kabataan',
+            'role' => $role,
             'status' => User::STATUS_PENDING_APPROVAL,
-            'profile_image_url' => null,
-            'profile_image_uploaded_at' => null,
         ];
+
+        if ($full) {
+            $payload['tenant_id'] = $tenantId;
+            $payload['barangay_id'] = $barangayId;
+            $payload['must_change_password'] = false;
+        }
+
+        if (Schema::hasColumn('users', 'deleted_at')) {
+            $payload['deleted_at'] = null;
+        }
 
         return array_filter(
             $payload,
