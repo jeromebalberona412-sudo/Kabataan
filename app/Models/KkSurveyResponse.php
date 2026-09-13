@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Facades\DB;
 
 class KkSurveyResponse extends Model
@@ -17,8 +18,21 @@ class KkSurveyResponse extends Model
         'registered_national_voter',
         'attended_kk_assembly',
         'voted_last_sk',
-        'willing_to_join_group_chat',
         'consent_given',
+    ];
+
+    /**
+     * Schema defaults for NOT NULL boolean columns. Never write SQL NULL —
+     * that overrides the column default and fails inserts/updates.
+     *
+     * @var array<string, bool>
+     */
+    private const BOOLEAN_DEFAULTS = [
+        'registered_sk_voter' => false,
+        'registered_national_voter' => false,
+        'attended_kk_assembly' => false,
+        'voted_last_sk' => false,
+        'consent_given' => true,
     ];
 
     protected static function booted(): void
@@ -33,7 +47,16 @@ class KkSurveyResponse extends Model
                     continue;
                 }
 
-                $bool = filter_var($model->attributes[$column], FILTER_VALIDATE_BOOLEAN);
+                $raw = $model->attributes[$column];
+                if ($raw instanceof Expression) {
+                    continue;
+                }
+
+                $bool = self::parseNullableBoolean($raw);
+                if ($bool === null) {
+                    $bool = self::BOOLEAN_DEFAULTS[$column] ?? false;
+                }
+
                 $model->attributes[$column] = DB::raw($bool ? 'TRUE' : 'FALSE');
             }
         });
@@ -70,7 +93,6 @@ class KkSurveyResponse extends Model
         'voted_last_sk',
         'kk_assembly_attendance_count',
         'kk_assembly_non_attendance_reason',
-        'willing_to_join_group_chat',
         'participant_signature',
         'supporting_documents',
         'consent_given',
@@ -106,21 +128,47 @@ class KkSurveyResponse extends Model
         return $this->pgBooleanAttribute();
     }
 
-    protected function willingToJoinGroupChat(): Attribute
-    {
-        return $this->pgBooleanAttribute();
-    }
-
     protected function consentGiven(): Attribute
     {
         return $this->pgBooleanAttribute();
     }
 
+    public static function parseNullableBoolean(mixed $value): ?bool
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value)) {
+            return match ($value) {
+                1 => true,
+                0 => false,
+                default => null,
+            };
+        }
+
+        $normalized = strtolower(trim((string) $value));
+
+        if (in_array($normalized, ['true', 't', '1', 'yes'], true)) {
+            return true;
+        }
+
+        if (in_array($normalized, ['false', 'f', '0', 'no'], true)) {
+            return false;
+        }
+
+        return null;
+    }
+
     private function pgBooleanAttribute(): Attribute
     {
         return Attribute::make(
-            get: fn (?string $value) => filter_var($value, FILTER_VALIDATE_BOOLEAN),
-            set: fn (mixed $value) => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            get: fn (mixed $value) => self::parseNullableBoolean($value),
+            set: fn (mixed $value) => self::parseNullableBoolean($value),
         );
     }
 

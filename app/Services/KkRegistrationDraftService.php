@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Barangay;
 use App\Models\KabataanRegistration;
 use App\Models\User;
+use App\Rules\ValidEmailAddress;
 use App\Support\SupportingDocumentTypes;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -320,7 +322,7 @@ class KkRegistrationDraftService
 
         try {
             $availableAt = Carbon::parse($sentAt)->addSeconds(60);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return ['remaining_seconds' => 0];
         }
 
@@ -434,10 +436,10 @@ class KkRegistrationDraftService
     {
         $email = strtolower(trim($email));
 
-        $formatValidator = \Illuminate\Support\Facades\Validator::make(
+        $formatValidator = Validator::make(
             ['email' => $email],
-            ['email' => \App\Rules\ValidEmailAddress::profilingRules()],
-            \App\Rules\ValidEmailAddress::profilingMessages()
+            ['email' => ValidEmailAddress::profilingRules()],
+            ValidEmailAddress::profilingMessages()
         );
 
         if ($formatValidator->fails()) {
@@ -926,7 +928,7 @@ class KkRegistrationDraftService
 
         try {
             return now()->greaterThan(Carbon::parse($wizard['expires_at']));
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return false;
         }
     }
@@ -1056,7 +1058,7 @@ class KkRegistrationDraftService
     }
 
     /**
-     * Shared users table stores youth accounts as role "user" (fallback: "kabataan").
+     * Youth accounts must be stored as role "kabataan". Legacy "user" is only a fallback.
      */
     private function upsertYouthUser(
         string $email,
@@ -1075,10 +1077,10 @@ class KkRegistrationDraftService
         }
 
         $attempts = [
-            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'user', true),
-            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'kabataan', true),
-            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'user', false),
-            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, 'kabataan', false),
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, User::ROLE_KABATAAN, true),
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, User::ROLE_KABATAAN, false),
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, User::ROLE_USER, true),
+            $this->wizardUserPayload($email, $password, $name, $tenantId, $barangayId, User::ROLE_USER, false),
         ];
 
         $lastException = null;

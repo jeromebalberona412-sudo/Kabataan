@@ -31,6 +31,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 
@@ -545,7 +546,7 @@ class KKProfilingController extends Controller
             );
 
             $scheduleService = app(KkProfilingScheduleService::class);
-            if (\Illuminate\Support\Facades\Schema::hasTable('kk_profiling_updates')) {
+            if (Schema::hasTable('kk_profiling_updates')) {
                 $scheduleService->markAnnualUpdateCompleted($registration, $profilingYear);
             }
             $scheduleService->forgetRegistrationCaches(
@@ -1249,13 +1250,13 @@ class KKProfilingController extends Controller
             );
 
             return view('kkprofiling::set_password', [
-            'barangay' => $registration->barangay?->name ?? 'Barangay',
-            'slug' => $barangay,
-            'email' => $registration->email,
-            'registrationAlreadyComplete' => true,
-            'registrationAutoApproved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
-            'barangayLogoUrl' => self::getBarangayLogoUrl($registration->barangay_id),
-        ]);
+                'barangay' => $registration->barangay?->name ?? 'Barangay',
+                'slug' => $barangay,
+                'email' => $registration->email,
+                'registrationAlreadyComplete' => true,
+                'registrationAutoApproved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
+                'barangayLogoUrl' => self::getBarangayLogoUrl($registration->barangay_id),
+            ]);
         }
 
         return view('kkprofiling::set_password', [
@@ -1310,11 +1311,19 @@ class KKProfilingController extends Controller
             $existing = User::where('email', $registration->email)->first();
 
             if ($existing) {
-                // Resubmission — update existing user
+                $existingRole = strtolower(trim((string) ($existing->role ?? '')));
+                if (in_array($existingRole, [User::ROLE_ADMIN, User::ROLE_SK_FED, User::ROLE_SK_OFFICIAL], true)) {
+                    throw ValidationException::withMessages([
+                        'email' => ['This email is already taken. Please use another email.'],
+                    ]);
+                }
+
+                // Resubmission — update existing youth account
                 $existing->update([
                     'name' => $registration->full_name,
                     'password' => bcrypt($request->password),
                     'email_verified_at' => now(),
+                    'role' => User::ROLE_KABATAAN,
                     'status' => 'PENDING_APPROVAL',
                     'tenant_id' => $registration->tenant_id,
                     'barangay_id' => $registration->barangay_id,
@@ -1330,7 +1339,7 @@ class KKProfilingController extends Controller
                     'email_verified_at' => now(),
                     'tenant_id' => $registration->tenant_id,
                     'barangay_id' => $registration->barangay_id,
-                    'role' => 'kabataan',
+                    'role' => User::ROLE_KABATAAN,
                     'status' => 'PENDING_APPROVAL',
                     'profile_image_url' => app(KabataanPhotoService::class)->publicUrl($registration->profile_photo_path),
                     'profile_image_uploaded_at' => $registration->facial_verification_completed_at ?? now(),
