@@ -40,7 +40,21 @@ class MailUrl
             return $preferred;
         }
 
-        return $preferred ?? rtrim((string) config('app.url'), '/');
+        $fallback = $preferred ?? rtrim((string) config('app.url'), '/');
+
+        // Last resort: never return empty — broken absolute links cause production mail 500s.
+        if ($fallback === '' || ! filter_var($fallback, FILTER_VALIDATE_URL)) {
+            try {
+                $requestRoot = rtrim((string) request()->root(), '/');
+                if ($requestRoot !== '' && filter_var($requestRoot, FILTER_VALIDATE_URL)) {
+                    return $requestRoot;
+                }
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        return $fallback !== '' ? $fallback : 'http://localhost';
     }
 
     public static function route(string $name, array $parameters = []): string

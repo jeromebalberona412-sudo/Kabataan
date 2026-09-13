@@ -649,7 +649,7 @@ class KKProfilingWizardController extends Controller
         return view('kkprofiling::set_password', [
             'wizardToken' => $token,
             'emailHash' => $hash,
-            'barangay' => $barangayRecord->name,
+            'barangay' => $barangayRecord->name ?? 'Barangay',
             'slug' => $this->barangaySlugFromId((int) $barangayRecord->id),
             'email' => $email,
             'emailVerified' => true,

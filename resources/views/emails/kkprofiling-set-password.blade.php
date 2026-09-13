@@ -9,13 +9,6 @@
 <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#111827;-webkit-text-size-adjust:100%;">
 @php
     $logoSrc = $logoUrl ?? null;
-    if (! empty($logoPath) && is_file($logoPath) && isset($message)) {
-        try {
-            $logoSrc = $message->embed($logoPath);
-        } catch (\Throwable $e) {
-            $logoSrc = $logoUrl ?? null;
-        }
-    }
 @endphp
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f4f6;width:100%;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
         <tr>

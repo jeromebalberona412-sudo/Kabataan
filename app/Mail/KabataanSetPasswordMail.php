@@ -6,6 +6,7 @@ use App\Support\MailUrl;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
+use Throwable;
 
 class KabataanSetPasswordMail extends Mailable
 {
@@ -17,29 +18,46 @@ class KabataanSetPasswordMail extends Mailable
 
     public function build(): self
     {
-        // Prefer PNG for email clients (Gmail/Outlook); webp is less reliable in mail.
-        $logoPath = null;
-        foreach ([
-            public_path('images/SK_OnePortal_logo.png'),
-            public_path('images/SK_OnePortal.png'),
-            public_path('images/skoneportal_logo.webp'),
-        ] as $path) {
+        // Use absolute public URL only — avoid CID embed() which can 500
+        // when build()/preview runs outside a live Swift/Symfony message context.
+        $root = rtrim((string) MailUrl::root(), '/');
+        if ($root === '') {
+            $root = rtrim((string) config('app.url'), '/');
+        }
+        if ($root === '') {
+            $root = 'http://localhost';
+        }
+
+        $logoFile = 'SK_OnePortal_logo.png';
+        foreach (['SK_OnePortal_logo.png', 'SK_OnePortal.png', 'skoneportal_logo.png'] as $candidate) {
+            $path = public_path('images/'.$candidate);
             if (is_string($path) && is_file($path)) {
-                $logoPath = $path;
+                $logoFile = $candidate;
                 break;
             }
         }
 
-        // Absolute public URL fallback when CID embed is blocked.
-        $logoUrl = $logoPath
-            ? MailUrl::root().'/images/'.rawurlencode(basename($logoPath))
-            : MailUrl::root().'/images/SK_OnePortal_logo.png';
+        $logoUrl = $root.'/images/'.rawurlencode($logoFile);
 
-        return $this->subject('Set Your KK Profiling Account Password')
-            ->view('emails.kkprofiling-set-password', [
-                'setPasswordUrl' => $this->setPasswordUrl,
-                'logoPath' => $logoPath,
-                'logoUrl' => $logoUrl,
-            ]);
+        $url = trim((string) $this->setPasswordUrl);
+        if ($url === '') {
+            $url = $root.'/';
+        }
+
+        try {
+            return $this->subject('Set Your KK Profiling Account Password')
+                ->view('emails.kkprofiling-set-password', [
+                    'setPasswordUrl' => $url,
+                    'logoPath' => null,
+                    'logoUrl' => $logoUrl,
+                ]);
+        } catch (Throwable) {
+            return $this->subject('Set Your KK Profiling Account Password')
+                ->view('emails.kkprofiling-set-password', [
+                    'setPasswordUrl' => $url,
+                    'logoPath' => null,
+                    'logoUrl' => $logoUrl,
+                ]);
+        }
     }
 }

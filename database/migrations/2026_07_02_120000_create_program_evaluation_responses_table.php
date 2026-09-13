@@ -22,21 +22,35 @@ return new class extends Migration
 
             $table->unique(['evaluation_id', 'registration_id']);
             $table->index(['registration_id']);
-
-            if (Schema::hasTable('program_evaluations')) {
-                $table->foreign('evaluation_id')
-                    ->references('id')
-                    ->on('program_evaluations')
-                    ->cascadeOnDelete();
-            }
-
-            if (Schema::hasTable('kabataan_registrations')) {
-                $table->foreign('registration_id')
-                    ->references('id')
-                    ->on('kabataan_registrations')
-                    ->cascadeOnDelete();
-            }
+            $table->index(['evaluation_id']);
         });
+
+        // Attach FKs only when parent tables exist (production DBs may miss optional tables).
+        try {
+            if (Schema::hasTable('program_evaluations') && Schema::hasTable('program_evaluation_responses')) {
+                Schema::table('program_evaluation_responses', function (Blueprint $table) {
+                    $table->foreign('evaluation_id')
+                        ->references('id')
+                        ->on('program_evaluations')
+                        ->cascadeOnDelete();
+                });
+            }
+        } catch (\Throwable) {
+            // Keep the table usable even if FK creation is blocked by the DB host.
+        }
+
+        try {
+            if (Schema::hasTable('kabataan_registrations') && Schema::hasTable('program_evaluation_responses')) {
+                Schema::table('program_evaluation_responses', function (Blueprint $table) {
+                    $table->foreign('registration_id')
+                        ->references('id')
+                        ->on('kabataan_registrations')
+                        ->cascadeOnDelete();
+                });
+            }
+        } catch (\Throwable) {
+            // Keep the table usable even if FK creation is blocked by the DB host.
+        }
     }
 
     public function down(): void

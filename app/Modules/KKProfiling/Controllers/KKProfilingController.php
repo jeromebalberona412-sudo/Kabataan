@@ -1249,17 +1249,17 @@ class KKProfilingController extends Controller
             );
 
             return view('kkprofiling::set_password', [
-                'barangay' => $registration->barangay->name,
-                'slug' => $barangay,
-                'email' => $registration->email,
-                'registrationAlreadyComplete' => true,
-                'registrationAutoApproved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
-                'barangayLogoUrl' => self::getBarangayLogoUrl($registration->barangay_id),
-            ]);
+            'barangay' => $registration->barangay?->name ?? 'Barangay',
+            'slug' => $barangay,
+            'email' => $registration->email,
+            'registrationAlreadyComplete' => true,
+            'registrationAutoApproved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
+            'barangayLogoUrl' => self::getBarangayLogoUrl($registration->barangay_id),
+        ]);
         }
 
         return view('kkprofiling::set_password', [
-            'barangay' => $registration->barangay->name,
+            'barangay' => $registration->barangay?->name ?? 'Barangay',
             'slug' => $barangay,
             'email' => $registration->email,
             'registration' => $registration,
