@@ -27,6 +27,15 @@ class KabataanRegistration extends Model
      */
     private static function forgetProfilingCaches(self $registration): void
     {
+        try {
+            self::forgetProfilingCachesUnsafe($registration);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    private static function forgetProfilingCachesUnsafe(self $registration): void
+    {
         if ($registration->user_id) {
             Cache::forget("kabataan_registration.latest.{$registration->user_id}");
         }

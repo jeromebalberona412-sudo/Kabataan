@@ -10,9 +10,12 @@ use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Session + temp-file wizard storage. No database writes until Step 4 finalize.
@@ -503,6 +506,12 @@ class KkRegistrationDraftService
             ]);
         }
 
+        if (empty($barangay->tenant_id)) {
+            throw ValidationException::withMessages([
+                'barangay' => ['This barangay is not configured for registration. Please contact SK Officials.'],
+            ]);
+        }
+
         $step1 = $wizard['step1_data'];
         $email = strtolower(trim($step1['email'] ?? $wizard['email'] ?? ''));
 
@@ -516,7 +525,16 @@ class KkRegistrationDraftService
 
         return DB::transaction(function () use ($wizard, $barangay, $step1, $email, $password) {
             $formData = $this->buildFormData($step1, $wizard);
-            $formData['supporting_documents'] = $this->promoteDocuments($wizard);
+            try {
+                $formData['supporting_documents'] = $this->promoteDocuments($wizard);
+            } catch (Throwable $e) {
+                report($e);
+                Log::error('KK wizard document promote failed', [
+                    'email' => $email,
+                    'error' => $e->getMessage(),
+                ]);
+                $formData['supporting_documents'] = $wizard['step2_data']['documents'] ?? [];
+            }
 
             $previousRejected = KabataanRegistration::where('email', $email)
                 ->where('barangay_id', $barangay->id)
@@ -524,60 +542,64 @@ class KkRegistrationDraftService
                 ->latest('id')
                 ->first();
 
-            $registration = KabataanRegistration::create([
+            $contactNumber = app(PhoneNumberService::class)->toLocalMobile((string) ($step1['contact_number'] ?? ''))
+                ?: mb_substr(preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? '')) ?: '', 0, 15);
+
+            $registrationPayload = [
                 'tenant_id' => $barangay->tenant_id,
                 'barangay_id' => $barangay->id,
-                'previous_application_id' => $previousRejected?->id,
-                'last_name' => $step1['last_name'],
-                'first_name' => $step1['first_name'],
-                'middle_name' => $step1['middle_name'] ?? null,
-                'suffix' => $this->resolvedSuffix($step1),
+                'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
+                'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
+                'middle_name' => ($step1['middle_name'] ?? null)
+                    ? mb_substr((string) $step1['middle_name'], 0, 100)
+                    : null,
+                'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
                 'email' => $email,
-                'contact_number' => $step1['contact_number'] ?? null,
+                'contact_number' => $contactNumber !== '' ? $contactNumber : null,
                 'profile_photo_path' => null,
                 'form_data' => $formData,
                 'status' => 'password_set',
                 'profiling_year' => now()->year,
                 'email_verified_at' => $wizard['email_verified_at'] ?? now(),
                 'submitted_at' => now(),
-            ]);
+            ];
 
-            $user = User::where('email', $email)->first();
+            if (Schema::hasColumn('kabataan_registrations', 'previous_application_id')) {
+                $registrationPayload['previous_application_id'] = $previousRejected?->id;
+            }
+
+            $registrationPayload = array_filter(
+                $registrationPayload,
+                static fn (string $column): bool => Schema::hasColumn('kabataan_registrations', $column),
+                ARRAY_FILTER_USE_KEY
+            );
+
+            $registration = KabataanRegistration::create($registrationPayload);
+
+            $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+            $userPayload = $this->wizardUserPayload($registration, $email, $password);
+
             if ($user) {
-                $user->update([
-                    'name' => $registration->full_name,
-                    'password' => bcrypt($password),
-                    'status' => 'PENDING_APPROVAL',
-                    'tenant_id' => $registration->tenant_id,
-                    'barangay_id' => $registration->barangay_id,
-                ]);
+                $user->update($userPayload);
             } else {
-                $user = User::create([
-                    'name' => $registration->full_name,
-                    'email' => $email,
-                    'password' => bcrypt($password),
-                    'email_verified_at' => now(),
-                    'tenant_id' => $registration->tenant_id,
-                    'barangay_id' => $registration->barangay_id,
-                    'role' => 'kabataan',
-                    'status' => 'PENDING_APPROVAL',
-                    'profile_image_url' => null,
-                    'profile_image_uploaded_at' => null,
-                ]);
+                $user = User::create($userPayload);
             }
 
             $registration->markPasswordSet();
             $registration->linkUser($user->id);
 
-            $evaluator = new RegistrationEvaluationService;
-            $evaluator->evaluate($registration->fresh());
+            try {
+                (new RegistrationEvaluationService)->evaluate($registration->fresh());
+            } catch (Throwable $e) {
+                report($e);
+            }
 
             try {
                 (new SkOfficialsNotificationDispatcher)->notifyKkProfilingSubmission(
                     (int) $barangay->id,
                     $registration->full_name,
                 );
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 report($e);
             }
 
@@ -586,12 +608,16 @@ class KkRegistrationDraftService
                     $registration->fresh(),
                     'pending'
                 );
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 report($e);
             }
 
             $registration = $registration->fresh();
-            $this->rememberCompletedWizardToken($wizard['token'], $registration);
+            try {
+                $this->rememberCompletedWizardToken($wizard['token'], $registration);
+            } catch (Throwable $e) {
+                report($e);
+            }
             $this->deletePendingFiles($wizard['token']);
             $this->clearSessionDraft();
             $this->markRegistrationComplete($email, (int) $barangay->id, $registration);
@@ -630,17 +656,21 @@ class KkRegistrationDraftService
 
     public function rememberCompletedWizardToken(string $token, KabataanRegistration $registration): void
     {
-        Cache::put(
-            self::COMPLETED_TOKEN_CACHE_PREFIX.$token,
-            [
-                'registration_id' => $registration->id,
-                'email' => strtolower(trim($registration->email)),
-                'barangay_id' => (int) $registration->barangay_id,
-                'auto_approved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
-                'evaluation_status' => $registration->evaluation_status,
-            ],
-            now()->addHours(24),
-        );
+        try {
+            Cache::put(
+                self::COMPLETED_TOKEN_CACHE_PREFIX.$token,
+                [
+                    'registration_id' => $registration->id,
+                    'email' => strtolower(trim($registration->email)),
+                    'barangay_id' => (int) $registration->barangay_id,
+                    'auto_approved' => RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status),
+                    'evaluation_status' => $registration->evaluation_status,
+                ],
+                now()->addHours(24),
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
     }
 
     /**
@@ -916,6 +946,31 @@ class KkRegistrationDraftService
         return $data;
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    private function wizardUserPayload(KabataanRegistration $registration, string $email, string $password): array
+    {
+        $payload = [
+            'name' => $registration->full_name,
+            'email' => $email,
+            'password' => $password,
+            'email_verified_at' => now(),
+            'tenant_id' => $registration->tenant_id,
+            'barangay_id' => $registration->barangay_id,
+            'role' => 'kabataan',
+            'status' => User::STATUS_PENDING_APPROVAL,
+            'profile_image_url' => null,
+            'profile_image_uploaded_at' => null,
+        ];
+
+        return array_filter(
+            $payload,
+            static fn (string $column): bool => Schema::hasColumn('users', $column),
+            ARRAY_FILTER_USE_KEY
+        );
+    }
+
     private function resolvedSuffix(array $step1): ?string
     {
         $suffix = $step1['suffix'] ?? null;
@@ -1013,18 +1068,26 @@ class KkRegistrationDraftService
         $publicId = $emailSlug.'_'.Str::slug($key, '_').'_'.now()->format('YmdHis');
 
         if ($this->cloudinary->isConfigured()) {
-            $absolutePath = Storage::disk(self::TEMP_DISK)->path($tempPath);
-            $uploaded = $this->cloudinary->uploadSupportingDocument($absolutePath, $publicId, $displayName);
+            try {
+                $absolutePath = Storage::disk(self::TEMP_DISK)->path($tempPath);
+                $uploaded = $this->cloudinary->uploadSupportingDocument($absolutePath, $publicId, $displayName);
 
-            return [
-                'path' => $uploaded['public_id'],
-                'url' => $uploaded['url'],
-                'public_id' => $uploaded['public_id'],
-                'cloudinary_version' => $uploaded['version'],
-                'original_name' => $originalName,
-                'display_name' => $displayName,
-                'storage' => 'cloudinary',
-            ];
+                return [
+                    'path' => $uploaded['public_id'],
+                    'url' => $uploaded['url'],
+                    'public_id' => $uploaded['public_id'],
+                    'cloudinary_version' => $uploaded['version'],
+                    'original_name' => $originalName,
+                    'display_name' => $displayName,
+                    'storage' => 'cloudinary',
+                ];
+            } catch (Throwable $e) {
+                report($e);
+                Log::error('KK wizard Cloudinary document upload failed', [
+                    'path' => $tempPath,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         if (! Storage::disk(self::DOCUMENTS_DISK)->exists(self::DOCUMENTS_DIRECTORY)) {

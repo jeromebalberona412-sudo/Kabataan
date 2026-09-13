@@ -791,7 +791,22 @@ class KKProfilingWizardController extends Controller
             'password.regex' => 'Password must include uppercase, lowercase, number, and special character.',
         ]);
 
-        $registration = $this->draftService->commitWizard($wizard, $request->password);
+        try {
+            $registration = $this->draftService->commitWizard($wizard, $request->password);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('KK wizard set-password finalize failed', [
+                'token' => $token,
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw ValidationException::withMessages([
+                'password' => ['Unable to complete registration. Please try again. If this continues, contact SK Officials.'],
+            ]);
+        }
 
         return $this->finalizeRegistrationResponse($registration);
     }
@@ -862,7 +877,21 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        $registration = $this->draftService->commitWizard($wizard, $request->password);
+        try {
+            $registration = $this->draftService->commitWizard($wizard, $request->password);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('KK wizard session finalize failed', [
+                'barangay' => $barangay,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw ValidationException::withMessages([
+                'password' => ['Unable to complete registration. Please try again. If this continues, contact SK Officials.'],
+            ]);
+        }
 
         $response = $this->finalizeRegistrationResponse($registration);
         $payload = $response->getData(true);
