@@ -6,6 +6,8 @@
 
     const survey = window.__programSurvey || {};
     const surveyId = Number(window.__surveyId || survey.id || 0);
+    const landingUrl = window.__surveyLandingUrl || '/programs/survey';
+    const submitUrl = window.__surveySubmitUrl || '/api/kabataan/programs/survey-responses';
     const form = document.getElementById('programSurveyForm');
     const questionsContainer = document.getElementById('surveyQuestionsContainer');
     const submitBtn = document.getElementById('surveySubmitBtn');
@@ -162,7 +164,7 @@
         setSubmitLoading(true);
 
         try {
-            const response = await fetch('/api/kabataan/programs/survey-responses', {
+            const response = await fetch(submitUrl, {
                 method: 'POST',
                 headers: {
                     Accept: 'application/json',
@@ -193,17 +195,11 @@
     }
 
     function handleCancel() {
-        const programId = survey.abyip_program_id;
-        window.location.href = programId
-            ? `/programs/survey?program=${encodeURIComponent(programId)}`
-            : '/dashboard';
+        window.location.href = landingUrl;
     }
 
     function handleSuccessClose() {
-        const programId = survey.abyip_program_id;
-        window.location.href = programId
-            ? `/programs/survey?program=${encodeURIComponent(programId)}`
-            : '/dashboard';
+        window.location.href = landingUrl;
     }
 
     document.addEventListener('DOMContentLoaded', () => {

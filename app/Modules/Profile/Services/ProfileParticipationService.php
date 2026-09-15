@@ -106,7 +106,7 @@ class ProfileParticipationService
             return route('programs.survey.form', ['survey' => $surveyId]);
         }
 
-        return route('programs.survey.landing');
+        return route('programs.survey.home');
     }
 
     /**

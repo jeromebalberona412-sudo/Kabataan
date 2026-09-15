@@ -109,7 +109,20 @@ class KabataanProgramService
             return null;
         }
 
-        return Cache::remember("abyip.latest_document.{$barangayId}", self::CACHE_TTL, function () use ($barangayId) {
+        return Cache::remember("abyip.latest_approved_document.{$barangayId}", self::CACHE_TTL, function () use ($barangayId) {
+            $approved = Abyip::query()
+                ->documents()
+                ->where('barangay_id', $barangayId)
+                ->where('status', Abyip::STATUS_APPROVED)
+                ->orderByDesc('fiscal_year')
+                ->orderByDesc('id')
+                ->first();
+
+            if ($approved !== null) {
+                return $approved;
+            }
+
+            // Fallback only when no approved ABYIP exists yet.
             return Abyip::query()
                 ->documents()
                 ->where('barangay_id', $barangayId)
@@ -133,13 +146,19 @@ class KabataanProgramService
                 $programModels = Abyip::query()
                     ->where('document_id', $document->id)
                     ->where('row_type', Abyip::ROW_YOUTH_PROGRAM)
-                    ->whereNull('parent_id')
-                    ->whereIn('code', self::YOUTH_PROGRAM_LETTERS)
+                    ->where(function ($query) {
+                        $query->whereNull('parent_id')
+                            ->orWhereIn('code', self::YOUTH_PROGRAM_LETTERS);
+
+                        foreach (self::YOUTH_PROGRAM_LETTERS as $letter) {
+                            $query->orWhere('program_name', 'ilike', $letter.'. %');
+                        }
+                    })
                     ->with(['children' => fn ($q) => $q->orderBy('sort_order')->orderBy('id')])
                     ->orderBy('sort_order')
                     ->orderBy('id')
                     ->get()
-                    ->unique(fn (Abyip $program) => strtoupper(trim((string) ($program->program_letter ?? $program->code ?? ''))))
+                    ->unique(fn (Abyip $program) => strtoupper(trim((string) ($program->program_letter ?? $program->code ?? ''))) ?: ('id:'.$program->id))
                     ->values();
 
                 $programIds = $programModels->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -190,6 +209,12 @@ class KabataanProgramService
     {
         Cache::forget("kabataan_dashboard_payload_u{$user->id}");
         Cache::forget("kabataan_dashboard_payload_v2_u{$user->id}");
+        Cache::forget("kabataan_dashboard_payload_v3_u{$user->id}");
+        $barangayId = $this->resolveUserBarangayId($user);
+        if ($barangayId !== null) {
+            Cache::forget("abyip.latest_document.{$barangayId}");
+            Cache::forget("abyip.latest_approved_document.{$barangayId}");
+        }
     }
 
     /**

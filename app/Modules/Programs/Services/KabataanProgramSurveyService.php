@@ -291,9 +291,10 @@ class KabataanProgramSurveyService
                 $program = $response->survey?->abyipProgram;
                 (new SkOfficialsNotificationDispatcher())->notifySurveyResponse(
                     (int) $survey->barangay_id,
-                    (string) ($registration->full_name ?? 'A Kabataan member'),
+                    $this->formatRespondentOfficialName($registration),
                     (string) ($program?->program_name ?? 'a program survey'),
                     $program?->program_letter,
+                    (int) $survey->id,
                 );
             } catch (\Throwable $e) {
                 report($e);
@@ -301,6 +302,30 @@ class KabataanProgramSurveyService
 
             return $this->formatResponseDetail($response);
         });
+    }
+
+    private function formatRespondentOfficialName(KabataanRegistration $registration): string
+    {
+        $first = trim((string) ($registration->first_name ?? ''));
+        $middle = trim((string) ($registration->middle_name ?? ''));
+        $last = trim((string) ($registration->last_name ?? ''));
+        $suffix = trim((string) ($registration->suffix ?? ''));
+
+        if (strcasecmp($middle, 'None') === 0) {
+            $middle = '';
+        }
+        if (strcasecmp($suffix, 'None') === 0) {
+            $suffix = '';
+        }
+
+        $parts = array_values(array_filter([$last, $first, $middle, $suffix], static fn ($part) => $part !== ''));
+        if ($parts !== []) {
+            return implode(', ', $parts);
+        }
+
+        $fallback = trim((string) ($registration->full_name ?? ''));
+
+        return $fallback !== '' ? $fallback : 'A Kabataan member';
     }
 
     private function openSurveyQuery(User $user)
@@ -478,6 +503,10 @@ class KabataanProgramSurveyService
             'survey_id' => $response->survey_id,
             'abyip_program_id' => $survey?->abyip_program_id,
             'program_name' => trim((string) ($survey?->abyipProgram?->program_name ?? 'Program Survey')),
+            'announcement' => $survey?->announcement,
+            'instructions' => $survey?->instructions,
+            'open_date_display' => $survey ? $this->formatDate($survey->open_date) : '—',
+            'close_date_display' => $survey ? $this->formatDate($survey->close_date) : '—',
             'submitted_at' => $response->submitted_at?->format('M j, Y g:i A'),
             'submitted_at_iso' => $response->submitted_at?->toIso8601String(),
             'survey_period' => $survey

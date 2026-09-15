@@ -100,33 +100,12 @@
         </div>
     </div>
 
-    <div id="pslViewModal" class="sl-view-modal" hidden>
-        <div class="sl-view-modal-overlay"></div>
-        <div class="sl-view-modal-container" id="pslViewContainer">
-            <div class="sl-view-modal-header">
-                <div class="sl-view-modal-header-main">
-                    <h2 id="pslViewTitle">Survey Response</h2>
-                    <p id="pslViewMeta" class="sl-view-modal-meta"></p>
-                </div>
-                <div class="sl-view-modal-header-actions">
-                    <button type="button" class="sl-view-modal-icon-btn sl-view-modal-maximize-btn" id="pslViewMaximize" title="Fullscreen" aria-label="Fullscreen">
-                        <svg class="sl-modal-icon-maximize" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
-                        <svg class="sl-modal-icon-restore" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><rect x="6" y="6" width="12" height="12" rx="1"/><path d="M9 3h12v12"/></svg>
-                    </button>
-                    <button type="button" class="sl-view-modal-icon-btn sl-view-modal-close" id="pslViewClose" aria-label="Close">×</button>
-                </div>
-            </div>
-            <div class="sl-view-modal-body">
-                <section class="sl-view-section">
-                    <h3 class="sl-view-section-title">Your Answers</h3>
-                    <div id="pslViewAnswers" class="sl-view-answers"></div>
-                </section>
-            </div>
-        </div>
-    </div>
-
     <script>
         window.__abyipProgramId = @json($abyipProgramId);
+        window.__surveyByProgramUrl = @json($surveyByProgramUrl);
+        window.__surveyResponsesUrl = @json($surveyResponsesUrl);
+        window.__surveyAnswerBaseUrl = @json(url('/programs/survey'));
+        window.__surveyResponseBaseUrl = @json(url('/programs/survey/responses'));
     </script>
 </body>
 </html>

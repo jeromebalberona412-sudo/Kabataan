@@ -5,33 +5,15 @@
     'use strict';
 
     const abyipProgramId = Number(window.__abyipProgramId || 0);
+    const surveyByProgramUrl = window.__surveyByProgramUrl || null;
+    const surveyResponsesUrl = window.__surveyResponsesUrl || '/api/kabataan/programs/survey-responses';
+    const surveyAnswerBaseUrl = String(window.__surveyAnswerBaseUrl || '/programs/survey').replace(/\/$/, '');
+    const surveyResponseBaseUrl = String(window.__surveyResponseBaseUrl || '/programs/survey/responses').replace(/\/$/, '');
     const startBtn = document.getElementById('pslStartSurveyBtn');
     const historyTable = document.getElementById('pslHistoryTable');
-    const viewModal = document.getElementById('pslViewModal');
-    const viewClose = document.getElementById('pslViewClose');
-    const viewMaximize = document.getElementById('pslViewMaximize');
-    const viewContainer = document.getElementById('pslViewContainer');
-    const viewTitle = document.getElementById('pslViewTitle');
-    const viewMeta = document.getElementById('pslViewMeta');
-    const viewAnswers = document.getElementById('pslViewAnswers');
 
     let currentSurvey = null;
     let surveyHistory = [];
-    let viewIsFullscreen = false;
-
-    function setViewFullscreen(isFullscreen) {
-        viewIsFullscreen = !!isFullscreen;
-        viewContainer?.classList.toggle('is-fullscreen', viewIsFullscreen);
-        viewModal?.classList.toggle('is-fullscreen', viewIsFullscreen);
-        if (viewMaximize) {
-            const maxIcon = viewMaximize.querySelector('.sl-modal-icon-maximize');
-            const restoreIcon = viewMaximize.querySelector('.sl-modal-icon-restore');
-            if (maxIcon) maxIcon.hidden = viewIsFullscreen;
-            if (restoreIcon) restoreIcon.hidden = !viewIsFullscreen;
-            viewMaximize.title = viewIsFullscreen ? 'Restore down' : 'Fullscreen';
-            viewMaximize.setAttribute('aria-label', viewIsFullscreen ? 'Restore down' : 'Fullscreen');
-        }
-    }
 
     function getCsrfToken() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -45,9 +27,17 @@
             .replace(/"/g, '&quot;');
     }
 
+    function answerUrl(surveyId) {
+        return `${surveyAnswerBaseUrl}/${encodeURIComponent(surveyId)}/answer`;
+    }
+
+    function responseUrl(responseId) {
+        return `${surveyResponseBaseUrl}/${encodeURIComponent(responseId)}`;
+    }
+
     async function fetchSurveyByProgram() {
-        if (!abyipProgramId) return null;
-        const response = await fetch(`/api/kabataan/programs/surveys/by-program/${abyipProgramId}`, {
+        if (!abyipProgramId || !surveyByProgramUrl) return null;
+        const response = await fetch(surveyByProgramUrl, {
             headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
             credentials: 'same-origin',
         });
@@ -57,26 +47,13 @@
     }
 
     async function fetchHistory() {
-        const query = abyipProgramId ? `?program=${encodeURIComponent(abyipProgramId)}` : '';
-        const response = await fetch(`/api/kabataan/programs/survey-responses${query}`, {
+        const response = await fetch(surveyResponsesUrl, {
             headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
             credentials: 'same-origin',
         });
         if (!response.ok) return [];
         const data = await response.json();
         return data.responses || [];
-    }
-
-    async function fetchResponse(responseId) {
-        const response = await fetch(`/api/kabataan/programs/survey-responses/${responseId}`, {
-            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
-            credentials: 'same-origin',
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(data.message || 'Unable to load survey response.');
-        }
-        return data.response;
     }
 
     function renderSurveyInfo(survey) {
@@ -169,60 +146,10 @@
                 <td>${escapeHtml(row.survey_period || '—')}</td>
                 <td>${escapeHtml(row.submitted_at || '—')}</td>
                 <td>
-                    <button type="button" class="sl-btn-action sl-btn-view" data-view-response="${row.id}">View</button>
+                    <a class="sl-btn-action sl-btn-view" href="${escapeHtml(responseUrl(row.id))}">View</a>
                 </td>
             </tr>
         `).join('');
-
-        historyTable.querySelectorAll('[data-view-response]').forEach((button) => {
-            button.addEventListener('click', () => {
-                openResponseView(Number(button.getAttribute('data-view-response')));
-            });
-        });
-    }
-
-    function renderAnswerItems(answers) {
-        if (!answers?.length) {
-            return '<p class="sl-view-empty">No answers found.</p>';
-        }
-
-        return answers.map((answer) => {
-            const displayAnswer = Array.isArray(answer.answer)
-                ? answer.answer.join(', ')
-                : (answer.answer ?? '—');
-
-            return `
-                <div class="sl-answer-item">
-                    <p class="sl-info-label">${escapeHtml(answer.question_label || 'Question')}</p>
-                    <p class="sl-info-value">${escapeHtml(String(displayAnswer))}</p>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function openResponseView(responseId) {
-        if (viewAnswers) viewAnswers.innerHTML = '<p class="sl-view-empty">Loading…</p>';
-        if (viewModal) {
-            viewModal.hidden = false;
-            document.body.style.overflow = 'hidden';
-        }
-
-        fetchResponse(responseId)
-            .then((response) => {
-                if (viewTitle) viewTitle.textContent = response.program_name || 'Survey Response';
-                if (viewMeta) viewMeta.textContent = `${response.survey_period || '—'} • Submitted: ${response.submitted_at || '—'}`;
-                if (viewAnswers) viewAnswers.innerHTML = renderAnswerItems(response.answers || []);
-            })
-            .catch((error) => {
-                closeResponseView();
-                alert(error.message || 'Unable to load response.');
-            });
-    }
-
-    function closeResponseView() {
-        if (viewModal) viewModal.hidden = true;
-        setViewFullscreen(false);
-        document.body.style.overflow = '';
     }
 
     function scrollToHistory() {
@@ -238,7 +165,7 @@
         if (currentSurvey.has_responded) {
             const latestResponse = surveyHistory[0];
             if (latestResponse?.id) {
-                openResponseView(latestResponse.id);
+                window.location.href = responseUrl(latestResponse.id);
                 return;
             }
             scrollToHistory();
@@ -246,7 +173,7 @@
         }
 
         if (!currentSurvey.can_respond) return;
-        window.location.href = `/programs/survey/form?survey=${encodeURIComponent(currentSurvey.id)}`;
+        window.location.href = answerUrl(currentSurvey.id);
     }
 
     async function init() {
@@ -263,14 +190,5 @@
     document.addEventListener('DOMContentLoaded', () => {
         init();
         startBtn?.addEventListener('click', handleStartSurvey);
-        viewClose?.addEventListener('click', closeResponseView);
-        viewMaximize?.addEventListener('click', () => setViewFullscreen(!viewIsFullscreen));
-        viewModal?.querySelector('.sl-view-modal-overlay')?.addEventListener('click', closeResponseView);
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && viewModal && !viewModal.hidden) {
-                if (viewIsFullscreen) setViewFullscreen(false);
-                else closeResponseView();
-            }
-        });
     });
 })();

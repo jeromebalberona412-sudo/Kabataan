@@ -224,10 +224,75 @@ class ProgramController extends Controller
         ]);
     }
 
-    public function surveyLanding(Request $request): View
+    public function surveyLandingHome(Request $request): View|RedirectResponse
+    {
+        $abyipProgramId = (int) $request->query('program', 0);
+        if ($abyipProgramId > 0) {
+            return redirect()->route('programs.survey.landing', ['program' => $abyipProgramId]);
+        }
+
+        return $this->renderSurveyLanding(null);
+    }
+
+    public function surveyLanding(Request $request, int $program): View
+    {
+        return $this->renderSurveyLanding($program > 0 ? $program : null);
+    }
+
+    public function surveyFormLegacy(Request $request): RedirectResponse
+    {
+        $surveyId = (int) $request->query('survey', 0);
+        if ($surveyId <= 0) {
+            abort(404);
+        }
+
+        return redirect()->route('programs.survey.form', ['survey' => $surveyId]);
+    }
+
+    public function surveyForm(Request $request, int $survey): View
     {
         $user = Auth::user();
-        $abyipProgramId = (int) $request->query('program', 0);
+
+        if ($survey <= 0) {
+            abort(404);
+        }
+
+        $surveyData = $this->surveyService->getSurveyForUser($user, $survey);
+        if ($surveyData === null || ! ($surveyData['can_respond'] ?? false)) {
+            abort(404);
+        }
+
+        return view('programs::program_survey_form', [
+            'surveyId' => $survey,
+            'survey' => $surveyData,
+            'landingUrl' => $this->surveyLandingUrl($surveyData['abyip_program_id'] ?? null),
+            'submitUrl' => route('kabataan.programs.survey-responses.store'),
+        ]);
+    }
+
+    public function surveyResponse(Request $request, int $response): View
+    {
+        $user = Auth::user();
+
+        if ($response <= 0) {
+            abort(404);
+        }
+
+        try {
+            $responseData = $this->surveyService->getUserResponse($user, $response);
+        } catch (ValidationException) {
+            abort(404);
+        }
+
+        return view('programs::program_survey_response', [
+            'response' => $responseData,
+            'landingUrl' => $this->surveyLandingUrl($responseData['abyip_program_id'] ?? null),
+        ]);
+    }
+
+    private function renderSurveyLanding(?int $abyipProgramId): View
+    {
+        $user = Auth::user();
 
         $registration = KabataanRegistration::with('barangay')
             ->where('user_id', $user->id)
@@ -237,29 +302,24 @@ class ProgramController extends Controller
         $barangayName = $registration?->barangay?->name ?? 'Your Barangay';
 
         return view('programs::program_survey_landing', [
-            'abyipProgramId' => $abyipProgramId > 0 ? $abyipProgramId : null,
+            'abyipProgramId' => $abyipProgramId,
             'barangayName' => $barangayName,
+            'surveyByProgramUrl' => $abyipProgramId
+                ? route('kabataan.programs.surveys.by-program', ['abyipProgramId' => $abyipProgramId])
+                : null,
+            'surveyResponsesUrl' => route('kabataan.programs.survey-responses.index', array_filter([
+                'program' => $abyipProgramId,
+            ])),
         ]);
     }
 
-    public function surveyForm(Request $request): View
+    private function surveyLandingUrl(mixed $abyipProgramId): string
     {
-        $user = Auth::user();
-        $surveyId = (int) $request->query('survey', 0);
+        $programId = (int) ($abyipProgramId ?? 0);
 
-        if ($surveyId <= 0) {
-            abort(404);
-        }
-
-        $survey = $this->surveyService->getSurveyForUser($user, $surveyId);
-        if ($survey === null || ! ($survey['can_respond'] ?? false)) {
-            abort(404);
-        }
-
-        return view('programs::program_survey_form', [
-            'surveyId' => $surveyId,
-            'survey' => $survey,
-        ]);
+        return $programId > 0
+            ? route('programs.survey.landing', ['program' => $programId])
+            : route('programs.survey.home');
     }
 
     public function showSurvey(Request $request, int $id): JsonResponse
@@ -308,10 +368,10 @@ class ProgramController extends Controller
             return response()->json([
                 'response' => $this->surveyService->getUserResponse($user, $id),
             ]);
-        } catch (ValidationException $exception) {
+        } catch (ValidationException) {
             return response()->json([
-                'message' => collect($exception->errors())->flatten()->first(),
-            ], 422);
+                'message' => 'Survey response not found.',
+            ], 404);
         }
     }
 

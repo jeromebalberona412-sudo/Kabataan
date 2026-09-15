@@ -934,7 +934,7 @@
         });
 
         setTimeout(() => {
-            window.location.href = `/programs/survey?program=${encodeURIComponent(programId)}`;
+            window.location.href = `/programs/survey/${encodeURIComponent(programId)}`;
         }, 650);
     }
 

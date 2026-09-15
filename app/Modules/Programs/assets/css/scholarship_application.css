@@ -119,6 +119,35 @@
     color: #f57c00;
 }
 
+.gf-form-readonly .gf-answer-readonly {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    color: #111827;
+    white-space: pre-wrap;
+    word-break: break-word;
+    cursor: default;
+}
+
+.gf-form-readonly .gf-answer-paragraph {
+    align-items: flex-start;
+    min-height: 96px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+.gf-form-readonly .gf-actions {
+    justify-content: flex-start;
+}
+
+.gf-form-readonly .gf-btn-cancel {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* Card */
 .gf-card {
     background: #fff;

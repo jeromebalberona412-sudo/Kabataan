@@ -36,11 +36,17 @@ class SkOfficialsNotificationDispatcher
         );
     }
 
+    /**
+     * One survey notification per program survey per official.
+     * Later responses update the same row (latest respondent wins),
+     * matching Community Feed post activity behavior.
+     */
     public function notifySurveyResponse(
         int $barangayId,
         string $respondentName,
         string $programName,
         ?string $programLetter,
+        int $surveyId = 0,
     ): void {
         if (! Schema::hasTable('sk_officials_notifications')) {
             return;
@@ -48,14 +54,19 @@ class SkOfficialsNotificationDispatcher
 
         $letter = strtoupper(trim((string) $programLetter));
         $committee = self::LETTER_COMMITTEE[$letter] ?? null;
-        $actionUrl = $committee ? "/{$committee}-survey-results" : '/schedule-programs';
+        $basePath = $committee ? "/{$committee}-survey-results" : '/schedule-programs';
+        $actionUrl = $surveyId > 0 ? "{$basePath}?survey={$surveyId}" : $basePath;
+        $title = 'New Survey Response';
+        $body = "{$respondentName} submitted a response for {$programName}.";
 
-        $this->insertForBarangayOfficials(
+        $this->upsertForBarangayOfficials(
             $barangayId,
             'survey',
-            'New Survey Response',
-            "{$respondentName} submitted a response for {$programName}.",
+            $title,
+            $body,
             $actionUrl,
+            $surveyId > 0 ? $basePath.'?survey='.$surveyId : null,
+            $surveyId > 0 ? $basePath : null,
         );
     }
 
@@ -183,5 +194,90 @@ class SkOfficialsNotificationDispatcher
         ])->all();
 
         DB::table('sk_officials_notifications')->insert($rows);
+    }
+
+    /**
+     * Upsert one notification per official for the same action URL.
+     * Updates existing (even if read), re-marks unread, bumps created_at.
+     */
+    private function upsertForBarangayOfficials(
+        int $barangayId,
+        string $category,
+        string $title,
+        string $body,
+        string $actionUrl,
+        ?string $exactActionUrl = null,
+        ?string $legacyBasePath = null,
+    ): void {
+        if ($barangayId <= 0) {
+            return;
+        }
+
+        $officialIds = DB::table('users')
+            ->where('barangay_id', $barangayId)
+            ->where('role', 'sk_official')
+            ->where('status', 'ACTIVE')
+            ->pluck('id');
+
+        if ($officialIds->isEmpty()) {
+            return;
+        }
+
+        $now = now();
+        $matchUrl = $exactActionUrl ?: $actionUrl;
+
+        foreach ($officialIds as $userId) {
+            $query = DB::table('sk_officials_notifications')
+                ->where('user_id', $userId)
+                ->where('category', $category)
+                ->where(function ($q) use ($matchUrl, $legacyBasePath) {
+                    $q->where('action_url', $matchUrl);
+                    if ($legacyBasePath) {
+                        // Migrate older committee-only URLs into the survey-scoped row.
+                        $q->orWhere('action_url', $legacyBasePath);
+                    }
+                })
+                ->orderByDesc('id');
+
+            $existingId = $query->value('id');
+
+            if ($existingId) {
+                DB::table('sk_officials_notifications')
+                    ->where('id', $existingId)
+                    ->update([
+                        'title' => $title,
+                        'body' => $body,
+                        'action_url' => $actionUrl,
+                        'read_at' => null,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+
+                DB::table('sk_officials_notifications')
+                    ->where('user_id', $userId)
+                    ->where('category', $category)
+                    ->where('id', '!=', $existingId)
+                    ->where(function ($q) use ($matchUrl, $legacyBasePath, $actionUrl) {
+                        $q->where('action_url', $matchUrl)
+                            ->orWhere('action_url', $actionUrl);
+                        if ($legacyBasePath) {
+                            $q->orWhere('action_url', $legacyBasePath);
+                        }
+                    })
+                    ->delete();
+
+                continue;
+            }
+
+            DB::table('sk_officials_notifications')->insert([
+                'user_id' => $userId,
+                'category' => $category,
+                'title' => $title,
+                'body' => $body,
+                'action_url' => $actionUrl,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
     }
 }
