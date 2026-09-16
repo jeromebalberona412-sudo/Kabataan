@@ -285,8 +285,9 @@
             '.comms-reaction-modal-hint{font-size:.78rem;color:#6b7280;margin-top:.1rem;}' +
             '.comms-reaction-modal-emoji{font-size:1.25rem;flex:0 0 auto;}' +
             '.comms-reaction-modal-empty{padding:1.5rem 1rem;text-align:center;color:#6b7280;font-weight:600;}' +
-            '.comms-image-lightbox{position:fixed;inset:0;z-index:100200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;}' +
-            '.comms-image-lightbox[hidden]{display:none!important;}' +
+            '.comms-image-lightbox{position:fixed;inset:0;z-index:100200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0;pointer-events:auto;}' +
+            '.comms-image-lightbox[hidden]{display:none!important;pointer-events:none!important;visibility:hidden!important;}' +
+            'body.comms-image-lightbox-open{overflow:hidden;}' +
             '.comms-image-lightbox-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.92);}' +
             '.comms-image-lightbox-toolbar{position:fixed;top:max(.65rem,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:3;display:flex;align-items:center;gap:.35rem;padding:.35rem;border-radius:999px;background:rgba(0,0,0,.35);}' +
             '.comms-image-lightbox-tool{width:40px;height:40px;border:0;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:1.15rem;font-weight:700;cursor:pointer;line-height:1;}' +
@@ -663,6 +664,9 @@
     }
 
     function openImageLightbox(src, images) {
+        if (Date.now() < (window.__commsIgnoreLightboxUntil || 0)) {
+            return;
+        }
         var list = uniqueLightboxSources(Array.isArray(images) ? images : []);
         var start = String(src || '').trim();
         if (!list.length && start) list = [start];
@@ -675,12 +679,14 @@
         ensureImageLightbox();
         renderImageLightbox();
         imageLightboxEl.hidden = false;
+        imageLightboxEl.style.pointerEvents = 'auto';
         document.body.classList.add('comms-image-lightbox-open');
     }
 
     function closeImageLightbox() {
         if (!imageLightboxEl) return;
         imageLightboxEl.hidden = true;
+        imageLightboxEl.style.pointerEvents = 'none';
         document.body.classList.remove('comms-image-lightbox-open');
         var img = imageLightboxEl.querySelector('.comms-image-lightbox-img');
         if (img) {
@@ -739,9 +745,23 @@
         return { src: start, images: images };
     }
 
+    function isDecorativeImageTarget(el) {
+        if (!el || typeof el.closest !== 'function') return false;
+        if (el.closest('input, textarea, select, [contenteditable="true"], .kabataan-header__logo, .kabataan-header__brand, .youth-logo, .logo-wrapper, .post-avatar, .comment-avatar, .profile-avatar, .kabataan-header__avatar-btn, .comms-chat-modal-avatar, .comms-avatar, .comms-chat-fs-item-avatar, .brgy-logo, .brgy-avatar, .brgy-avatar-logo, .officer-avatar, .cp-avatar, .cp-composer-avatar')) {
+            return true;
+        }
+        var img = el.tagName === 'IMG' ? el : el.closest('img');
+        if (!img) return false;
+        var src = String(img.currentSrc || img.src || '').toLowerCase();
+        return src.indexOf('skoneportal_logo') !== -1 || src.indexOf('sk_oneportal_logo') !== -1;
+    }
+
     function wireChatImageLightbox(root) {
         if (!root || root.dataset.commsLightboxWired === 'true') return;
         root.addEventListener('click', function (e) {
+            if (isDecorativeImageTarget(e.target)) {
+                return;
+            }
             var thumb = e.target.closest('[data-comms-lightbox-src], .comms-chat-attachment-grid img, .comms-bubble-image img, a.comms-bubble-image, button.comms-bubble-image');
             if (!thumb || !root.contains(thumb)) return;
             var gallery = collectLightboxGallery(thumb, root);
@@ -762,7 +782,7 @@
         style.id = 'commsDeleteModalStyles';
         style.textContent =
             '.comms-unsend-modal{position:fixed;inset:0;z-index:100080;display:flex;align-items:center;justify-content:center;padding:16px;pointer-events:auto;}' +
-            '.comms-unsend-modal[hidden]{display:none!important;}' +
+            '.comms-unsend-modal[hidden]{display:none!important;pointer-events:none!important;visibility:hidden!important;}' +
             '.comms-unsend-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);}' +
             '.comms-unsend-card{position:relative;z-index:1;width:min(100%,500px);background:#fff;border-radius:8px;box-shadow:0 12px 28px rgba(0,0,0,.22);overflow:hidden;box-sizing:border-box;}' +
             '.comms-unsend-close{position:absolute;top:12px;right:12px;width:36px;height:36px;border:0;border-radius:999px;background:#e4e6eb;color:#050505;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;}' +

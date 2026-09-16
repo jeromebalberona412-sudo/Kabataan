@@ -634,3 +634,112 @@ import '../../../Communications/assets/js/chat-modal.js';
 
     setInterval(refreshUnreadBadge, 30000);
 })();
+
+(function wireKabataanPageInteractionRestore() {
+    if (document.documentElement.dataset.kabataanInteractionRestore === '1') {
+        return;
+    }
+    document.documentElement.dataset.kabataanInteractionRestore = '1';
+
+    function isVisibleBlockingOverlay() {
+        const chat = document.getElementById('commsChatModal');
+        if (chat && !chat.hidden) return true;
+        const liveCam = document.getElementById('commsLiveCameraModal');
+        if (liveCam && !liveCam.hidden) return true;
+        const lightbox = document.getElementById('commsImageLightbox');
+        if (lightbox && !lightbox.hidden) return true;
+        const feedLightbox = document.getElementById('imageLightbox');
+        if (feedLightbox && feedLightbox.classList.contains('active')) return true;
+        const videoLightbox = document.getElementById('videoLightbox');
+        if (videoLightbox && videoLightbox.classList.contains('active')) return true;
+        if (document.body.classList.contains('kabataan-mobile-nav-open')) return true;
+        const drawer = document.getElementById('programsDrawerSidebar');
+        if (drawer && drawer.classList.contains('drawer-open')) return true;
+        return false;
+    }
+
+    function restoreKabataanPageInteraction() {
+        if (restoreKabataanPageInteraction._busy) return;
+        restoreKabataanPageInteraction._busy = true;
+        try {
+            if (Date.now() < (window.__commsIgnoreLightboxUntil || 0)) {
+                if (window.Comms && typeof window.Comms.closeImageLightbox === 'function') {
+                    window.Comms.closeImageLightbox();
+                }
+                const feedLightbox = document.getElementById('imageLightbox');
+                if (feedLightbox && feedLightbox.classList.contains('active')) {
+                    feedLightbox.classList.remove('active');
+                    feedLightbox.setAttribute('aria-hidden', 'true');
+                    document.body.classList.remove('kabataan-image-lightbox-open');
+                }
+            }
+
+            const lightbox = document.getElementById('commsImageLightbox');
+            if (lightbox && lightbox.hidden) {
+                document.body.classList.remove('comms-image-lightbox-open');
+                lightbox.style.pointerEvents = 'none';
+            }
+
+            const liveCam = document.getElementById('commsLiveCameraModal');
+            if (liveCam && liveCam.hidden) {
+                document.body.classList.remove('comms-live-camera-open');
+            }
+
+            const chat = document.getElementById('commsChatModal');
+            if (chat && chat.hidden) {
+                document.body.classList.remove('comms-chat-modal-open');
+            }
+
+            if (!isVisibleBlockingOverlay()) {
+                document.body.style.overflow = '';
+                document.documentElement.style.overflow = '';
+                document.body.style.pointerEvents = '';
+            }
+        } finally {
+            restoreKabataanPageInteraction._busy = false;
+        }
+    }
+
+    window.restoreKabataanPageInteraction = restoreKabataanPageInteraction;
+
+    const onReturnFromPicker = function () {
+        window.setTimeout(restoreKabataanPageInteraction, 0);
+        window.setTimeout(restoreKabataanPageInteraction, 80);
+    };
+
+    window.addEventListener('focus', onReturnFromPicker);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) onReturnFromPicker();
+    });
+    document.addEventListener('cancel', function (e) {
+        if (e.target && e.target.matches && e.target.matches('input[type="file"]')) {
+            onReturnFromPicker();
+        }
+    }, true);
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.matches && e.target.matches('input[type="file"]')) {
+            window.__commsIgnoreLightboxUntil = Date.now() + 600;
+            onReturnFromPicker();
+        }
+    }, true);
+
+    document.addEventListener('click', function (e) {
+        if (!e.target || typeof e.target.closest !== 'function') {
+            return;
+        }
+        if (!e.target.closest('.kabataan-header__logo, .kabataan-header__brand, .youth-logo, .logo-wrapper, .brgy-logo, .brgy-avatar, .brgy-avatar-logo, .officer-avatar')) {
+            return;
+        }
+        window.__commsIgnoreLightboxUntil = Date.now() + 400;
+        if (window.Comms && typeof window.Comms.closeImageLightbox === 'function') {
+            window.Comms.closeImageLightbox();
+        }
+        const feedLightbox = document.getElementById('imageLightbox');
+        if (feedLightbox && feedLightbox.classList.contains('active')) {
+            feedLightbox.classList.remove('active');
+            feedLightbox.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('kabataan-image-lightbox-open');
+        }
+        restoreKabataanPageInteraction();
+    }, true);
+})();

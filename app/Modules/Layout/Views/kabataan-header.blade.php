@@ -4,7 +4,7 @@
     $userEmail = $headerUser->email ?? 'youth@skportal.com';
     $avatarUrl = $headerUser
         ? app(\App\Modules\Profile\Services\ProfileImageService::class)->resolveDisplayUrl($headerUser)
-        : 'https://ui-avatars.com/api/?name=' . urlencode($userName) . '&background=667eea&color=fff';
+        : 'https://ui-avatars.com/api/?name=' . urlencode($userName) . '&background=0039A8&color=fff';
     $pageBadge = $pageBadge ?? null;
     $kabataanViewOnly = $kabataanViewOnly ?? false;
 @endphp

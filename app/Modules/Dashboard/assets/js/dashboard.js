@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const div = document.createElement('div');
         div.className = 'comment-item';
         div.innerHTML = `
-            <img src="https://ui-avatars.com/api/?name=You&background=667eea&color=fff" alt="You">
+            <img src="https://ui-avatars.com/api/?name=You&background=0039A8&color=fff" alt="You">
             <div class="comment-content">
                 <p class="comment-author">You</p>
                 <p class="comment-text">${escapeHtml(text)}</p>

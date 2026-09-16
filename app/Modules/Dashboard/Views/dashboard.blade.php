@@ -1659,6 +1659,9 @@
         if (!mediaItems.length) return;
         grid.querySelectorAll('[data-image-index]').forEach((el) => {
             el.addEventListener('click', (e) => {
+                if (e.target.closest('.post-avatar, .comment-avatar, .kabataan-header__logo, .kabataan-header__brand, .youth-logo, .profile-avatar, .kabataan-header__avatar-btn, .brgy-logo, .brgy-avatar, .brgy-avatar-logo, .officer-avatar, .cp-avatar')) {
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
                 const imageIndex = parseInt(el.dataset.imageIndex, 10) || 0;
@@ -2345,6 +2348,9 @@
     };
 
     function openLightbox(images, startIndex = 0) {
+        if (Date.now() < (window.__commsIgnoreLightboxUntil || 0)) {
+            return;
+        }
         lightboxImages = images;
         lightboxIndex = startIndex;
         lightboxZoom = 1;
@@ -2352,6 +2358,7 @@
         if (!lb) return;
         lb.classList.add('active');
         lb.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('kabataan-image-lightbox-open');
         document.body.style.overflow = 'hidden';
         renderLightboxImage();
         applyLightboxZoom();
@@ -2364,6 +2371,7 @@
             lb.classList.remove('active');
             lb.setAttribute('aria-hidden', 'true');
         }
+        document.body.classList.remove('kabataan-image-lightbox-open');
         document.body.style.overflow = '';
         lightboxZoom = 1;
         applyLightboxZoom();
@@ -2443,7 +2451,9 @@
     
     // Close on backdrop click
     document.getElementById('imageLightbox')?.addEventListener('click', (e) => {
-        if (e.target?.id === 'imageLightbox') closeLightbox();
+        if (e.target?.id === 'imageLightbox' || e.target?.id === 'lightboxViewport') {
+            closeLightbox();
+        }
     });
     
     // Zoom with mouse wheel

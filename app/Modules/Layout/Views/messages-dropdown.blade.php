@@ -59,7 +59,7 @@
                 $preview = $conversation['last_message']['body'] ?? 'No messages yet';
                 $unread = (int) ($conversation['unread_count'] ?? 0);
                 $name = $peer['name'] ?? 'User';
-                $avatar = $peer['profile_image_url'] ?? ('https://ui-avatars.com/api/?name='.urlencode((string) $name).'&background=2C2C3E&color=fff');
+                $avatar = $peer['profile_image_url'] ?? ('https://ui-avatars.com/api/?name='.urlencode((string) $name).'&background=0450A8&color=fff');
                 $convId = (int) ($conversation['id'] ?? 0);
                 $searchBlob = mb_strtolower(trim($name.' '.$preview));
             @endphp
@@ -73,7 +73,7 @@
                 data-search="{{ e($searchBlob) }}"
                 role="menuitem"
             >
-                <img class="comms-msg-avatar" src="{{ $avatar }}" alt="" onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=U&background=2C2C3E&color=fff'">
+                <img class="comms-msg-avatar" src="{{ $avatar }}" alt="" onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=U&background=0450A8&color=fff'">
                 <div class="comms-msg-content">
                     <div class="comms-msg-item-top">
                         <span class="comms-msg-item-name">{{ \Illuminate\Support\Str::limit($name, 28) }}</span>

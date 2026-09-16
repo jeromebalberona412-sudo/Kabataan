@@ -3,6 +3,8 @@
 /* Header chat modal â€” Messenger-style dock, right side */
 .comms-chat-modal[hidden] {
     display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
 }
 
 .comms-chat-modal {
@@ -2049,8 +2051,12 @@ body.comms-messages-page #commsChatModal {
 
 @media (max-width: 768px) {
     .comms-chat-modal {
-        pointer-events: auto;
+        pointer-events: none;
         z-index: 3200;
+    }
+
+    .comms-chat-modal:not([hidden]) {
+        pointer-events: auto;
     }
 
     body.comms-chat-modal-open {
@@ -2364,9 +2370,12 @@ body.comms-messages-page #commsChatModal {
     align-items: center;
     justify-content: center;
     padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+    pointer-events: auto;
 }
 .comms-live-camera[hidden] {
     display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
 }
 .comms-live-camera-backdrop {
     position: absolute;

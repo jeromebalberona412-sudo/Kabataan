@@ -43,7 +43,7 @@
                     @php
                         $user = auth()->user();
                         $displayName = $user->name ?? 'Youth Member';
-                        $avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($displayName) . '&background=667eea&color=fff';
+                        $avatarUrl = 'https://ui-avatars.com/api/?name=' . urlencode($displayName) . '&background=0039A8&color=fff';
                     @endphp
                     <img src="{{ $avatarUrl }}" alt="">
                 </div>

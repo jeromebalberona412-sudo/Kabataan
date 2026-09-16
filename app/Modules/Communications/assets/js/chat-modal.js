@@ -116,7 +116,7 @@ function renderCommsDateSeparator(iso) {
 
 function defaultCommsAvatar(name) {
     var label = encodeURIComponent(String(name || 'U').slice(0, 40));
-    return 'https://ui-avatars.com/api/?name=' + label + '&background=2C2C3E&color=fff';
+    return 'https://ui-avatars.com/api/?name=' + label + '&background=0450A8&color=fff';
 }
 
 // Header chat modal (open conversation without leaving page)
@@ -277,6 +277,7 @@ function renderHeaderAttachPreview() {
             }).filter(Boolean);
             var start = thumb.getAttribute('data-comms-lightbox-src') || '';
             if (start && window.Comms && typeof window.Comms.openImageLightbox === 'function') {
+                if (Date.now() < (window.__commsIgnoreLightboxUntil || 0)) return;
                 window.Comms.openImageLightbox(start, images);
             }
         });

@@ -895,11 +895,17 @@ body.youth-dashboard {
     align-items: center;
     justify-content: center;
     padding: 56px 72px 48px;
+    pointer-events: none;
 }
 
 .image-lightbox.active {
     display: flex;
     flex-direction: column;
+    pointer-events: auto;
+}
+
+body.kabataan-image-lightbox-open {
+    overflow: hidden;
 }
 
 .lightbox-viewport {

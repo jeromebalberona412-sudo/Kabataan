@@ -272,7 +272,12 @@ function initProfileAvatarChange() {
         }
 
         // Must run synchronously inside the user click handler (no modal close before this).
+        window.__commsIgnoreLightboxUntil = Date.now() + 600;
         fileInput.click();
+        if (typeof window.restoreKabataanPageInteraction === 'function') {
+            window.setTimeout(window.restoreKabataanPageInteraction, 0);
+            window.setTimeout(window.restoreKabataanPageInteraction, 80);
+        }
     }
 
     function closeModalsForUpload() {
@@ -444,6 +449,10 @@ function initProfileAvatarChange() {
     fileInput?.addEventListener('change', (event) => {
         const file = event.target.files?.[0];
         event.target.value = '';
+        window.__commsIgnoreLightboxUntil = Date.now() + 600;
+        if (typeof window.restoreKabataanPageInteraction === 'function') {
+            window.restoreKabataanPageInteraction();
+        }
 
         if (!file) {
             return;

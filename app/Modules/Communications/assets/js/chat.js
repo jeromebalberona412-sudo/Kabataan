@@ -819,6 +819,7 @@ import './communication.js';
         }).join('');
         if (els.attachPreview.dataset.zoomWired !== 'true') {
             els.attachPreview.addEventListener('click', function (e) {
+                if (Date.now() < (window.__commsIgnoreLightboxUntil || 0)) return;
                 var thumb = e.target.closest('[data-comms-lightbox-src]');
                 if (!thumb || !els.attachPreview.contains(thumb)) return;
                 e.preventDefault();

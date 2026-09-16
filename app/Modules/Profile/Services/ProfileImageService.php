@@ -27,7 +27,7 @@ class ProfileImageService
     {
         $name = $displayName ?: ($user->name ?: 'Youth User');
 
-        return 'https://ui-avatars.com/api/?name='.urlencode($name).'&size=150&background=667eea&color=fff';
+        return 'https://ui-avatars.com/api/?name='.urlencode($name).'&size=150&background=0039A8&color=fff';
     }
 
     public function resolveDisplayUrl(User $user, ?string $displayName = null): string

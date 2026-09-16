@@ -248,7 +248,7 @@ class BarangaySkProfileService
 
     private function uiAvatarUrl(string $name): string
     {
-        return 'https://ui-avatars.com/api/?name='.urlencode($name).'&background=667eea&color=fff&size=80';
+        return 'https://ui-avatars.com/api/?name='.urlencode($name).'&background=0039A8&color=fff&size=80';
     }
 
     /**
