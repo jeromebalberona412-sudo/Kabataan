@@ -659,14 +659,14 @@ body.kkpu-mandatory-open {
     .kabataan-header__icon-btn,
     .kabataan-header .nav-icon-btn,
     .kabataan-header__avatar-btn {
-        width: 36px;
-        height: 36px;
+        width: 42px;
+        height: 42px;
     }
 
     .kabataan-header__icon-btn svg,
     .kabataan-header .nav-icon-btn svg {
-        width: 18px !important;
-        height: 18px !important;
+        width: 22px !important;
+        height: 22px !important;
     }
 
     .kabataan-header__dropdown-user-card {
@@ -745,14 +745,14 @@ body.kkpu-mandatory-open {
     .kabataan-header__icon-btn,
     .kabataan-header .nav-icon-btn,
     .kabataan-header__avatar-btn {
-        width: 34px;
-        height: 34px;
+        width: 44px;
+        height: 44px;
     }
 
     .kabataan-header__icon-btn svg,
     .kabataan-header .nav-icon-btn svg {
-        width: 17px;
-        height: 17px;
+        width: 22px !important;
+        height: 22px !important;
     }
 
     .kabataan-header__dropdown,
@@ -830,14 +830,14 @@ body.kkpu-mandatory-open {
     .kabataan-header__icon-btn,
     .kabataan-header .nav-icon-btn,
     .kabataan-header__avatar-btn {
-        width: 34px;
-        height: 34px;
+        width: 44px;
+        height: 44px;
     }
 
     .kabataan-header__icon-btn svg,
     .kabataan-header .nav-icon-btn svg {
-        width: 17px !important;
-        height: 17px !important;
+        width: 22px !important;
+        height: 22px !important;
     }
 }
 
@@ -853,14 +853,14 @@ body.kkpu-mandatory-open {
     .kabataan-header__icon-btn,
     .kabataan-header .nav-icon-btn,
     .kabataan-header__avatar-btn {
-        width: 32px;
-        height: 32px;
+        width: 40px;
+        height: 40px;
     }
 
     .kabataan-header__icon-btn svg,
     .kabataan-header .nav-icon-btn svg {
-        width: 16px !important;
-        height: 16px !important;
+        width: 20px !important;
+        height: 20px !important;
     }
 }
 
@@ -876,14 +876,14 @@ body.kkpu-mandatory-open {
     .kabataan-header__icon-btn,
     .kabataan-header .nav-icon-btn,
     .kabataan-header__avatar-btn {
-        width: 30px;
-        height: 30px;
+        width: 38px;
+        height: 38px;
     }
 
     .kabataan-header__icon-btn svg,
     .kabataan-header .nav-icon-btn svg {
-        width: 15px !important;
-        height: 15px !important;
+        width: 19px !important;
+        height: 19px !important;
     }
 }
 

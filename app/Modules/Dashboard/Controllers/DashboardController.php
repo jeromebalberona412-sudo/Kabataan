@@ -3,6 +3,7 @@
 namespace App\Modules\Dashboard\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Announcement;
 use App\Models\KabataanRegistration;
 use App\Modules\Dashboard\Services\BarangaySkProfileService;
 use App\Modules\Profile\Services\ProfileImageService;
@@ -10,6 +11,7 @@ use App\Modules\Programs\Services\KabataanProgramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class DashboardController extends Controller
@@ -52,6 +54,8 @@ class DashboardController extends Controller
 
         $kabataanPrograms = app(KabataanProgramService::class)->getDashboardPayload($user);
 
+        $barangayId = (int) ($registration?->barangay_id ?? $user->barangay_id ?? 0);
+
         $viewData = [
             'user' => $user,
             'userAvatarUrl' => $userAvatarUrl,
@@ -59,6 +63,7 @@ class DashboardController extends Controller
             'barangayProfiles' => $barangayProfiles,
             'kabataanPrograms' => $kabataanPrograms,
             'commentPreviewPost' => null,
+            'feedYearsWithPosts' => $this->yearsWithPosts($barangayId),
         ];
 
         return view('dashboard::dashboard', $viewData)->withHeaders([
@@ -149,5 +154,35 @@ class DashboardController extends Controller
             'Pragma' => 'no-cache',
             'Expires' => 'Sat, 01 Jan 2000 00:00:00 GMT',
         ]);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function yearsWithPosts(int $barangayId): array
+    {
+        if ($barangayId <= 0) {
+            return [(int) date('Y')];
+        }
+
+        $yearSelect = match (Schema::getConnection()->getDriverName()) {
+            'pgsql' => 'DISTINCT EXTRACT(YEAR FROM created_at)::integer as year',
+            'sqlite' => "DISTINCT CAST(strftime('%Y', created_at) AS INTEGER) as year",
+            default => 'DISTINCT YEAR(created_at) as year',
+        };
+
+        return Announcement::query()
+            ->active()
+            ->where(function ($q) use ($barangayId) {
+                $q->where('barangay_id', $barangayId)
+                    ->orWhereRaw('"is_federation_wide" = true');
+            })
+            ->selectRaw($yearSelect)
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(static fn ($year): int => (int) $year)
+            ->filter(static fn (int $year): bool => $year >= 2000 && $year <= 2100)
+            ->values()
+            ->all();
     }
 }

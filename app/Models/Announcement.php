@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class Announcement extends Model
 {
@@ -18,7 +19,9 @@ class Announcement extends Model
         'title',
         'body',
         'link_url',
+        'share_token',
         'is_federation_wide',
+        'visibility',
         'is_archived',
         'archived_at',
         'deleted_at',
@@ -64,5 +67,27 @@ class Announcement extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereRaw('"is_archived" = false');
+    }
+
+    public function isPublicAudience(): bool
+    {
+        if (! Schema::hasColumn('community_feeds', 'visibility')) {
+            return true;
+        }
+
+        return ($this->visibility ?: 'public') === 'public';
+    }
+
+    public function isShareable(): bool
+    {
+        if ((bool) $this->is_archived) {
+            return false;
+        }
+
+        if (! Schema::hasColumn('community_feeds', 'share_token')) {
+            return false;
+        }
+
+        return filled($this->share_token) && $this->isPublicAudience();
     }
 }

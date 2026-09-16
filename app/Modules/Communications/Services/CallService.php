@@ -10,9 +10,14 @@ use App\Modules\Communications\Models\Message;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CallService
 {
+    protected const STALE_RINGING_SECONDS = 90;
+
+    protected const STALE_ACCEPTED_MINUTES = 45;
+
     public function __construct(
         protected ParticipantTypeResolver $types,
         protected ConversationService $conversations
@@ -66,7 +71,8 @@ class CallService
             $receiverId,
             $receiverType
         ) {
-            $this->releaseStaleRingingCalls();
+            $this->releaseStaleActiveCalls();
+            $this->cancelCallerOutboundRinging($callerId);
             $this->assertParticipantsAvailableForCall($callerId, $receiverId);
 
             $call = Call::query()->create([
@@ -95,7 +101,7 @@ class CallService
         $ended = [];
 
         DB::transaction(function () use ($userId, $user, &$ended) {
-            $this->releaseStaleRingingCalls();
+            $this->releaseStaleActiveCalls();
 
             $active = Call::query()
                 ->whereIn('status', Call::ACTIVE_STATUSES)
@@ -120,15 +126,39 @@ class CallService
         return $ended;
     }
 
-    protected function releaseStaleRingingCalls(): void
+    protected function releaseStaleActiveCalls(): void
     {
+        $now = now();
+
         Call::query()
             ->where('status', Call::STATUS_RINGING)
-            ->where('created_at', '<', now()->subMinutes(2))
+            ->where('created_at', '<', $now->copy()->subSeconds(self::STALE_RINGING_SECONDS))
             ->update([
                 'status' => Call::STATUS_MISSED,
-                'ended_at' => now(),
-                'updated_at' => now(),
+                'ended_at' => $now,
+                'updated_at' => $now,
+            ]);
+
+        Call::query()
+            ->where('status', Call::STATUS_ACCEPTED)
+            ->where('updated_at', '<', $now->copy()->subMinutes(self::STALE_ACCEPTED_MINUTES))
+            ->update([
+                'status' => Call::STATUS_ENDED,
+                'ended_at' => $now,
+                'updated_at' => $now,
+            ]);
+    }
+
+    protected function cancelCallerOutboundRinging(int $callerId): void
+    {
+        $now = now();
+        Call::query()
+            ->where('status', Call::STATUS_RINGING)
+            ->where('caller_id', $callerId)
+            ->update([
+                'status' => Call::STATUS_CANCELLED,
+                'ended_at' => $now,
+                'updated_at' => $now,
             ]);
     }
 
@@ -149,18 +179,54 @@ class CallService
             ->lockForUpdate()
             ->get();
 
+        $active = $active->filter(function (Call $call) {
+            return in_array($call->status, Call::ACTIVE_STATUSES, true)
+                && $call->ended_at === null;
+        })->values();
+
         foreach ($active as $call) {
             $callerBusy = (int) $call->caller_id === $callerId || (int) $call->receiver_id === $callerId;
             if ($callerBusy) {
+                Log::info('CALL VALIDATION', [
+                    'user' => $callerId,
+                    'recipient' => $receiverId,
+                    'existing_active_call' => $call->id,
+                    'caller_id' => $call->caller_id,
+                    'receiver_id' => $call->receiver_id,
+                    'status' => $call->status,
+                    'created_at' => (string) $call->created_at,
+                    'updated_at' => (string) $call->updated_at,
+                    'result' => 'REJECT',
+                    'reason' => 'caller_busy',
+                ]);
                 abort(409, 'You are currently on another call. Please end your current call first.');
             }
 
             if ($receiverId !== null && $receiverId > 0
                 && ((int) $call->caller_id === $receiverId || (int) $call->receiver_id === $receiverId)
             ) {
+                Log::info('CALL VALIDATION', [
+                    'user' => $callerId,
+                    'recipient' => $receiverId,
+                    'existing_active_call' => $call->id,
+                    'caller_id' => $call->caller_id,
+                    'receiver_id' => $call->receiver_id,
+                    'status' => $call->status,
+                    'created_at' => (string) $call->created_at,
+                    'updated_at' => (string) $call->updated_at,
+                    'result' => 'REJECT',
+                    'reason' => 'recipient_busy',
+                ]);
                 abort(409, 'This person is currently on another call. Please wait.');
             }
         }
+
+        Log::info('CALL VALIDATION', [
+            'user' => $callerId,
+            'recipient' => $receiverId,
+            'existing_active_call' => 'NONE',
+            'result' => 'ALLOW',
+        ]);
     }
 
     public function updateStatus(Call $call, Authenticatable $user, string $status): Call

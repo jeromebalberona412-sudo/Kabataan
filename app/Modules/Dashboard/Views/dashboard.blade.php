@@ -52,22 +52,23 @@
             to { opacity: 1; transform: none; }
         }
         .youth-dashboard .feed-sticky-toolbar {
-            position: sticky;
-            top: 0;
-            z-index: 90;
+            position: static;
+            top: auto;
+            z-index: 1;
             background: var(--bg, #f8fafc);
             overflow: visible;
             flex-shrink: 0;
-            transform: translate3d(0, 0, 0);
-            opacity: 1;
-            pointer-events: auto;
-            transition: transform 0.22s ease, opacity 0.18s ease;
-            will-change: transform;
+            transform: none !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            transition: none;
+            will-change: auto;
+            box-shadow: none;
         }
         .youth-dashboard .feed-sticky-toolbar.is-hidden {
-            transform: translate3d(0, calc(-100% - 2px), 0);
-            opacity: 0;
-            pointer-events: none;
+            transform: none !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
         }
         .youth-dashboard .feed-filter-bar {
             display: flex;
@@ -84,7 +85,7 @@
                 overflow-x: visible;
             }
             .youth-dashboard .feed-sticky-toolbar {
-                box-shadow: 0 8px 16px -10px rgba(15, 23, 42, 0.25);
+                box-shadow: none;
             }
         }
         @media (prefers-reduced-motion: reduce) {
@@ -182,18 +183,24 @@
                         <h1>SK Community Feed</h1>
                         <p>Posts, events, and programs from your barangay SK.</p>
                     </div>
-                    <div class="feed-header__search">
-                        <svg class="feed-header__search-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
-                        </svg>
-                        <input
-                            type="search"
-                            id="feedSearchInput"
-                            class="feed-header__search-input"
-                            placeholder="Search posts, programs, announcements..."
-                            autocomplete="off"
-                            aria-label="Search community feed"
-                        >
+                    <div class="feed-header__tools">
+                        <div class="feed-header__search">
+                            <svg class="feed-header__search-icon" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+                            </svg>
+                            <input
+                                type="search"
+                                id="feedSearchInput"
+                                class="feed-header__search-input"
+                                placeholder="Search posts, programs, announcements..."
+                                autocomplete="off"
+                                aria-label="Search community feed"
+                            >
+                        </div>
+                        <button type="button" class="feed-filters-btn" id="feedFiltersBtn" aria-haspopup="dialog" aria-controls="feedFiltersModal">
+                            <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M3 4a1 1 0 011-1h12a1 1 0 01.8 1.6L12 11.333V15a1 1 0 01-.553.894l-2 1A1 1 0 018 16v-4.667L3.2 4.6A1 1 0 013 4z"/></svg>
+                            <span>Filters</span>
+                        </button>
                     </div>
                 </div>
 
@@ -381,6 +388,49 @@
     </div>
 
     @include('dashboard::remaining_modals')
+
+    {{-- Share post --}}
+    <div id="sharePostModal" class="program-modal" aria-hidden="true">
+        <div class="modal-overlay" onclick="closeShareModal()"></div>
+        <div class="modal-container share-post-modal" role="dialog" aria-modal="true" aria-labelledby="sharePostModalTitle">
+            <div class="modal-header">
+                <h2 id="sharePostModalTitle">Share post</h2>
+                <button type="button" class="modal-close" onclick="closeShareModal()" aria-label="Close"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg></button>
+            </div>
+            <form class="share-post-form" id="sharePostForm" onsubmit="event.preventDefault(); copySharePostLink();">
+                <div class="modal-body">
+                    <p class="share-post-hint">Anyone with this link can view this post.</p>
+                    <label class="share-post-label" for="sharePostLinkInput">Public post link</label>
+                    <div class="share-post-field">
+                        <input type="text" id="sharePostLinkInput" class="share-post-link-input" readonly value="" aria-label="Public post link">
+                    </div>
+                </div>
+                <div class="modal-footer-btns share-post-footer">
+                    <button type="button" class="btn-secondary" onclick="closeShareModal()">Close</button>
+                    <button type="submit" class="btn-primary" id="copySharePostLinkBtn">Copy link</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- Post year filters --}}
+    <div id="feedFiltersModal" class="program-modal" aria-hidden="true">
+        <div class="modal-overlay" data-feed-filters-close></div>
+        <div class="modal-container feed-filters-modal" role="dialog" aria-modal="true" aria-labelledby="feedFiltersTitle">
+            <div class="modal-header">
+                <h2 id="feedFiltersTitle">Post filters</h2>
+                <button type="button" class="modal-close" data-feed-filters-close aria-label="Close"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg></button>
+            </div>
+            <div class="modal-body">
+                <label class="feed-filters-label" for="feedFilterYear">Go to:</label>
+                <select id="feedFilterYear" class="feed-filters-select" aria-label="Filter posts by year"></select>
+            </div>
+            <div class="modal-footer-btns feed-filters-footer">
+                <button type="button" class="feed-filters-clear" id="feedFiltersClear">Clear</button>
+                <button type="button" class="btn-primary" id="feedFiltersDone">Done</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Program Registration Success Modal -->
     <div id="programSuccessModal" class="program-modal">
@@ -895,6 +945,7 @@
         commentsPageUrl: @json(\App\Support\MailUrl::uri('/dashboard/comments/__ID__')),
         feedPollMs: 2500,
         prohibitedWords: @json(config('prohibited_words', [])),
+        feedYearsWithPosts: @json($feedYearsWithPosts ?? []),
     };
     window.__skProhibitedWords = window.CommunityFeedConfig.prohibitedWords;
     window.CommentPreviewConfig = {
@@ -919,19 +970,170 @@
     let feedLastPage = 1;
     let feedFilter = 'all';
     let feedSearch = '';
+    let feedYearOptions = [];
+    let defaultFeedYear = new Date().getFullYear();
+    let currentYearFilter = 0;
     let feedLoading = false;
     let feedRequestToken = 0;
     const renderedPostIds = new Set();
     const postCache = new Map();
     const FEED_LS_KEY = 'kabataan_community_feed_v1';
 
+    function getFeedYearsWithPosts() {
+        const years = Array.isArray(window.CommunityFeedConfig?.feedYearsWithPosts)
+            ? window.CommunityFeedConfig.feedYearsWithPosts
+                .map((y) => Number(y))
+                .filter((y) => Number.isFinite(y) && y >= 2000 && y <= 2100)
+            : [];
+        return [...new Set(years)].sort((a, b) => b - a);
+    }
+
+    function resolveDefaultFeedYear(years = getFeedYearsWithPosts()) {
+        const now = new Date().getFullYear();
+        if (years.includes(now)) return now;
+        if (years.length) return years[0];
+        return now;
+    }
+
+    function populateFeedYearOptions() {
+        const select = document.getElementById('feedFilterYear');
+        if (!select) return;
+        feedYearOptions = getFeedYearsWithPosts();
+        defaultFeedYear = resolveDefaultFeedYear(feedYearOptions);
+        if (!currentYearFilter) {
+            currentYearFilter = defaultFeedYear;
+        }
+        const previous = currentYearFilter || Number(select.value) || defaultFeedYear;
+        select.innerHTML = '';
+        feedYearOptions.forEach((y) => {
+            const opt = document.createElement('option');
+            opt.value = String(y);
+            opt.textContent = String(y);
+            select.appendChild(opt);
+        });
+        if (!feedYearOptions.length) {
+            const opt = document.createElement('option');
+            opt.value = String(defaultFeedYear);
+            opt.textContent = String(defaultFeedYear);
+            select.appendChild(opt);
+        }
+        const selected = feedYearOptions.includes(previous) ? previous : defaultFeedYear;
+        select.value = String(selected);
+        currentYearFilter = selected;
+        updateFeedFiltersClearVisibility();
+    }
+
+    function updateFeedFiltersClearVisibility() {
+        const clearBtn = document.getElementById('feedFiltersClear');
+        if (!clearBtn) return;
+        clearBtn.hidden = feedYearOptions.length < 2;
+    }
+
+    function openFeedFiltersModal() {
+        populateFeedYearOptions();
+        const modal = document.getElementById('feedFiltersModal');
+        const select = document.getElementById('feedFilterYear');
+        if (!modal || !select) return;
+        select.value = String(currentYearFilter || defaultFeedYear);
+        updateFeedFiltersClearVisibility();
+        modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeFeedFiltersModal() {
+        const modal = document.getElementById('feedFiltersModal');
+        if (!modal) return;
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    function applyFeedYearFilter(year) {
+        const next = Number(year) || defaultFeedYear;
+        if (next === currentYearFilter) {
+            closeFeedFiltersModal();
+            return;
+        }
+        currentYearFilter = next;
+        closeFeedFiltersModal();
+        loadFeed(true, { force: true });
+    }
+
+    function bindFeedYearFilters() {
+        populateFeedYearOptions();
+        document.getElementById('feedFiltersBtn')?.addEventListener('click', openFeedFiltersModal);
+        document.querySelectorAll('[data-feed-filters-close]').forEach((el) => {
+            el.addEventListener('click', closeFeedFiltersModal);
+        });
+        document.getElementById('feedFiltersClear')?.addEventListener('click', () => {
+            const select = document.getElementById('feedFilterYear');
+            const year = resolveDefaultFeedYear(feedYearOptions);
+            if (select) select.value = String(year);
+            applyFeedYearFilter(year);
+        });
+        document.getElementById('feedFiltersDone')?.addEventListener('click', () => {
+            const select = document.getElementById('feedFilterYear');
+            applyFeedYearFilter(select?.value || defaultFeedYear);
+        });
+    }
+
+    function openShareModal(postId) {
+        const cached = postCache.get(Number(postId)) || {};
+        const shareUrl = String(cached.share_url || '').trim();
+        if (!shareUrl || cached.can_share === false) {
+            notifyFeed('Sharing unavailable for this post.', 'error');
+            return;
+        }
+        const modal = document.getElementById('sharePostModal');
+        const input = document.getElementById('sharePostLinkInput');
+        if (!modal || !input) return;
+        input.value = shareUrl;
+        modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeShareModal() {
+        const modal = document.getElementById('sharePostModal');
+        if (!modal) return;
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    async function copySharePostLink() {
+        const input = document.getElementById('sharePostLinkInput');
+        const url = String(input?.value || '').trim();
+        if (!url) {
+            notifyFeed('Share link is unavailable.', 'error');
+            return;
+        }
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+            } else {
+                input.focus();
+                input.select();
+                document.execCommand('copy');
+            }
+            notifyFeed('Link copied.', 'success');
+            closeShareModal();
+        } catch (err) {
+            window.prompt('Copy this link:', url);
+        }
+    }
+
+    window.openShareModal = openShareModal;
+    window.closeShareModal = closeShareModal;
+    window.copySharePostLink = copySharePostLink;
+
     function readFeedLocalCache() {
         try {
-            const raw = localStorage.getItem(FEED_LS_KEY);
+            const raw = localStorage.getItem(FEED_LOCAL_KEY);
             if (!raw) return null;
             const parsed = JSON.parse(raw);
             if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return null;
             if (Date.now() - Number(parsed.savedAt || 0) > 30 * 60 * 1000) return null;
+            if ((parsed.filter || 'all') !== feedFilter) return null;
+            if ((parsed.search || '') !== (feedSearch || '')) return null;
+            if (Number(parsed.year || 0) !== Number(currentYearFilter || 0)) return null;
             return parsed;
         } catch (e) {
             return null;
@@ -940,10 +1142,11 @@
 
     function writeFeedLocalCache(items, filter, search) {
         try {
-            localStorage.setItem(FEED_LS_KEY, JSON.stringify({
+            localStorage.setItem(FEED_LOCAL_KEY, JSON.stringify({
                 items: (items || []).slice(0, 12),
                 filter: filter || 'all',
                 search: search || '',
+                year: currentYearFilter || 0,
                 savedAt: Date.now(),
             }));
         } catch (e) { /* ignore quota */ }
@@ -1166,6 +1369,9 @@
         if (feedSearch) {
             params.set('search', feedSearch);
         }
+        if (currentYearFilter > 0) {
+            params.set('year', String(currentYearFilter));
+        }
 
         const container = document.getElementById('feed-posts');
         if (!container) {
@@ -1249,83 +1455,15 @@
     bindInfiniteScroll();
 
     function bindFilterBarScrollHide() {
+        // Keep All / Announcements / Events / Activities / Programs always visible (no sticky hide).
         const toolbar = document.querySelector('.feed-sticky-toolbar');
         const bar = document.querySelector('.feed-filter-bar');
-        const feedSection = document.querySelector('.feed-section');
-        if (!toolbar || !bar) return;
-
-        const DOWN_THRESHOLD = 14;
-        const UP_THRESHOLD = 8;
-        const TOP_SHOW = 24;
-        let lastY = 0;
-        let ticking = false;
-        let hidden = false;
-
-        function scrollRoot() {
-            if (!feedSection) return window;
-            const overflowY = getComputedStyle(feedSection).overflowY;
-            if (overflowY === 'auto' || overflowY === 'scroll') return feedSection;
-            return window;
-        }
-
-        function currentY() {
-            const root = scrollRoot();
-            return root === window
-                ? (window.scrollY || document.documentElement.scrollTop || 0)
-                : root.scrollTop;
-        }
-
-        function showBar() {
-            if (!hidden && !toolbar.classList.contains('is-hidden')) return;
-            hidden = false;
-            toolbar.classList.remove('is-hidden');
-            bar.classList.remove('is-hidden');
-        }
-
-        function hideBar() {
-            if (hidden && toolbar.classList.contains('is-hidden')) return;
-            hidden = true;
-            toolbar.classList.add('is-hidden');
-        }
-
-        function apply() {
-            ticking = false;
-            const y = Math.max(0, currentY());
-            const delta = y - lastY;
-            lastY = y;
-
-            if (y <= TOP_SHOW) {
-                showBar();
-                return;
-            }
-            if (delta >= DOWN_THRESHOLD) {
-                hideBar();
-                return;
-            }
-            if (delta <= -UP_THRESHOLD) {
-                showBar();
-            }
-        }
-
-        function onScroll() {
-            if (ticking) return;
-            ticking = true;
-            requestAnimationFrame(apply);
-        }
-
-        lastY = currentY();
-        showBar();
-
-        window.addEventListener('scroll', onScroll, { passive: true });
-        feedSection?.addEventListener('scroll', onScroll, { passive: true });
-        window.addEventListener('resize', function () {
-            lastY = currentY();
-            if (currentY() <= TOP_SHOW) showBar();
-        });
-        bar.addEventListener('focusin', showBar);
+        toolbar?.classList.remove('is-hidden');
+        bar?.classList.remove('is-hidden');
     }
 
     bindFilterBarScrollHide();
+    bindFeedYearFilters();
 
     function setFeedFilter(btn, filter) {
         document.querySelector('.feed-sticky-toolbar')?.classList.remove('is-hidden');
@@ -1344,8 +1482,9 @@
     });
 
     (function hydrateFeedFromLocalCache() {
+        populateFeedYearOptions();
         const cached = readFeedLocalCache();
-        if (!cached || cached.filter !== feedFilter || (cached.search || '') !== '') return;
+        if (!cached) return;
         paintFeedPosts(cached.items, { reset: true, clearLoading: true });
     })();
 
@@ -1754,6 +1893,10 @@
             <button class="action-btn comment-btn" onclick="openComments(${p.id})">
               <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
               <span>Comment</span>
+            </button>
+            <button type="button" class="action-btn share-btn" onclick="openShareModal(${p.id})" aria-label="Share post"${(p.can_share !== false && p.share_url) ? '' : ' disabled title="Sharing unavailable for this post"'}>
+              <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg>
+              <span>Share</span>
             </button>
           </div>`;
     }
@@ -2492,6 +2635,7 @@
             }
             const params = new URLSearchParams({ page: 1, filter: feedFilter });
             if (feedSearch) params.set('search', feedSearch);
+            if (currentYearFilter > 0) params.set('year', String(currentYearFilter));
             const data = await apiFeed(`/api/feed?${params}`);
             if (tokenAtStart !== feedRequestToken) return;
             const items = data.data ?? [];

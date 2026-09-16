@@ -32,10 +32,11 @@
         {
             key: 'programs',
             target: '[data-tour="programs"]',
+            mobileTarget: '#programsDrawerSidebar [data-tour="programs"] .sidebar-title, #programsDrawerSidebar [data-tour="programs"]',
             icon: 'fa-list',
             title: 'Programs in Your Barangay',
             description: 'Browse available barangay programs such as Education, Sports, Health, and more. Tap a category to view and apply.',
-            placement: 'right',
+            placement: 'bottom',
             isSidebar: true
         },
         {
@@ -50,10 +51,11 @@
         {
             key: 'barangay-profiles',
             target: '[data-tour="barangay-profiles"]',
+            mobileTarget: '#programsDrawerSidebar [data-tour="barangay-profiles"] .sidebar-title, #programsDrawerSidebar [data-tour="barangay-profiles"]',
             icon: 'fa-building',
             title: 'Barangay SK Profiles',
             description: 'Browse SK officials from each barangay. Open a barangay to see officers, term dates, and their posts.',
-            placement: 'left',
+            placement: 'bottom',
             isSidebar: true
         },
         {
@@ -156,6 +158,24 @@
         if (!step || !step.target) return null;
 
         if (step.isSidebar && isMobileViewport()) {
+            const mobileSelectors = String(step.mobileTarget || step.target)
+                .split(',')
+                .map(function (s) { return s.trim(); })
+                .filter(Boolean);
+
+            for (let s = 0; s < mobileSelectors.length; s += 1) {
+                const sel = mobileSelectors[s];
+                const scoped = sel.indexOf('#programsDrawerSidebar') === 0
+                    ? document.querySelectorAll(sel)
+                    : document.querySelectorAll('#programsDrawerSidebar ' + sel);
+                for (let i = 0; i < scoped.length; i += 1) {
+                    if (isElementUsable(scoped[i]) || scoped[i].closest('#programsDrawerSidebar')) {
+                        return scoped[i];
+                    }
+                }
+                if (scoped.length) return scoped[0];
+            }
+
             const inDrawer = document.querySelectorAll('#programsDrawerSidebar ' + step.target);
             for (let i = 0; i < inDrawer.length; i += 1) {
                 if (isElementUsable(inDrawer[i]) || inDrawer[i].closest('#programsDrawerSidebar')) {
@@ -170,6 +190,22 @@
             if (isElementUsable(matches[i])) return matches[i];
         }
         return matches.length ? matches[0] : null;
+    }
+
+    function scrollTourTargetIntoView(el) {
+        if (!el || !el.scrollIntoView) return Promise.resolve();
+        try {
+            el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+        } catch (e) {
+            try { el.scrollIntoView(true); } catch (err) { /* ignore */ }
+        }
+        const drawer = document.getElementById('programsDrawerSidebar');
+        if (drawer && el.closest('#programsDrawerSidebar')) {
+            const card = el.closest('.sidebar-card') || el;
+            const top = Math.max(0, card.offsetTop - 24);
+            try { drawer.scrollTo({ top: top, behavior: 'smooth' }); } catch (e2) { drawer.scrollTop = top; }
+        }
+        return waitForLayoutSettle(280);
     }
 
     function isProgramsDrawerOpen() {
@@ -386,49 +422,63 @@
             if (!isActive) return;
             const targetEl = resolveTargetEl(step);
             if (!targetEl) {
+                // Give drawer/layout another beat before skipping (mobile sidebar steps).
+                waitForLayoutSettle(360).then(function () {
+                    if (!isActive) return;
+                    const retry = resolveTargetEl(step);
+                    if (!retry) {
+                        goToNextStep();
+                        return;
+                    }
+                    scrollTourTargetIntoView(retry).then(function () {
+                        measureAndHighlight(retry);
+                    });
+                });
+                return;
+            }
+
+            scrollTourTargetIntoView(targetEl).then(function () {
+                measureAndHighlight(targetEl);
+            });
+        };
+
+        function measureAndHighlight(seedEl) {
+            if (!isActive) return;
+            const fresh = resolveTargetEl(step) || seedEl;
+            if (!fresh) {
                 goToNextStep();
                 return;
             }
 
-            const rect = targetEl.getBoundingClientRect();
-            const inView = rect.top >= 72
-                && rect.bottom <= window.innerHeight - 12
-                && rect.left >= 0
-                && rect.right <= window.innerWidth;
-            if (!inView) {
-                targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            fresh.classList.add('sk-tour-highlighted-element');
+            currentHighlightedEl = fresh;
+
+            const spotRect = fresh.getBoundingClientRect();
+            const padding = 8;
+            let spotLeft = Math.max(0, spotRect.left - padding);
+            let spotTop = Math.max(0, spotRect.top - padding);
+            let spotWidth = Math.min(window.innerWidth - spotLeft, Math.max(48, spotRect.width + (padding * 2)));
+            let spotHeight = Math.min(window.innerHeight - spotTop, Math.max(36, spotRect.height + (padding * 2)));
+
+            // Keep spotlight on-screen for tall drawer cards.
+            if (spotHeight > window.innerHeight * 0.42) {
+                spotHeight = Math.min(window.innerHeight * 0.36, Math.max(72, spotRect.height));
+                spotTop = Math.max(8, Math.min(spotTop, window.innerHeight - spotHeight - 120));
             }
 
-            waitForLayoutSettle(inView ? 40 : 220).then(function () {
-                if (!isActive) return;
-                const fresh = resolveTargetEl(step);
-                if (!fresh) {
-                    goToNextStep();
-                    return;
-                }
+            spotlightEl.style.opacity = '1';
+            spotlightEl.style.left = `${spotLeft}px`;
+            spotlightEl.style.top = `${spotTop}px`;
+            spotlightEl.style.width = `${spotWidth}px`;
+            spotlightEl.style.height = `${spotHeight}px`;
 
-                fresh.classList.add('sk-tour-highlighted-element');
-                currentHighlightedEl = fresh;
-
-                const spotRect = fresh.getBoundingClientRect();
-                const padding = 6;
-                const spotLeft = Math.max(0, spotRect.left - padding);
-                const spotTop = Math.max(0, spotRect.top - padding);
-                const spotWidth = Math.min(window.innerWidth - spotLeft, spotRect.width + (padding * 2));
-                const spotHeight = Math.min(window.innerHeight - spotTop, spotRect.height + (padding * 2));
-
-                spotlightEl.style.opacity = '1';
-                spotlightEl.style.left = `${spotLeft}px`;
-                spotlightEl.style.top = `${spotTop}px`;
-                spotlightEl.style.width = `${spotWidth}px`;
-                spotlightEl.style.height = `${spotHeight}px`;
-
-                positionTourCard(spotLeft, spotTop, spotWidth, spotHeight, step.placement || 'bottom');
-            });
-        };
+            positionTourCard(spotLeft, spotTop, spotWidth, spotHeight, step.placement || 'bottom');
+        }
 
         if (step.isSidebar && isMobileViewport()) {
-            openProgramsDrawerForTour().then(prepareAndMeasure);
+            openProgramsDrawerForTour().then(function () {
+                return waitForLayoutSettle(420);
+            }).then(prepareAndMeasure);
             return;
         }
 

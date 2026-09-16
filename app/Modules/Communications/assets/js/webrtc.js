@@ -1000,7 +1000,13 @@ import {
     }
 
     function beginCallCountdown(conversationId, callType, conversation) {
-        if (startingCall || pendingStart || currentCall) return;
+        if (startingCall || pendingStart) return;
+        if (currentCall) {
+            var inCallVisible = els.inCall && !els.inCall.hidden;
+            var incomingVisible = els.incoming && !els.incoming.hidden;
+            if (inCallVisible || incomingVisible || callConnected) return;
+            currentCall = null;
+        }
         try {
             assertMediaReady();
         } catch (err) {
@@ -1541,6 +1547,44 @@ import {
     if (window.screen && screen.orientation && typeof screen.orientation.addEventListener === 'function') {
         screen.orientation.addEventListener('change', syncLocalPipLayout);
     }
+
+    function releaseCallOnUnload() {
+        if (pendingStart) {
+            clearPendingStart();
+            return;
+        }
+        if (!currentCall || !currentCall.id) return;
+        var callId = currentCall.id;
+        var status = callConnected ? 'ended' : (role === 'caller' ? 'cancelled' : 'rejected');
+        var r = routes();
+        if (!r.callStatus) return;
+        var url = window.Comms && typeof window.Comms.route === 'function'
+            ? window.Comms.route(r.callStatus, callId)
+            : null;
+        if (!url) return;
+        var token = document.querySelector('meta[name="csrf-token"]');
+        var body = JSON.stringify({ status: status });
+        try {
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': token ? token.getAttribute('content') : '',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body,
+                keepalive: true,
+                credentials: 'same-origin'
+            }).catch(function () {});
+        } catch (e) { /* ignore */ }
+        currentCall = null;
+        callConnected = false;
+        role = null;
+    }
+
+    window.addEventListener('pagehide', releaseCallOnUnload);
+    window.addEventListener('beforeunload', releaseCallOnUnload);
 
     window.CommsWebRTC = {
         startCall: startCall,

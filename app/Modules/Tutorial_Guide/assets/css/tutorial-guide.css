@@ -49,12 +49,19 @@
     transition: box-shadow 0.2s ease;
 }
 
-/* Keep programs drawer above page chrome while a drawer step is active. */
-body.sk-tour-active-sidebar #programsDrawerSidebar {
-    z-index: 1000503 !important;
-}
+/* Keep programs drawer in the tour stack so Programs + Barangay SK Profiles stay visible
+   under the spotlight, without covering the tour tooltip card. */
 body.sk-tour-active-sidebar #programsDrawerBackdrop {
-    z-index: 1000502 !important;
+    z-index: 1000001 !important;
+}
+body.sk-tour-active-sidebar #programsDrawerSidebar {
+    z-index: 1000002 !important;
+}
+body.sk-tour-active-sidebar .sk-tour-spotlight {
+    z-index: 1000003 !important;
+}
+body.sk-tour-active-sidebar .sk-tour-card {
+    z-index: 1000006 !important;
 }
 
 /* ── Floating Tooltip / Card ──────────────────────────────────────── */

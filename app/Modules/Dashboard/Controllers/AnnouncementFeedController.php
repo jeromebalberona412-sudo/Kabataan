@@ -24,6 +24,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -106,6 +107,14 @@ class AnnouncementFeedController extends Controller
 
         if ($request->filter && $request->filter !== 'all') {
             $query->where('type', $request->filter);
+        }
+
+        $year = (int) $request->query('year', 0);
+        if ($year < 2000 || $year > 2100) {
+            $year = 0;
+        }
+        if ($year > 0) {
+            $query->whereYear('community_feeds.created_at', $year);
         }
 
         $search = trim((string) $request->query('search', ''));
@@ -568,7 +577,29 @@ class AnnouncementFeedController extends Controller
             'comments' => $post->relationLoaded('comments')
                 ? $this->formatCommentTree($comments, $userId)
                 : [],
+            'can_share' => $canShare = $post->isShareable(),
+            'share_url' => $canShare ? $this->resolvePublicShareUrl($post) : null,
         ];
+    }
+
+    private function resolvePublicShareUrl(Announcement $post): ?string
+    {
+        $token = trim((string) ($post->share_token ?? ''));
+        if ($token === '') {
+            return null;
+        }
+
+        // Public share pages live on SK Officials (`/community/post/{token}`).
+        $base = rtrim((string) (
+            config('services.sk_officials_app_url')
+            ?: config('services.sk_fed_app_url')
+        ), '/');
+
+        if ($base === '') {
+            return null;
+        }
+
+        return $base.'/community/post/'.$token;
     }
 
     /**
