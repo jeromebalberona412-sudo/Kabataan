@@ -3,6 +3,12 @@
  * Voice: mic on, camera off (can turn on). Video: camera on (can turn off).
  * Shows visible ringing UI on both sides and a Call ended screen when not picked up.
  */
+import {
+    mediaConstraints,
+    videoOnlyConstraints,
+    prepareLocalStream
+} from './media-constraints.js';
+
 (function () {
     'use strict';
 
@@ -117,6 +123,50 @@
         return (window.CommsChat && window.CommsChat.routes) || {};
     }
 
+    function getCallRoot() {
+        return document.getElementById('commsApp') || document.getElementById('commsRealtimeBoot');
+    }
+
+    function myIdentity() {
+        var root = getCallRoot();
+        return {
+            id: root ? Number(root.dataset.currentUserId || 0) : 0,
+            type: root ? String(root.dataset.portalUserType || '') : '',
+            name: root ? String(root.dataset.currentUserName || '') : ''
+        };
+    }
+
+    function subscribeCallChannel(conversationId) {
+        if (!conversationId || !window.CommsRealtime || typeof window.CommsRealtime.ensureCallChannel !== 'function') {
+            return Promise.resolve();
+        }
+        return window.CommsRealtime.ensureCallChannel(conversationId);
+    }
+
+    function signalTargets() {
+        var me = myIdentity();
+        var peerId = null;
+        var peerType = null;
+        var peers = [];
+        if (!currentCall) return { peerId: peerId, peerType: peerType, peers: peers };
+        var isGroup = Number(currentCall.caller_id) === Number(currentCall.receiver_id)
+            && String(currentCall.caller_type || '') === String(currentCall.receiver_type || '');
+        if (!isGroup && currentCall.receiver_id != null && currentCall.caller_id != null) {
+            var iAmCaller = Number(currentCall.caller_id) === me.id && String(currentCall.caller_type || '') === me.type;
+            if (iAmCaller) {
+                peerId = currentCall.receiver_id;
+                peerType = currentCall.receiver_type;
+            } else {
+                peerId = currentCall.caller_id;
+                peerType = currentCall.caller_type;
+            }
+        }
+        if (Array.isArray(currentCall.invitees)) {
+            peers = currentCall.invitees;
+        }
+        return { peerId: peerId, peerType: peerType, peers: peers };
+    }
+
     function toast(message, type) {
         if (window.Comms && typeof window.Comms.showToast === 'function') {
             window.Comms.showToast(message, type || 'error');
@@ -190,23 +240,6 @@
 
     async function getLocalStream(videoEnabled) {
         var devices = assertMediaReady();
-        var isMobile = false;
-        try {
-            isMobile = window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
-        } catch (e) { /* ignore */ }
-
-        var audioConstraints = {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1
-        };
-        var videoConstraints = videoEnabled ? {
-            facingMode: { ideal: 'user' },
-            width: isMobile ? { ideal: 640, max: 1280 } : { ideal: 1280, max: 1920 },
-            height: isMobile ? { ideal: 480, max: 720 } : { ideal: 720, max: 1080 },
-            aspectRatio: { ideal: 4 / 3 }
-        } : false;
 
         function mapMediaError(err, forVideo) {
             var name = (err && err.name) || '';
@@ -225,27 +258,35 @@
         }
 
         try {
-            return await devices.getUserMedia({
-                audio: audioConstraints,
-                video: videoConstraints
-            });
+            var stream = await devices.getUserMedia(mediaConstraints(!!videoEnabled));
+            if (videoEnabled) {
+                await prepareLocalStream(stream);
+            }
+            return stream;
         } catch (err) {
-            // Video call: if camera fails, continue with mic so audio still works.
             if (videoEnabled) {
                 try {
-                    var audioOnly = await devices.getUserMedia({
-                        audio: audioConstraints,
-                        video: false
+                    var fallback = await devices.getUserMedia({
+                        audio: mediaConstraints(false).audio,
+                        video: { facingMode: 'user' }
                     });
-                    toast('Camera unavailable — continuing with microphone only.', 'error');
-                    cameraEnabled = false;
-                    wantsVideo = false;
-                    return audioOnly;
-                } catch (audioErr) {
-                    throw mapMediaError(audioErr, false);
+                    await prepareLocalStream(fallback);
+                    return fallback;
+                } catch (e2) {
+                    try {
+                        var audioOnly = await devices.getUserMedia({
+                            audio: mediaConstraints(false).audio,
+                            video: false
+                        });
+                        toast('Camera unavailable — continuing with microphone only.', 'error');
+                        cameraEnabled = false;
+                        wantsVideo = false;
+                        return audioOnly;
+                    } catch (audioErr) {
+                        throw mapMediaError(audioErr, false);
+                    }
                 }
             }
-            // Voice: retry with simpler audio constraints.
             try {
                 return await devices.getUserMedia({ audio: true, video: false });
             } catch (retryErr) {
@@ -370,7 +411,8 @@
         updateCameraUi();
     }
 
-    function endedCopy(reason) {
+    function endedCopy(reason, endedByRole) {
+        var actor = endedByRole || role;
         switch (reason) {
             case 'missed':
                 return {
@@ -385,7 +427,9 @@
             case 'cancelled':
                 return {
                     title: 'Call cancelled',
-                    reason: role === 'caller' ? 'You cancelled the call.' : 'The caller cancelled the call.'
+                    reason: actor === 'caller'
+                        ? (role === 'caller' ? 'You cancelled the call.' : 'The caller cancelled the call.')
+                        : (role === 'callee' ? 'You cancelled the call.' : 'The other person cancelled the call.')
                 };
             default:
                 return {
@@ -463,7 +507,7 @@
         if (els.endedRedial) els.endedRedial.hidden = true;
     }
 
-    function showCallEnded(reason, peerName, callId) {
+    function showCallEnded(reason, peerName, callId, endedByRole) {
         if (callId != null && Number(callId) === Number(lastEndedCallId)) {
             return;
         }
@@ -474,7 +518,7 @@
         clearRingTimeout();
         stopRingtone();
 
-        var copy = endedCopy(reason || 'ended');
+        var copy = endedCopy(reason || 'ended', endedByRole);
         if (els.endedTitle) els.endedTitle.textContent = copy.title;
         if (els.endedReason) els.endedReason.textContent = copy.reason;
         if (els.endedPeer) {
@@ -509,26 +553,18 @@
 
     function signalPeer(payload) {
         if (!window.CommsRealtime || !currentCall) return Promise.resolve();
-        var root = document.getElementById('commsApp') || document.getElementById('commsRealtimeBoot');
-        var myId = root ? Number(root.dataset.currentUserId) : null;
-        var myType = root ? root.dataset.portalUserType : null;
-        var peerId = null;
-        var peerType = null;
-
-        if (currentCall.receiver_id != null && currentCall.caller_id != null) {
-            var iAmCaller = Number(currentCall.caller_id) === myId && currentCall.caller_type === myType;
-            if (iAmCaller) {
-                peerId = currentCall.receiver_id;
-                peerType = currentCall.receiver_type;
-            } else {
-                peerId = currentCall.caller_id;
-                peerType = currentCall.caller_type;
-            }
-        }
-
+        var me = myIdentity();
+        payload.from_user_id = me.id;
+        payload.from_user_type = me.type;
+        payload.from_name = me.name || payload.from_name;
+        payload.call_id = payload.call_id || currentCall.id;
+        payload.conversation_id = payload.conversation_id || currentCall.conversation_id;
+        var targets = signalTargets();
+        subscribeCallChannel(currentCall.conversation_id);
         return window.CommsRealtime.broadcastSignal(currentCall.conversation_id, payload, {
-            peerId: peerId,
-            peerType: peerType
+            peerId: targets.peerId,
+            peerType: targets.peerType,
+            peers: targets.peers
         });
     }
 
@@ -620,14 +656,33 @@
         } catch (e) { /* ignore */ }
     }
 
+    function applyRemoteVideoMetrics() {
+        if (!els.remoteVideo || !els.inCall) return;
+        var w = Number(els.remoteVideo.videoWidth || 0);
+        var h = Number(els.remoteVideo.videoHeight || 0);
+        if (!w || !h) return;
+        var portrait = (w / h) < 0.92;
+        els.remoteVideo.classList.toggle('is-remote-portrait', portrait);
+        els.remoteVideo.classList.toggle('is-remote-landscape', !portrait);
+        els.inCall.classList.toggle('is-remote-portrait', portrait);
+        els.inCall.classList.toggle('is-remote-landscape', !portrait);
+    }
+
     function bindRemoteMedia(stream) {
         if (!stream) return;
         if (els.remoteVideo) {
             els.remoteVideo.srcObject = stream;
+            els.remoteVideo.playsInline = true;
             try {
                 var vp = els.remoteVideo.play();
                 if (vp && typeof vp.catch === 'function') vp.catch(function () {});
             } catch (e) { /* ignore */ }
+            if (!els.remoteVideo._commsMetricsBound) {
+                els.remoteVideo._commsMetricsBound = true;
+                els.remoteVideo.addEventListener('loadedmetadata', applyRemoteVideoMetrics);
+                els.remoteVideo.addEventListener('resize', applyRemoteVideoMetrics);
+            }
+            applyRemoteVideoMetrics();
         }
         if (els.remoteAudio) {
             els.remoteAudio.srcObject = stream;
@@ -721,6 +776,28 @@
                 ensureRemoteAudioPlaying();
             }
         };
+        pc.oniceconnectionstatechange = function () {
+            var st = pc && pc.iceConnectionState;
+            if (st === 'connected' || st === 'completed') {
+                markCallConnected();
+                setCallStatus('Connected');
+            }
+            if (st === 'failed') {
+                if (!currentCall) return;
+                toast('Call connection failed.', 'error');
+                endCall();
+            }
+        };
+        pc.onconnectionstatechange = function () {
+            if (pc && pc.connectionState === 'connected') {
+                markCallConnected();
+            }
+            if (pc && pc.connectionState === 'failed') {
+                if (!currentCall) return;
+                toast('Call connection failed.', 'error');
+                endCall();
+            }
+        };
 
         localStream.getTracks().forEach(function (track) {
             pc.addTrack(track, localStream);
@@ -741,19 +818,8 @@
         if (enabled) {
             if (!videoTracks.length || videoTracks.every(function (t) { return t.readyState === 'ended'; })) {
                 var devices = assertMediaReady();
-                var isMobileCam = false;
-                try {
-                    isMobileCam = window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
-                } catch (e) { /* ignore */ }
-                var camStream = await devices.getUserMedia({
-                    video: {
-                        facingMode: { ideal: 'user' },
-                        width: isMobileCam ? { ideal: 640, max: 1280 } : { ideal: 1280 },
-                        height: isMobileCam ? { ideal: 480, max: 720 } : { ideal: 720 },
-                        aspectRatio: { ideal: 4 / 3 }
-                    },
-                    audio: false
-                });
+                var camStream = await devices.getUserMedia(videoOnlyConstraints());
+                await prepareLocalStream(camStream);
                 var newTrack = camStream.getVideoTracks()[0];
                 if (!newTrack) {
                     throw new Error('No camera was found on this device.');
@@ -841,7 +907,13 @@
         if (els.remoteAudio) els.remoteAudio.srcObject = null;
         if (els.inCall) {
             els.inCall.hidden = true;
-            els.inCall.classList.remove('is-connected', 'has-remote-video', 'is-video-call');
+            els.inCall.classList.remove('is-connected', 'has-remote-video', 'is-video-call', 'is-remote-portrait', 'is-remote-landscape');
+        }
+        if (els.remoteVideo) {
+            els.remoteVideo.classList.remove('is-remote-portrait', 'is-remote-landscape');
+        }
+        if (window.CommsRealtime && typeof window.CommsRealtime.teardownCallChannel === 'function') {
+            window.CommsRealtime.teardownCallChannel();
         }
         if (els.callCenter) {
             els.callCenter.classList.remove('is-compact');
@@ -875,6 +947,7 @@
         var signalPromise = signalPeer({
             type: 'hangup',
             reason: status,
+            ended_by_role: role || (status === 'cancelled' ? 'caller' : 'callee'),
             call_id: callSnapshot.id,
             conversation_id: callSnapshot.conversation_id,
             caller_id: callSnapshot.caller_id,
@@ -1002,6 +1075,7 @@
                 currentCall.peer = conversation.other_user;
             }
             rememberCallContext(currentCall);
+            await subscribeCallChannel(conversationId);
             if (els.muteBtn) els.muteBtn.hidden = false;
             if (els.cameraBtn) els.cameraBtn.hidden = false;
             setCtrlLabel(els.endBtn, 'End');
@@ -1047,6 +1121,27 @@
         beginCallCountdown(conversationId, callType, conversation);
     }
 
+    function waitForRemoteOffer(ms) {
+        return new Promise(function (resolve) {
+            if (currentCall && currentCall._remoteOffer) {
+                resolve(true);
+                return;
+            }
+            var started = Date.now();
+            var timer = setInterval(function () {
+                if (currentCall && currentCall._remoteOffer) {
+                    clearInterval(timer);
+                    resolve(true);
+                    return;
+                }
+                if (Date.now() - started >= ms) {
+                    clearInterval(timer);
+                    resolve(false);
+                }
+            }, 50);
+        });
+    }
+
     async function acceptIncoming() {
         if (!currentCall || startingCall) return;
         startingCall = true;
@@ -1055,15 +1150,30 @@
         hideIncoming();
         try {
             assertMediaReady();
-            var accepted = await updateCallStatus(currentCall.id, 'accepted');
-            if (accepted) {
-                currentCall = Object.assign({}, currentCall, accepted);
-            }
-            wantsVideo = currentCall.call_type === 'video';
+            await subscribeCallChannel(currentCall.conversation_id);
             markCallAnswered();
             showInCall(currentCall, 'Connecting...');
             armConnectionTimeout();
+            // Tell the caller immediately — do not wait for getUserMedia or SDP.
+            signalPeer({
+                type: 'call-accepted',
+                call_id: currentCall.id,
+                conversation_id: currentCall.conversation_id,
+                caller_id: currentCall.caller_id,
+                caller_type: currentCall.caller_type,
+                receiver_id: currentCall.receiver_id,
+                receiver_type: currentCall.receiver_type
+            });
+            updateCallStatus(currentCall.id, 'accepted').then(function (accepted) {
+                if (accepted && currentCall && Number(currentCall.id) === Number(accepted.id)) {
+                    currentCall = Object.assign({}, currentCall, accepted);
+                }
+            }).catch(function () {});
+            wantsVideo = currentCall.call_type === 'video';
             await ensurePeerConnection(wantsVideo);
+            if (!currentCall._remoteOffer) {
+                await waitForRemoteOffer(8000);
+            }
             if (currentCall._remoteOffer) {
                 await pc.setRemoteDescription(currentCall._remoteOffer);
                 var answer = await pc.createAnswer();
@@ -1143,6 +1253,7 @@
         var signalPromise = signalPeer({
             type: 'hangup',
             reason: 'ended',
+            ended_by_role: role || 'caller',
             call_id: callSnapshot.id,
             conversation_id: callSnapshot.conversation_id,
             caller_id: callSnapshot.caller_id,
@@ -1160,34 +1271,86 @@
         ]);
     }
 
+    function sameCall(payload) {
+        if (!payload || payload.call_id == null || !currentCall) return true;
+        return Number(currentCall.id) === Number(payload.call_id);
+    }
+
+    function applyPeerAnswered() {
+        stopRingtone();
+        markCallAnswered();
+        setCallStatus('Connecting...');
+        armConnectionTimeout();
+        updateCameraUi();
+    }
+
+    async function applyPeerAnswerSdp(payload) {
+        if (role !== 'caller') return;
+        applyPeerAnswered();
+        if (els.timer && !callStartedAt) {
+            startTimer();
+        }
+        if (pc && payload && payload.sdp) {
+            var desc = pc.signalingState === 'have-local-offer' || pc.signalingState === 'have-remote-pranswer'
+                ? payload.sdp
+                : payload.sdp;
+            try {
+                if (pc.signalingState === 'have-local-offer') {
+                    await pc.setRemoteDescription(payload.sdp);
+                    while (iceQueue.length) {
+                        await pc.addIceCandidate(iceQueue.shift());
+                    }
+                }
+            } catch (e) { /* ignore duplicate/stale SDP */ }
+        }
+        markCallConnected();
+        setCallStatus('Connected');
+        refreshCallChat(currentCall && currentCall.conversation_id);
+    }
+
     async function handleSignal(payload) {
         if (!payload || !payload.type) return;
 
         if (payload.type === 'offer') {
+            if (role === 'caller' && sameCall(payload)) return;
+            if (currentCall && currentCall._remoteOffer && Number(currentCall.id) === Number(payload.call_id)) {
+                currentCall._remoteOffer = payload.sdp;
+                return;
+            }
             lastEndedCallId = null;
             currentCall = Object.assign({}, currentCall || {}, {
                 id: payload.call_id,
                 conversation_id: payload.conversation_id || (window.CommsChat && window.CommsChat.getActiveId()),
                 call_type: payload.call_type || 'voice',
-                peer: { name: payload.peer_name || 'Incoming caller' },
+                peer: { name: payload.peer_name || payload.from_name || 'Incoming caller' },
                 caller_id: payload.caller_id,
                 caller_type: payload.caller_type,
                 receiver_id: payload.receiver_id,
                 receiver_type: payload.receiver_type,
                 _remoteOffer: payload.sdp
             });
+            subscribeCallChannel(currentCall.conversation_id);
             showIncoming(currentCall);
             return;
         }
 
+        if (payload.type === 'call-accepted' || payload.type === 'accepted') {
+            if (role !== 'caller' || !sameCall(payload)) return;
+            applyPeerAnswered();
+            return;
+        }
+
         if (payload.type === 'hangup') {
+            if (currentCall && payload.call_id != null && Number(currentCall.id) !== Number(payload.call_id)) {
+                return;
+            }
             var reason = payload.reason || 'ended';
             var peerName = (currentCall && currentCall.peer && currentCall.peer.name) || '';
             var hangupId = (currentCall && currentCall.id) || payload.call_id;
             var hangupConv = (currentCall && currentCall.conversation_id) || payload.conversation_id;
             currentCall = null;
             await cleanupMediaOnly();
-            showCallEnded(reason, peerName, hangupId);
+            showCallEnded(reason, peerName, hangupId, payload.ended_by_role);
             refreshCallChat(hangupConv);
             return;
         }
@@ -1197,27 +1360,17 @@
         }
 
         if (payload.type === 'answer') {
-            stopRingtone();
-            markCallConnected();
-            setCallStatus('Connected');
-            if (els.timer && !callStartedAt) {
-                startTimer();
-            }
-            if (pc) {
-                await pc.setRemoteDescription(payload.sdp);
-                while (iceQueue.length) {
-                    await pc.addIceCandidate(iceQueue.shift());
-                }
-            }
-            refreshCallChat(currentCall && currentCall.conversation_id);
+            if (!sameCall(payload)) return;
+            await applyPeerAnswerSdp(payload);
             return;
         }
 
         if (payload.type === 'ice' && payload.candidate) {
+            if (!sameCall(payload)) return;
             if (!pc || !pc.remoteDescription) {
                 iceQueue.push(payload.candidate);
             } else {
-                await pc.addIceCandidate(payload.candidate);
+                try { await pc.addIceCandidate(payload.candidate); } catch (e) { /* ignore */ }
             }
         }
     }
@@ -1225,7 +1378,7 @@
     function handleCallRow(payload) {
         var row = (payload && payload.new) || null;
         if (!row) return;
-        var root = document.getElementById('commsApp') || document.getElementById('commsRealtimeBoot');
+        var root = getCallRoot();
         if (!root) return;
         var myId = Number(root.dataset.currentUserId);
         var myType = root.dataset.portalUserType;
@@ -1244,6 +1397,7 @@
                 receiver_type: row.receiver_type,
                 peer: (currentCall && currentCall.peer) || { name: 'Incoming caller' }
             });
+            subscribeCallChannel(row.conversation_id);
             if (els.incoming && els.incoming.hidden && (!els.inCall || els.inCall.hidden)) {
                 showIncoming(currentCall);
             }
@@ -1252,10 +1406,7 @@
 
         if (row.status === 'accepted') {
             if (isCaller && currentCall && Number(currentCall.id) === Number(row.id)) {
-                stopRingtone();
-                markCallAnswered();
-                setCallStatus('Connecting...');
-                armConnectionTimeout();
+                applyPeerAnswered();
             }
             return;
         }
@@ -1265,9 +1416,12 @@
                 var peerName = (currentCall.peer && currentCall.peer.name) || '';
                 var rowId = row.id;
                 var rowConv = row.conversation_id;
+                var endedBy = isCaller
+                    ? (row.status === 'cancelled' ? 'caller' : null)
+                    : (row.status === 'cancelled' ? 'caller' : (row.status === 'rejected' ? 'callee' : null));
                 currentCall = null;
                 cleanupMediaOnly().then(function () {
-                    showCallEnded(row.status, peerName, rowId);
+                    showCallEnded(row.status, peerName, rowId, endedBy);
                     refreshCallChat(rowConv);
                 });
             } else {

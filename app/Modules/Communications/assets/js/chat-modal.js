@@ -2629,6 +2629,15 @@ function sendHeaderChatMessage(event, opts) {
         var tempIdx = replaceTempId ? headerChatState.messages.findIndex(function (m) { return String(m.id) === String(replaceTempId); }) : -1;
         var nextMsg = Object.assign({}, data.message, { send_status: 'sent', mine: true });
         if (keepBatchId) nextMsg.batch_id = keepBatchId;
+        if (window.CommsRealtime && typeof window.CommsRealtime.broadcastMessage === 'function') {
+            var peer = typeof findCachedHeaderPeer === 'function'
+                ? findCachedHeaderPeer(headerChatState.conversationId)
+                : null;
+            window.CommsRealtime.broadcastMessage(headerChatState.conversationId, nextMsg, {
+                peerId: peer && (peer.id || peer.user_id),
+                peerType: peer && (peer.user_type || peer.type || peer.portal_user_type)
+            });
+        }
         if (realIdx !== -1 && tempIdx !== -1) {
             headerChatState.messages.splice(tempIdx, 1);
             headerChatState.messages[realIdx] = Object.assign({}, headerChatState.messages[realIdx], nextMsg);

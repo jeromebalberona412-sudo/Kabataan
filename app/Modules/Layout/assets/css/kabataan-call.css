@@ -8,11 +8,11 @@
 .comms-modal {
     position: fixed;
     inset: 0;
-    z-index: 10060;
+    z-index: 10080;
     background: rgba(1, 30, 60, 0.58);
     display: grid;
     place-items: center;
-    padding: 1rem;
+    padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px));
 }
 
 .comms-modal-card {
@@ -72,6 +72,34 @@
 .comms-modal-card--call {
     position: relative;
     overflow: hidden;
+    width: min(100%, 400px);
+}
+
+.comms-modal-card--call .comms-modal-actions {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 0.85rem;
+    width: 100%;
+    margin-top: 1.35rem;
+    flex-wrap: nowrap;
+}
+
+.comms-modal-card--call .comms-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 168px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+}
+
+.comms-modal-actions--ended {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
 }
 
 .comms-modal-peer {
@@ -152,7 +180,10 @@
 }
 
 .comms-modal-actions--ended {
+    display: flex;
+    justify-content: space-between;
     align-items: center;
+    width: 100%;
 }
 
 .comms-btn--ghost-x {

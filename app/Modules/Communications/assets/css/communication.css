@@ -1844,11 +1844,11 @@ body.comms-messages-page .comms-page-main.container-fluid {
 .comms-modal {
     position: fixed;
     inset: 0;
-    z-index: 10060;
-    background: rgba(18, 38, 58, 0.55);
+    z-index: 10080;
+    background: rgba(15, 23, 42, 0.55);
     display: grid;
     place-items: center;
-    padding: 1rem;
+    padding: max(1rem, env(safe-area-inset-top, 0px)) 1rem max(1rem, env(safe-area-inset-bottom, 0px));
 }
 
 .comms-modal-card {
@@ -1863,6 +1863,35 @@ body.comms-messages-page .comms-page-main.container-fluid {
 .comms-modal-card--call {
     position: relative;
     overflow: hidden;
+    width: min(100%, 400px);
+    padding-bottom: 1.35rem;
+}
+
+.comms-modal-card--call .comms-modal-actions {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 0.85rem;
+    width: 100%;
+    margin-top: 1.35rem;
+    flex-wrap: nowrap;
+}
+
+.comms-modal-card--call .comms-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 168px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+}
+
+.comms-modal-actions--ended {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
 }
 
 .comms-modal-peer {
@@ -1927,6 +1956,12 @@ body.comms-messages-page .comms-page-main.container-fluid {
     object-fit: contain;
     object-position: center center;
     background: #0b0b0b;
+}
+.comms-call-overlay:not(.is-group-call) .comms-remote-video,
+.comms-call-overlay.is-remote-portrait .comms-remote-video,
+.comms-remote-video.is-remote-portrait {
+    object-fit: contain;
+    object-position: center center;
 }
 
 .comms-local-video {

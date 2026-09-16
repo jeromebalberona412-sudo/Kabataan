@@ -23,6 +23,10 @@
     object-position: center center;
     background: #0b0b0b;
 }
+#commsInCall.is-remote-portrait .comms-remote-video {
+    object-fit: contain;
+    object-position: center center;
+}
 #commsInCall .comms-local-video {
     position: absolute;
     right: max(0.75rem, env(safe-area-inset-right, 0px));

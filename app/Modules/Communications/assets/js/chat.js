@@ -2186,6 +2186,16 @@ import './communication.js';
         Comms.showToast('Message cannot exceed ' + state.messageMaxLength + ' characters.', 'error');
     }
 
+    function publishSentMessage(sent) {
+        if (!sent || !window.CommsRealtime || typeof window.CommsRealtime.broadcastMessage !== 'function') return;
+        var conv = state.activeConversation;
+        var peer = conv && conv.other_user;
+        window.CommsRealtime.broadcastMessage(sent.conversation_id || state.activeId, sent, {
+            peerId: peer && (peer.id || peer.user_id),
+            peerType: peer && (peer.user_type || peer.type || peer.portal_user_type)
+        });
+    }
+
     function sendMessage(body, opts) {
         opts = opts || {};
         if (state.sendInFlight || !state.activeId) return;
@@ -2245,8 +2255,10 @@ import './communication.js';
                 var tempIdx = state.messages.findIndex(function (m) { return String(m.id) === String(textTempId); });
                 if (tempIdx !== -1 && data.message) {
                     state.messages[tempIdx] = Object.assign({}, data.message, { send_status: 'sent', mine: true });
+                    publishSentMessage(state.messages[tempIdx]);
                 } else if (data.message) {
                     appendMessage(Object.assign({}, data.message, { send_status: 'sent', mine: true }));
+                    publishSentMessage(data.message);
                 }
                 // Show automation only after the user message was accepted by the server.
                 if (data.automated_message) {
@@ -2329,8 +2341,10 @@ import './communication.js';
                             }
                         });
                         state.messages[tempIdx] = Object.assign({}, data.message, { batch_id: batchId, send_status: 'sent', mine: true });
+                        publishSentMessage(state.messages[tempIdx]);
                     } else if (data.message) {
                         appendMessage(Object.assign({}, data.message, { batch_id: batchId, send_status: 'sent', mine: true }));
+                        publishSentMessage(data.message);
                     }
                 }));
             });
