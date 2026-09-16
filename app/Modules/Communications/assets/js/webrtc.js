@@ -150,9 +150,9 @@ import {
         var peers = [];
         if (!currentCall) return { peerId: peerId, peerType: peerType, peers: peers };
         var isGroup = Number(currentCall.caller_id) === Number(currentCall.receiver_id)
-            && String(currentCall.caller_type || '') === String(currentCall.receiver_type || '');
+            && portalTypesMatch(currentCall.caller_type, currentCall.receiver_type);
         if (!isGroup && currentCall.receiver_id != null && currentCall.caller_id != null) {
-            var iAmCaller = Number(currentCall.caller_id) === me.id && String(currentCall.caller_type || '') === me.type;
+            var iAmCaller = Number(currentCall.caller_id) === me.id && portalTypesMatch(currentCall.caller_type, me.type);
             if (iAmCaller) {
                 peerId = currentCall.receiver_id;
                 peerType = currentCall.receiver_type;
@@ -165,6 +165,15 @@ import {
             peers = currentCall.invitees;
         }
         return { peerId: peerId, peerType: peerType, peers: peers };
+    }
+
+    function portalTypesMatch(a, b) {
+        a = String(a || '').toLowerCase().trim();
+        b = String(b || '').toLowerCase().trim();
+        if (!a || !b) return false;
+        if (a === b) return true;
+        var kab = { kabataan: 1, user: 1 };
+        return !!(kab[a] && kab[b]);
     }
 
     function toast(message, type) {
@@ -1312,12 +1321,17 @@ import {
         if (!payload || !payload.type) return;
 
         if (payload.type === 'offer') {
+            var meOffer = myIdentity();
+            var iAmOfferCaller = Number(payload.caller_id) === meOffer.id
+                && portalTypesMatch(payload.caller_type, meOffer.type);
+            if (iAmOfferCaller) return;
             if (role === 'caller' && sameCall(payload)) return;
             if (currentCall && currentCall._remoteOffer && Number(currentCall.id) === Number(payload.call_id)) {
                 currentCall._remoteOffer = payload.sdp;
                 return;
             }
             lastEndedCallId = null;
+            role = 'callee';
             currentCall = Object.assign({}, currentCall || {}, {
                 id: payload.call_id,
                 conversation_id: payload.conversation_id || (window.CommsChat && window.CommsChat.getActiveId()),
@@ -1335,7 +1349,12 @@ import {
         }
 
         if (payload.type === 'call-accepted' || payload.type === 'accepted') {
-            if (role !== 'caller' || !sameCall(payload)) return;
+            var meAccept = myIdentity();
+            var iAmCallerAccept = currentCall
+                && Number(currentCall.caller_id) === meAccept.id
+                && portalTypesMatch(currentCall.caller_type, meAccept.type);
+            if ((!iAmCallerAccept && role !== 'caller') || !sameCall(payload)) return;
+            role = 'caller';
             applyPeerAnswered();
             return;
         }
@@ -1382,11 +1401,12 @@ import {
         if (!root) return;
         var myId = Number(root.dataset.currentUserId);
         var myType = root.dataset.portalUserType;
-        var isReceiver = Number(row.receiver_id) === myId && row.receiver_type === myType;
-        var isCaller = Number(row.caller_id) === myId && row.caller_type === myType;
+        var isReceiver = Number(row.receiver_id) === myId && portalTypesMatch(row.receiver_type, myType);
+        var isCaller = Number(row.caller_id) === myId && portalTypesMatch(row.caller_type, myType);
         if (!isReceiver && !isCaller) return;
 
         if (row.status === 'ringing' && isReceiver) {
+            role = 'callee';
             currentCall = Object.assign({}, currentCall || {}, {
                 id: row.id,
                 conversation_id: row.conversation_id,
@@ -1398,14 +1418,26 @@ import {
                 peer: (currentCall && currentCall.peer) || { name: 'Incoming caller' }
             });
             subscribeCallChannel(row.conversation_id);
-            if (els.incoming && els.incoming.hidden && (!els.inCall || els.inCall.hidden)) {
+            if (!els.inCall || els.inCall.hidden) {
                 showIncoming(currentCall);
             }
             return;
         }
 
         if (row.status === 'accepted') {
-            if (isCaller && currentCall && Number(currentCall.id) === Number(row.id)) {
+            if (isCaller) {
+                role = 'caller';
+                if (!currentCall || Number(currentCall.id) !== Number(row.id)) {
+                    currentCall = Object.assign({}, currentCall || {}, {
+                        id: row.id,
+                        conversation_id: row.conversation_id,
+                        call_type: row.call_type,
+                        caller_id: row.caller_id,
+                        caller_type: row.caller_type,
+                        receiver_id: row.receiver_id,
+                        receiver_type: row.receiver_type
+                    });
+                }
                 applyPeerAnswered();
             }
             return;

@@ -49,6 +49,14 @@
     transition: box-shadow 0.2s ease;
 }
 
+/* Keep programs drawer above page chrome while a drawer step is active. */
+body.sk-tour-active-sidebar #programsDrawerSidebar {
+    z-index: 1000503 !important;
+}
+body.sk-tour-active-sidebar #programsDrawerBackdrop {
+    z-index: 1000502 !important;
+}
+
 /* ── Floating Tooltip / Card ──────────────────────────────────────── */
 .sk-tour-card {
     position: fixed;

@@ -138,33 +138,88 @@
     }
 
     function isMobileViewport() {
-        return window.innerWidth <= 1024;
+        // Match programs-drawer / header CSS (drawer button appears ≤1200px).
+        return window.matchMedia('(max-width: 1200px)').matches;
+    }
+
+    function isElementUsable(el) {
+        if (!el || !el.getBoundingClientRect) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) {
+            return false;
+        }
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
     }
 
     function resolveTargetEl(step) {
         if (!step || !step.target) return null;
 
         if (step.isSidebar && isMobileViewport()) {
-            const inDrawer = document.querySelector('#programsDrawerSidebar ' + step.target);
-            if (inDrawer) return inDrawer;
+            const inDrawer = document.querySelectorAll('#programsDrawerSidebar ' + step.target);
+            for (let i = 0; i < inDrawer.length; i += 1) {
+                if (isElementUsable(inDrawer[i]) || inDrawer[i].closest('#programsDrawerSidebar')) {
+                    return inDrawer[i];
+                }
+            }
+            if (inDrawer.length) return inDrawer[0];
         }
 
-        return document.querySelector(step.target);
+        const matches = document.querySelectorAll(step.target);
+        for (let i = 0; i < matches.length; i += 1) {
+            if (isElementUsable(matches[i])) return matches[i];
+        }
+        return matches.length ? matches[0] : null;
+    }
+
+    function isProgramsDrawerOpen() {
+        const drawer = document.getElementById('programsDrawerSidebar');
+        return !!(drawer && (drawer.classList.contains('drawer-open') || drawer.classList.contains('active')));
+    }
+
+    function waitForLayoutSettle(ms) {
+        return new Promise(function (resolve) {
+            window.requestAnimationFrame(function () {
+                window.requestAnimationFrame(function () {
+                    window.setTimeout(resolve, ms || 0);
+                });
+            });
+        });
     }
 
     function openProgramsDrawerForTour() {
+        if (!isMobileViewport()) return Promise.resolve(false);
+        if (isProgramsDrawerOpen()) {
+            document.body.classList.add('sk-tour-active-sidebar');
+            return Promise.resolve(false);
+        }
+
         if (typeof window.kabataanOpenProgramsDrawer === 'function') {
             window.kabataanOpenProgramsDrawer();
             autoOpenedMobileSidebar = true;
-            return;
+        } else {
+            var drawer = document.getElementById('programsDrawerSidebar');
+            var drawerBtn = document.getElementById('programsDrawerBtn');
+            if (drawer && drawerBtn && !drawer.classList.contains('drawer-open') && !drawer.classList.contains('active')) {
+                drawerBtn.click();
+                autoOpenedMobileSidebar = true;
+            }
         }
 
-        var drawer = document.getElementById('programsDrawerSidebar');
-        var drawerBtn = document.getElementById('programsDrawerBtn');
-        if (drawer && drawerBtn && !drawer.classList.contains('drawer-open') && !drawer.classList.contains('active')) {
-            drawerBtn.click();
-            autoOpenedMobileSidebar = true;
+        document.body.classList.add('sk-tour-active-sidebar');
+        return waitForLayoutSettle(340);
+    }
+
+    function closeProgramsDrawerForTour() {
+        document.body.classList.remove('sk-tour-active-sidebar');
+        if (!autoOpenedMobileSidebar) return;
+        autoOpenedMobileSidebar = false;
+        if (typeof window.kabataanCloseProgramsDrawer === 'function') {
+            window.kabataanCloseProgramsDrawer();
+            return;
         }
+        var closeBtn = document.querySelector('[data-programs-drawer-close]');
+        if (closeBtn) closeBtn.click();
     }
 
     function cacheDom() {
@@ -310,6 +365,7 @@
         }
 
         if (!step.target) {
+            document.body.classList.remove('sk-tour-active-sidebar');
             spotlightEl.style.opacity = '0';
             spotlightEl.style.width = '0px';
             spotlightEl.style.height = '0px';
@@ -326,42 +382,58 @@
             return;
         }
 
-        const targetEl = resolveTargetEl(step);
-        if (!targetEl) {
-            goToNextStep();
+        const prepareAndMeasure = function () {
+            if (!isActive) return;
+            const targetEl = resolveTargetEl(step);
+            if (!targetEl) {
+                goToNextStep();
+                return;
+            }
+
+            const rect = targetEl.getBoundingClientRect();
+            const inView = rect.top >= 72
+                && rect.bottom <= window.innerHeight - 12
+                && rect.left >= 0
+                && rect.right <= window.innerWidth;
+            if (!inView) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+            }
+
+            waitForLayoutSettle(inView ? 40 : 220).then(function () {
+                if (!isActive) return;
+                const fresh = resolveTargetEl(step);
+                if (!fresh) {
+                    goToNextStep();
+                    return;
+                }
+
+                fresh.classList.add('sk-tour-highlighted-element');
+                currentHighlightedEl = fresh;
+
+                const spotRect = fresh.getBoundingClientRect();
+                const padding = 6;
+                const spotLeft = Math.max(0, spotRect.left - padding);
+                const spotTop = Math.max(0, spotRect.top - padding);
+                const spotWidth = Math.min(window.innerWidth - spotLeft, spotRect.width + (padding * 2));
+                const spotHeight = Math.min(window.innerHeight - spotTop, spotRect.height + (padding * 2));
+
+                spotlightEl.style.opacity = '1';
+                spotlightEl.style.left = `${spotLeft}px`;
+                spotlightEl.style.top = `${spotTop}px`;
+                spotlightEl.style.width = `${spotWidth}px`;
+                spotlightEl.style.height = `${spotHeight}px`;
+
+                positionTourCard(spotLeft, spotTop, spotWidth, spotHeight, step.placement || 'bottom');
+            });
+        };
+
+        if (step.isSidebar && isMobileViewport()) {
+            openProgramsDrawerForTour().then(prepareAndMeasure);
             return;
         }
 
-        if (step.isSidebar && isMobileViewport()) {
-            openProgramsDrawerForTour();
-        }
-
-        const rect = targetEl.getBoundingClientRect();
-        const inView = rect.top >= 72
-            && rect.bottom <= window.innerHeight - 12
-            && rect.left >= 0
-            && rect.right <= window.innerWidth;
-        if (!inView) {
-            targetEl.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' });
-        }
-
-        targetEl.classList.add('sk-tour-highlighted-element');
-        currentHighlightedEl = targetEl;
-
-        const spotRect = targetEl.getBoundingClientRect();
-        const padding = 6;
-        const spotLeft = Math.max(0, spotRect.left - padding);
-        const spotTop = Math.max(0, spotRect.top - padding);
-        const spotWidth = Math.min(window.innerWidth, spotRect.width + (padding * 2));
-        const spotHeight = Math.min(window.innerHeight, spotRect.height + (padding * 2));
-
-        spotlightEl.style.opacity = '1';
-        spotlightEl.style.left = `${spotLeft}px`;
-        spotlightEl.style.top = `${spotTop}px`;
-        spotlightEl.style.width = `${spotWidth}px`;
-        spotlightEl.style.height = `${spotHeight}px`;
-
-        positionTourCard(spotLeft, spotTop, spotWidth, spotHeight, step.placement || 'bottom');
+        document.body.classList.remove('sk-tour-active-sidebar');
+        prepareAndMeasure();
     }
 
     function positionTourCard(spotLeft, spotTop, spotWidth, spotHeight, preferredPlacement) {
@@ -507,13 +579,7 @@
         }
 
         if (TOUR_STEPS[currentStepIndex].isSidebar && !TOUR_STEPS[nextIdx].isSidebar) {
-            if (autoOpenedMobileSidebar && document.body.classList.contains('sidebar-open') && typeof window.toggleSidebar === 'function') {
-                window.toggleSidebar();
-            }
-            if (autoOpenedMobileSidebar && typeof window.kabataanCloseProgramsDrawer === 'function') {
-                window.kabataanCloseProgramsDrawer();
-            }
-            autoOpenedMobileSidebar = false;
+            closeProgramsDrawerForTour();
         }
 
         currentStepIndex = nextIdx;
@@ -586,13 +652,9 @@
             currentHighlightedEl = null;
         }
 
-        if (autoOpenedMobileSidebar && document.body.classList.contains('sidebar-open') && typeof window.toggleSidebar === 'function') {
-            window.toggleSidebar();
+        if (autoOpenedMobileSidebar || document.body.classList.contains('sk-tour-active-sidebar')) {
+            closeProgramsDrawerForTour();
         }
-        if (autoOpenedMobileSidebar && typeof window.kabataanCloseProgramsDrawer === 'function') {
-            window.kabataanCloseProgramsDrawer();
-        }
-        autoOpenedMobileSidebar = false;
 
         if (rootEl) {
             rootEl.style.display = 'none';
@@ -691,6 +753,11 @@
             if (!isActive) return;
             window.clearTimeout(windowResizeDebounce);
             windowResizeDebounce = window.setTimeout(updatePosition, 100);
+        });
+        window.addEventListener('orientationchange', () => {
+            if (!isActive) return;
+            window.clearTimeout(windowResizeDebounce);
+            windowResizeDebounce = window.setTimeout(updatePosition, 200);
         });
     }
 

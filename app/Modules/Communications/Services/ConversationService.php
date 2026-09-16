@@ -30,11 +30,15 @@ class ConversationService
     public function isParticipant(Conversation $conversation, Authenticatable $user, ?string $userType = null): bool
     {
         $userType ??= $this->types->portalType();
+        $types = $this->types->equivalentTypes($userType);
+        if ($types === []) {
+            $types = [$userType];
+        }
 
         return ConversationParticipant::query()
             ->where('conversation_id', $conversation->id)
             ->where('user_id', (int) $user->id)
-            ->where('user_type', $userType)
+            ->whereIn('user_type', $types)
             ->exists();
     }
 
@@ -218,23 +222,39 @@ class ConversationService
     public function markRead(Conversation $conversation, Authenticatable $user): void
     {
         $userType = $this->types->portalType();
+        $userId = (int) $user->id;
+
+        $latestMessageId = (int) (Message::query()
+            ->where('conversation_id', $conversation->id)
+            ->max('id') ?? 0);
+
+        $payload = ['last_read_at' => now()];
+        if (Schema::hasColumn('conversation_participants', 'last_read_message_id') && $latestMessageId > 0) {
+            $payload['last_read_message_id'] = $latestMessageId;
+        }
 
         ConversationParticipant::query()
             ->where('conversation_id', $conversation->id)
-            ->where('user_id', (int) $user->id)
+            ->where('user_id', $userId)
             ->where('user_type', $userType)
-            ->update(['last_read_at' => now()]);
+            ->update($payload);
     }
 
     public function unreadTotalForUser(Authenticatable $user): int
     {
         $userType = $this->types->portalType();
         $userId = (int) $user->id;
+        $hasMessageCursor = Schema::hasColumn('conversation_participants', 'last_read_message_id');
+
+        $columns = ['conversation_id', 'last_read_at'];
+        if ($hasMessageCursor) {
+            $columns[] = 'last_read_message_id';
+        }
 
         $participants = ConversationParticipant::query()
             ->where('user_id', $userId)
             ->where('user_type', $userType)
-            ->get(['conversation_id', 'last_read_at']);
+            ->get($columns);
 
         if ($participants->isEmpty()) {
             return 0;
@@ -242,18 +262,12 @@ class ConversationService
 
         $total = 0;
         foreach ($participants as $participant) {
-            $query = Message::query()
-                ->where('conversation_id', $participant->conversation_id)
-                ->where(function (Builder $q) use ($userId, $userType) {
-                    $q->where('sender_id', '!=', $userId)
-                        ->orWhere('sender_type', '!=', $userType);
-                });
-
-            if ($participant->last_read_at) {
-                $query->where('created_at', '>', $participant->last_read_at);
-            }
-
-            $total += (int) $query->count();
+            $total += $this->unreadCountForParticipant(
+                (int) $participant->conversation_id,
+                $participant,
+                $userId,
+                $userType
+            );
         }
 
         return $total;
@@ -294,25 +308,18 @@ class ConversationService
             });
         }
 
-        // Narrow search by portal messaging rules (barangay-scoped where required).
+        // Narrow search by portal messaging rules.
         if ($viewerType === ParticipantTypeResolver::KABATAAN) {
-            if ($viewerBarangayId <= 0) {
-                return collect();
+            $builder->where('role', 'sk_official');
+            if ($viewerBarangayId > 0) {
+                $builder->where(function (Builder $officials) use ($viewerBarangayId) {
+                    $officials->where('barangay_id', $viewerBarangayId)
+                        ->orWhereNull('barangay_id');
+                });
             }
-            $builder->where('role', 'sk_official')
-                ->where('barangay_id', $viewerBarangayId);
         } elseif ($viewerType === ParticipantTypeResolver::SK_OFFICIAL) {
-            $builder->where(function (Builder $scope) use ($viewerBarangayId) {
-                $scope->where('role', 'sk_fed')
-                    ->orWhere('role', 'sk_official')
-                    ->orWhere(function (Builder $kabataan) use ($viewerBarangayId) {
-                        $kabataan->whereIn('role', ['kabataan', 'user']);
-                        if ($viewerBarangayId > 0) {
-                            $kabataan->where('barangay_id', $viewerBarangayId);
-                        } else {
-                            $kabataan->whereRaw('1 = 0');
-                        }
-                    });
+            $builder->where(function (Builder $scope) {
+                $scope->whereIn('role', ['sk_fed', 'sk_official', 'kabataan', 'user']);
             });
         } else {
             $builder->whereIn('role', $this->types->searchableRoles());
@@ -424,9 +431,9 @@ class ConversationService
     }
 
     /**
-     * Barangay messaging rules:
-     * - Kabataan: only SK Officials of the same barangay
-     * - SK Official: kabataan of same barangay, any SK Official, any SK Federation
+     * Messaging rules:
+     * - Kabataan: SK Officials (same barangay when known; otherwise any active official)
+     * - SK Official: any active Kabataan / SK Official / SK Federation
      * - SK Federation: active kabataan / sk_official / sk_fed accounts
      */
     public function canMessage(Authenticatable $from, User $to): bool
@@ -446,15 +453,13 @@ class ConversationService
 
         $fromType = $this->types->portalType();
         $fromBarangayId = $this->resolveUserBarangayId($from);
-        $toBarangayId = (int) ($to->barangay_id ?? 0);
+        $toBarangayId = $this->resolveUserBarangayId($to);
 
         return match ($fromType) {
             ParticipantTypeResolver::KABATAAN => $toType === ParticipantTypeResolver::SK_OFFICIAL
-                && $fromBarangayId > 0
-                && $fromBarangayId === $toBarangayId,
+                && ($fromBarangayId <= 0 || $toBarangayId <= 0 || $fromBarangayId === $toBarangayId),
             ParticipantTypeResolver::SK_OFFICIAL => match ($toType) {
-                ParticipantTypeResolver::KABATAAN => $fromBarangayId > 0
-                    && $fromBarangayId === $toBarangayId,
+                ParticipantTypeResolver::KABATAAN,
                 ParticipantTypeResolver::SK_OFFICIAL,
                 ParticipantTypeResolver::SK_FED => true,
                 default => false,
@@ -470,23 +475,89 @@ class ConversationService
 
     public function assertCanMessagePeer(Conversation $conversation, Authenticatable $user): void
     {
-        $userType = $this->types->portalType();
-        $other = ConversationParticipant::query()
-            ->where('conversation_id', $conversation->id)
-            ->where(function ($q) use ($user, $userType) {
-                $q->where('user_id', '!=', (int) $user->id)
-                    ->orWhere('user_type', '!=', $userType);
-            })
-            ->first();
-
-        if (! $other) {
-            abort(403, 'Conversation peer not found.');
-        }
-
-        $peer = User::query()->find($other->user_id);
+        $peer = $this->resolvePrivatePeerUser($conversation, $user);
         if (! $peer || ! $this->canMessage($user, $peer)) {
             abort(403, 'You are not allowed to message this account.');
         }
+    }
+
+    /**
+     * Call authorization for an existing conversation.
+     * Allows Kabataan ↔ SK Official when both are conversation participants.
+     */
+    public function assertCanCallPeer(Conversation $conversation, Authenticatable $user): void
+    {
+        if (! $this->isParticipant($conversation, $user)) {
+            abort(403, 'You are not allowed to call this account.');
+        }
+
+        $peer = $this->resolvePrivatePeerUser($conversation, $user);
+        if (! $peer) {
+            abort(403, 'Conversation peer not found.');
+        }
+
+        if ($this->canMessage($user, $peer) || $this->rolesAllowCall($user, $peer)) {
+            return;
+        }
+
+        abort(403, 'You are not allowed to call this account.');
+    }
+
+    public function resolvePrivatePeerUser(Conversation $conversation, Authenticatable $user): ?User
+    {
+        $userType = $this->types->portalType();
+        $callerTypes = $this->types->equivalentTypes($userType);
+        if ($callerTypes === []) {
+            $callerTypes = [$userType];
+        }
+
+        $other = ConversationParticipant::query()
+            ->where('conversation_id', $conversation->id)
+            ->where(function ($query) use ($user, $callerTypes) {
+                $query->where('user_id', '!=', (int) $user->id)
+                    ->orWhereNotIn('user_type', $callerTypes);
+            })
+            ->orderByRaw('CASE WHEN user_id = ? THEN 1 ELSE 0 END', [(int) $user->id])
+            ->first();
+
+        if (! $other || ((int) $other->user_id === (int) $user->id && $this->types->typesMatch($other->user_type, $userType))) {
+            return null;
+        }
+
+        return User::query()->find($other->user_id);
+    }
+
+    public function rolesAllowCall(Authenticatable $from, User $to): bool
+    {
+        if ((int) $from->id === (int) $to->id) {
+            return false;
+        }
+
+        if (strtoupper((string) $to->status) !== User::STATUS_ACTIVE) {
+            return false;
+        }
+
+        try {
+            $fromType = $this->types->fromUser($from);
+            $toType = $this->types->fromUser($to);
+        } catch (\InvalidArgumentException) {
+            return false;
+        }
+
+        return match ($fromType) {
+            ParticipantTypeResolver::SK_OFFICIAL => in_array($toType, [
+                ParticipantTypeResolver::KABATAAN,
+                ParticipantTypeResolver::SK_OFFICIAL,
+                ParticipantTypeResolver::SK_FED,
+            ], true),
+            ParticipantTypeResolver::KABATAAN => $toType === ParticipantTypeResolver::SK_OFFICIAL,
+            ParticipantTypeResolver::SK_FED => in_array($toType, [
+                ParticipantTypeResolver::KABATAAN,
+                ParticipantTypeResolver::SK_OFFICIAL,
+                ParticipantTypeResolver::SK_FED,
+            ], true),
+            default => false,
+        };
     }
 
     public function isSearchableUser(User $user, ?Authenticatable $viewer = null): bool
@@ -710,7 +781,10 @@ class ConversationService
                     ->orWhere('sender_type', '!=', $userType);
             });
 
-        if ($mine?->last_read_at) {
+        $lastReadMessageId = (int) ($mine?->last_read_message_id ?? 0);
+        if ($lastReadMessageId > 0 && Schema::hasColumn('conversation_participants', 'last_read_message_id')) {
+            $query->where('id', '>', $lastReadMessageId);
+        } elseif ($mine?->last_read_at) {
             $query->where('created_at', '>', $mine->last_read_at);
         }
 

@@ -242,7 +242,15 @@ import { createClient } from '@supabase/supabase-js';
         if (typeof window.onCommsHeaderMessageInsert === 'function') {
             window.onCommsHeaderMessageInsert(message);
         }
+        if (!message.mine) {
+            var badge = document.getElementById('commsMsgBadge');
+            if (badge) {
+                var next = Number(badge.dataset.unreadTotal || 0) + 1;
+                updateHeaderBadge(next);
+            }
+        }
         scheduleInboxReload();
+        refreshUnread();
     }
 
     function updateHeaderBadge(count) {
@@ -521,8 +529,11 @@ import { createClient } from '@supabase/supabase-js';
         options = options || {};
         var names = [];
         var push = function (type, id) {
-            var name = peerInboxName(type, id);
-            if (name && names.indexOf(name) === -1) names.push(name);
+            var aliases = typeAliases(type);
+            for (var i = 0; i < aliases.length; i += 1) {
+                var name = peerInboxName(aliases[i], id);
+                if (name && names.indexOf(name) === -1) names.push(name);
+            }
         };
         push(options.peerType, options.peerId);
         var extra = Array.isArray(options.peers) ? options.peers : [];
@@ -531,6 +542,13 @@ import { createClient } from '@supabase/supabase-js';
             push(peer.user_type || peer.type || peer.portal, peer.id || peer.user_id);
         });
         return names;
+    }
+
+    function typeAliases(type) {
+        var t = String(type || '').toLowerCase().trim();
+        if (!t) return [];
+        if (t === 'kabataan' || t === 'user') return ['kabataan', 'user'];
+        return [t];
     }
 
     function broadcastMessage(conversationId, message, options) {

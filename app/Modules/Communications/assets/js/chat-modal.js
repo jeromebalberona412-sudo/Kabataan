@@ -2954,12 +2954,23 @@ function wireHeaderChatCallButtons() {
         }
         var peerName = (document.getElementById('commsChatModalTitle') || {}).textContent || 'Contact';
         var avatarEl = document.querySelector('#commsChatModalAvatar img');
+        var known = null;
+        var list = Array.isArray(window.__COMMS_HEADER_CONVERSATIONS__) ? window.__COMMS_HEADER_CONVERSATIONS__ : [];
+        for (var i = 0; i < list.length; i += 1) {
+            if (Number(list[i].id) === Number(cid)) {
+                known = list[i];
+                break;
+            }
+        }
+        var other = (known && known.other_user) || {};
         var conversation = {
             id: cid,
-            other_user: {
-                name: peerName,
-                profile_image_url: avatarEl ? avatarEl.getAttribute('src') : ''
-            }
+            conversation_type: (known && known.conversation_type) || 'private',
+            other_user: Object.assign({}, other, {
+                name: other.name || peerName,
+                profile_image_url: other.profile_image_url
+                    || (avatarEl ? avatarEl.getAttribute('src') : '')
+            })
         };
         window.CommsWebRTC.startCall(cid, callType, conversation);
     }

@@ -113,6 +113,26 @@
     margin: 0;
 }
 
+.programs-drawer-barangay-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #e8f0fe;
+    color: #0b57d0;
+    font-weight: 650;
+    font-size: 0.9rem;
+    text-decoration: none;
+}
+
+.programs-drawer-barangay-link:hover,
+.programs-drawer-barangay-link:focus-visible {
+    background: #d2e3fc;
+    outline: none;
+}
+
 .programs-sidebar .program-categories {
     display: flex;
     flex-direction: column;

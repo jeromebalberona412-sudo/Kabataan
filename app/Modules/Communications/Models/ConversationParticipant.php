@@ -16,6 +16,7 @@ class ConversationParticipant extends Model
         'user_type',
         'joined_at',
         'last_read_at',
+        'last_read_message_id',
     ];
 
     protected function casts(): array
@@ -23,6 +24,7 @@ class ConversationParticipant extends Model
         return [
             'joined_at' => 'datetime',
             'last_read_at' => 'datetime',
+            'last_read_message_id' => 'integer',
         ];
     }
 

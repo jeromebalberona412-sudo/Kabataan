@@ -15,4 +15,18 @@
             <p class="programs-drawer-loading">Loading programs…</p>
         </div>
     </div>
+
+    <div class="sidebar-card programs-drawer-barangay-card" style="margin-top:16px;" data-tour="barangay-profiles">
+        <h2 class="sidebar-title">Barangay SK Profiles</h2>
+        <p class="sidebar-subtitle">Browse SK officials from each barangay.</p>
+        @if (!empty($barangayProfiles) && is_iterable($barangayProfiles))
+            <div class="barangay-profiles-list">
+                @include('dashboard::partials.barangay-profiles-list', ['barangayProfiles' => $barangayProfiles])
+            </div>
+        @else
+            <a href="{{ route('dashboard') }}" class="programs-drawer-barangay-link">
+                Open Barangay SK Profiles on Home
+            </a>
+        @endif
+    </div>
 </aside>

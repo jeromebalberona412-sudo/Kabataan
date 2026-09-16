@@ -23,7 +23,7 @@ class CallService
             abort(403);
         }
 
-        $this->conversations->assertCanMessagePeer($conversation, $caller);
+        $this->conversations->assertCanCallPeer($conversation, $caller);
 
         $callType = strtolower(trim($callType));
         if (! in_array($callType, [Call::TYPE_VOICE, Call::TYPE_VIDEO], true)) {
@@ -31,24 +31,37 @@ class CallService
         }
 
         $callerType = $this->types->portalType();
+        $callerId = (int) $caller->id;
+        $callerTypes = $this->types->equivalentTypes($callerType);
+        if ($callerTypes === []) {
+            $callerTypes = [$callerType];
+        }
+
         $other = ConversationParticipant::query()
             ->where('conversation_id', $conversation->id)
-            ->where(function ($q) use ($caller, $callerType) {
-                $q->where('user_id', '!=', (int) $caller->id)
-                    ->orWhere('user_type', '!=', $callerType);
+            ->where(function ($query) use ($callerId, $callerTypes) {
+                $query->where('user_id', '!=', $callerId)
+                    ->orWhereNotIn('user_type', $callerTypes);
             })
+            ->orderByRaw('CASE WHEN user_id = ? THEN 1 ELSE 0 END', [$callerId])
             ->first();
 
-        if (! $other) {
+        if (! $other || ((int) $other->user_id === $callerId && $this->types->typesMatch($other->user_type, $callerType))) {
             abort(422, 'No call recipient found.');
         }
 
+        $receiverId = (int) $other->user_id;
+        $peerUser = User::query()->find($receiverId);
+        $receiverType = $peerUser
+            ? $this->types->fromUser($peerUser)
+            : ($this->types->canonicalType($other->user_type) ?: $other->user_type);
+
         $call = Call::query()->create([
             'conversation_id' => $conversation->id,
-            'caller_id' => (int) $caller->id,
+            'caller_id' => $callerId,
             'caller_type' => $callerType,
-            'receiver_id' => (int) $other->user_id,
-            'receiver_type' => $other->user_type,
+            'receiver_id' => $receiverId,
+            'receiver_type' => $receiverType,
             'call_type' => $callType,
             'status' => Call::STATUS_RINGING,
         ]);
@@ -127,7 +140,7 @@ class CallService
     public function serialize(Call $call, Authenticatable $viewer): array
     {
         $viewerType = $this->types->portalType();
-        $isCaller = (int) $call->caller_id === (int) $viewer->id && $call->caller_type === $viewerType;
+        $isCaller = (int) $call->caller_id === (int) $viewer->id && $this->types->typesMatch($call->caller_type, $viewerType);
         $peer = $isCaller ? $call->receiver : $call->caller;
         $peerType = $isCaller ? $call->receiver_type : $call->caller_type;
 
@@ -192,8 +205,8 @@ class CallService
         $userId = (int) $user->id;
         $userType = $this->types->portalType();
 
-        $isCaller = (int) $call->caller_id === $userId && $call->caller_type === $userType;
-        $isReceiver = (int) $call->receiver_id === $userId && $call->receiver_type === $userType;
+        $isCaller = (int) $call->caller_id === $userId && $this->types->typesMatch($call->caller_type, $userType);
+        $isReceiver = (int) $call->receiver_id === $userId && $this->types->typesMatch($call->receiver_type, $userType);
 
         if (! $isCaller && ! $isReceiver) {
             abort(403);
