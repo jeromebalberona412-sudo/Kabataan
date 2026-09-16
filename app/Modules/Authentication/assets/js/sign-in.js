@@ -341,4 +341,16 @@
         }
     });
 
+    document.addEventListener('focusin', function (event) {
+        var el = event.target;
+        if (!el || !el.matches || !el.matches('input, textarea, select')) return;
+        window.setTimeout(function () {
+            try {
+                el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+            } catch (err) {
+                el.scrollIntoView(true);
+            }
+        }, 120);
+    }, { passive: true });
+
 }());

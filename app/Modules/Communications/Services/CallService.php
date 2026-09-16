@@ -9,6 +9,7 @@ use App\Modules\Communications\Models\ConversationParticipant;
 use App\Modules\Communications\Models\Message;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class CallService
 {
@@ -56,20 +57,110 @@ class CallService
             ? $this->types->fromUser($peerUser)
             : ($this->types->canonicalType($other->user_type) ?: $other->user_type);
 
-        $call = Call::query()->create([
-            'conversation_id' => $conversation->id,
-            'caller_id' => $callerId,
-            'caller_type' => $callerType,
-            'receiver_id' => $receiverId,
-            'receiver_type' => $receiverType,
-            'call_type' => $callType,
-            'status' => Call::STATUS_RINGING,
-        ]);
+        return DB::transaction(function () use (
+            $conversation,
+            $caller,
+            $callType,
+            $callerId,
+            $callerType,
+            $receiverId,
+            $receiverType
+        ) {
+            $this->releaseStaleRingingCalls();
+            $this->assertParticipantsAvailableForCall($callerId, $receiverId);
 
-        $label = $callType === Call::TYPE_VIDEO ? 'Video call' : 'Voice call';
-        $this->postCallMessage($call, $caller, $label.' started');
+            $call = Call::query()->create([
+                'conversation_id' => $conversation->id,
+                'caller_id' => $callerId,
+                'caller_type' => $callerType,
+                'receiver_id' => $receiverId,
+                'receiver_type' => $receiverType,
+                'call_type' => $callType,
+                'status' => Call::STATUS_RINGING,
+            ]);
 
-        return $call;
+            $label = $callType === Call::TYPE_VIDEO ? 'Video call' : 'Voice call';
+            $this->postCallMessage($call, $caller, $label.' started');
+
+            return $call;
+        });
+    }
+
+    /**
+     * @return list<Call>
+     */
+    public function endActiveCallsForUser(Authenticatable $user): array
+    {
+        $userId = (int) $user->id;
+        $ended = [];
+
+        DB::transaction(function () use ($userId, $user, &$ended) {
+            $this->releaseStaleRingingCalls();
+
+            $active = Call::query()
+                ->whereIn('status', Call::ACTIVE_STATUSES)
+                ->where(function ($q) use ($userId) {
+                    $q->where('caller_id', $userId)->orWhere('receiver_id', $userId);
+                })
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($active as $call) {
+                $call->status = Call::STATUS_ENDED;
+                $call->ended_at = now();
+                if ($call->started_at) {
+                    $call->duration_seconds = max(0, $call->ended_at->diffInSeconds($call->started_at));
+                }
+                $call->save();
+                $this->postCallMessage($call, $user, ($call->call_type === Call::TYPE_VIDEO ? 'Video call' : 'Voice call').' ended');
+                $ended[] = $call;
+            }
+        });
+
+        return $ended;
+    }
+
+    protected function releaseStaleRingingCalls(): void
+    {
+        Call::query()
+            ->where('status', Call::STATUS_RINGING)
+            ->where('created_at', '<', now()->subMinutes(2))
+            ->update([
+                'status' => Call::STATUS_MISSED,
+                'ended_at' => now(),
+                'updated_at' => now(),
+            ]);
+    }
+
+    protected function assertParticipantsAvailableForCall(int $callerId, ?int $receiverId): void
+    {
+        $active = Call::query()
+            ->whereIn('status', Call::ACTIVE_STATUSES)
+            ->where(function ($q) use ($callerId, $receiverId) {
+                $q->where('caller_id', $callerId)
+                    ->orWhere('receiver_id', $callerId);
+
+                if ($receiverId !== null && $receiverId > 0) {
+                    $q->orWhere('caller_id', $receiverId)
+                        ->orWhere('receiver_id', $receiverId);
+                }
+            })
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($active as $call) {
+            $callerBusy = (int) $call->caller_id === $callerId || (int) $call->receiver_id === $callerId;
+            if ($callerBusy) {
+                abort(409, 'You are currently on another call. Please end your current call first.');
+            }
+
+            if ($receiverId !== null && $receiverId > 0
+                && ((int) $call->caller_id === $receiverId || (int) $call->receiver_id === $receiverId)
+            ) {
+                abort(409, 'This person is currently on another call. Please wait.');
+            }
+        }
     }
 
     public function updateStatus(Call $call, Authenticatable $user, string $status): Call

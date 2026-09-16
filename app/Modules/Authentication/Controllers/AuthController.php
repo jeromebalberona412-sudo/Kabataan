@@ -199,6 +199,11 @@ class AuthController extends Controller
         $user = $request->user();
 
         if ($user instanceof User) {
+            try {
+                app(\App\Modules\Communications\Services\CallService::class)->endActiveCallsForUser($user);
+            } catch (\Throwable) {
+                // Do not block logout if communications is unavailable.
+            }
             $this->trustedDeviceService->revokeCurrentDevice($user, $request);
         }
 

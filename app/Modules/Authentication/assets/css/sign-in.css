@@ -1113,3 +1113,37 @@ a.youth-submit-btn:visited {
 
 ::selection { background: var(--youth-yellow); color: var(--youth-blue-dark); }
 ::-moz-selection { background: var(--youth-yellow); color: var(--youth-blue-dark); }
+
+/* Mobile keyboard: keep focused auth fields visible and scrollable */
+@media (max-width: 1024px) {
+    html, body {
+        height: auto !important;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    .youth-signin-page,
+    .youth-login-page,
+    .youth-signin-container,
+    .youth-login-container {
+        height: auto !important;
+        min-height: 100dvh;
+        min-height: 100vh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .youth-signin-section,
+    .youth-signin-card,
+    .youth-form-group,
+    .form-group,
+    input,
+    button,
+    .youth-signin-btn,
+    .btn-signin {
+        scroll-margin-bottom: 40vh;
+        scroll-margin-top: 1.25rem;
+    }
+}

@@ -974,25 +974,33 @@ body.comms-messages-page .comms-page-main.container-fluid {
 }
 
 .comms-reaction-chips {
-    position: absolute;
-    bottom: -2px;
+    position: relative;
+    bottom: auto;
+    left: auto;
+    right: auto;
     display: inline-flex;
-    flex-wrap: nowrap;
-    gap: 2px;
-    z-index: 4;
-    max-width: 90%;
+    flex-wrap: wrap;
+    gap: 4px;
+    z-index: 2;
+    max-width: 100%;
+    margin-top: 6px;
+    transform: none;
+    pointer-events: auto;
 }
 
 .comms-bubble-wrap.is-mine .comms-reaction-chips {
-    right: 8px;
-    left: auto;
+    align-self: flex-end;
     justify-content: flex-end;
 }
 
 .comms-bubble-wrap.is-theirs .comms-reaction-chips {
-    left: 8px;
-    right: auto;
+    align-self: flex-start;
     justify-content: flex-start;
+}
+
+.comms-bubble-wrap:has(.comms-reaction-chips:not(:empty)) {
+    padding-bottom: 0.15rem;
+    margin-bottom: 0.7rem;
 }
 
 .comms-reaction-chips .comms-reaction-summary {

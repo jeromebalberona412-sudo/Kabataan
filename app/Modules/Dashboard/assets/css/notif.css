@@ -13,21 +13,26 @@
 .notif-nav-badge {
     position: absolute;
     top: 2px;
-    right: 2px;
+    right: 0;
     min-width: 16px;
     height: 16px;
     padding: 0 4px;
     border-radius: 999px;
-    background: #ef4444;
+    background: #ff4757;
     color: #ffffff;
     font-size: 9px;
     font-weight: 700;
-    line-height: 16px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     box-shadow: 0 0 0 2px #0039A8;
     white-space: nowrap;
     box-sizing: border-box;
     font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    z-index: 2;
 }
 
 .notif-popover:not(.open) {
@@ -315,14 +320,13 @@
 /* Responsive — Tablet + phone: same spot, smaller panel */
 @media (max-width: 768px) {
     .notif-nav-badge {
-        min-width: 18px;
-        height: 13px;
-        font-size: 8px;
-        line-height: 13px;
-        padding: 0 3px;
-        top: 0;
-        right: 0;
-        box-shadow: 0 0 0 1.5px rgba(4, 80, 168, 0.9);
+        min-width: 17px;
+        height: 17px;
+        font-size: 9px;
+        padding: 0 4px;
+        top: 1px;
+        right: -1px;
+        box-shadow: 0 0 0 2px #0039A8;
     }
 
     .np-count-pill {

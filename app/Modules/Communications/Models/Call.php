@@ -24,6 +24,12 @@ class Call extends Model
 
     public const TYPE_VIDEO = 'video';
 
+    /** @var list<string> */
+    public const ACTIVE_STATUSES = [
+        self::STATUS_RINGING,
+        self::STATUS_ACCEPTED,
+    ];
+
     protected $table = 'calls';
 
     protected $fillable = [

@@ -732,29 +732,30 @@
     transform: scale(1.2);
 }
 
-/* Messenger-style: stacked emojis + one total count */
+/* Messenger-style: stacked emojis + one total count — below bubble, never overlapping text */
 .comms-chat-reaction-chips {
-    position: absolute;
-    bottom: 2px;
+    position: relative;
+    bottom: auto;
+    left: auto;
+    right: auto;
     display: inline-flex;
-    flex-wrap: nowrap;
-    z-index: 4;
-    max-width: min(100%, 180px);
+    flex-wrap: wrap;
+    gap: 4px;
+    z-index: 2;
+    max-width: 100%;
+    margin-top: 6px;
     overflow: visible;
+    transform: none;
 }
 
 .comms-chat-bubble-wrap.is-mine .comms-chat-reaction-chips {
-    right: 4px;
-    left: auto;
+    align-self: flex-end;
     justify-content: flex-end;
-    transform: translateY(35%);
 }
 
 .comms-chat-bubble-wrap.is-theirs .comms-chat-reaction-chips {
-    left: 4px;
-    right: auto;
+    align-self: flex-start;
     justify-content: flex-start;
-    transform: translateY(35%);
 }
 
 .comms-chat-reaction-chips .comms-reaction-summary {
