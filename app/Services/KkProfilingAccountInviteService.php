@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\KabataanRegistration;
 use App\Models\User;
+use App\Support\MailUrl;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -173,7 +174,7 @@ class KkProfilingAccountInviteService
 
     public function activationUrl(KabataanRegistration $registration, string $plainToken): string
     {
-        return url('/kkprofiling/account-invite/'.$registration->id.'/'.$plainToken);
+        return MailUrl::to('kkprofiling/account-invite/'.$registration->id.'/'.$plainToken);
     }
 
     public function errorTypeFromMessage(string $message): string

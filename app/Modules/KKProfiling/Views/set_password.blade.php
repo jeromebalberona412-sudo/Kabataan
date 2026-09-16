@@ -86,8 +86,8 @@
                     @if(!empty($wizardToken))
                         data-wizard-token="{{ $wizardToken }}"
                         data-email-hash="{{ $emailHash ?? '' }}"
-                        data-finalize-url="{{ route('kkprofiling.wizard.finalize-token', ['token' => $wizardToken]) }}"
-                        data-link-status-url="{{ route('kkprofiling.wizard.set-password-link-status', ['token' => $wizardToken]) }}"
+                        data-finalize-url="{{ \App\Support\MailUrl::sameOrigin(route('kkprofiling.wizard.finalize-token', ['token' => $wizardToken])) }}"
+                        data-link-status-url="{{ \App\Support\MailUrl::sameOrigin(route('kkprofiling.wizard.set-password-link-status', ['token' => $wizardToken])) }}"
                     @endif
                 >
                     @csrf

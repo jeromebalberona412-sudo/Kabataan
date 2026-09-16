@@ -7,54 +7,116 @@ use DateTimeInterface;
 use Illuminate\Support\Facades\URL;
 
 /**
- * Build absolute URLs for outbound email links.
- * Uses APP_PUBLIC_URL when set so links work from phones and outside the dev LAN.
+ * Build public URLs for email links and same-origin paths for the browser.
+ * Prefers APP_PUBLIC_URL, then a non-localhost APP_URL, then the current request host
+ * so production never ships localhost links when the live domain is already serving the page.
  */
 class MailUrl
 {
     public static function root(): string
     {
-        $preferred = null;
+        $candidates = [
+            config('app.public_url'),
+            config('app.url'),
+        ];
 
-        foreach ([config('app.public_url'), config('app.url')] as $candidate) {
-            $value = trim((string) $candidate);
-            if ($value === '' || ! filter_var($value, FILTER_VALIDATE_URL)) {
-                continue;
+        try {
+            $requestRoot = request()->getSchemeAndHttpHost();
+            if ($requestRoot !== '' && ! self::isLoopback($requestRoot)) {
+                $candidates[] = $requestRoot;
             }
-
-            $host = strtolower((string) parse_url($value, PHP_URL_HOST));
-            $isLoopback = $host === ''
-                || $host === 'localhost'
-                || $host === '127.0.0.1'
-                || $host === '[::1]'
-                || str_ends_with($host, '.localhost');
-
-            if (! $isLoopback) {
-                return rtrim($value, '/');
-            }
-
-            $preferred ??= rtrim($value, '/');
+        } catch (\Throwable) {
+            // ignore
         }
 
-        if (app()->environment('local', 'testing') && $preferred !== null) {
-            return $preferred;
+        foreach ($candidates as $candidate) {
+            $normalized = self::normalize($candidate);
+            if ($normalized !== null && ! self::isLoopback($normalized)) {
+                return rtrim($normalized, '/');
+            }
         }
 
-        $fallback = $preferred ?? rtrim((string) config('app.url'), '/');
-
-        // Last resort: never return empty — broken absolute links cause production mail 500s.
-        if ($fallback === '' || ! filter_var($fallback, FILTER_VALIDATE_URL)) {
-            try {
-                $requestRoot = rtrim((string) request()->root(), '/');
-                if ($requestRoot !== '' && filter_var($requestRoot, FILTER_VALIDATE_URL)) {
-                    return $requestRoot;
+        if (app()->environment('local', 'testing')) {
+            foreach ($candidates as $candidate) {
+                $normalized = self::normalize($candidate);
+                if ($normalized !== null) {
+                    return rtrim($normalized, '/');
                 }
-            } catch (\Throwable) {
-                // ignore
             }
         }
 
-        return $fallback !== '' ? $fallback : 'http://localhost';
+        try {
+            $requestRoot = self::normalize(request()->getSchemeAndHttpHost());
+            if ($requestRoot !== null && ! self::isLoopback($requestRoot)) {
+                return rtrim($requestRoot, '/');
+            }
+        } catch (\Throwable) {
+            // ignore
+        }
+
+        $fallback = self::normalize(config('app.url'));
+
+        return $fallback !== null ? rtrim($fallback, '/') : '';
+    }
+
+    public static function to(string $path): string
+    {
+        $root = rtrim(self::root(), '/');
+        $path = ltrim($path, '/');
+
+        if ($root === '') {
+            return '/'.$path;
+        }
+
+        return $root.'/'.$path;
+    }
+
+    /**
+     * Same-origin path for JS fetch/navigation. Never includes http://localhost.
+     */
+    public static function uri(string $path): string
+    {
+        return self::sameOrigin(self::to($path));
+    }
+
+    public static function sameOrigin(string $urlOrPath): string
+    {
+        $value = trim($urlOrPath);
+        if ($value === '') {
+            return '/';
+        }
+
+        if (! preg_match('#^https?://#i', $value)) {
+            return '/'.ltrim($value, '/');
+        }
+
+        $path = parse_url($value, PHP_URL_PATH);
+        $path = is_string($path) && $path !== '' ? $path : '/';
+        $query = parse_url($value, PHP_URL_QUERY);
+
+        return is_string($query) && $query !== '' ? $path.'?'.$query : $path;
+    }
+
+    /**
+     * Public file URL for the browser. Loopback hosts become same-origin paths;
+     * Cloudinary and other remote URLs stay absolute.
+     */
+    public static function media(string $urlOrPath): string
+    {
+        $value = trim($urlOrPath);
+        if ($value === '') {
+            return $value;
+        }
+
+        if (str_starts_with($value, '//')) {
+            $value = 'https:'.$value;
+        }
+
+        if (preg_match('#^https?://#i', $value) === 1) {
+            return self::isLoopback($value) ? self::sameOrigin($value) : $value;
+        }
+
+        return self::uri('/'.ltrim($value, '/'));
     }
 
     public static function route(string $name, array $parameters = []): string
@@ -74,10 +136,57 @@ class MailUrl
         );
     }
 
+    public static function isLoopback(?string $url): bool
+    {
+        $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+
+        return $host === ''
+            || $host === 'localhost'
+            || $host === '127.0.0.1'
+            || $host === '[::1]'
+            || str_ends_with($host, '.localhost');
+    }
+
+    public static function normalize(mixed $url): ?string
+    {
+        $value = trim((string) $url);
+        if ($value === '') {
+            return null;
+        }
+
+        if (str_starts_with($value, '//')) {
+            $value = 'https:'.$value;
+        }
+
+        if (! preg_match('#^https?://#i', $value)) {
+            $value = 'https://'.$value;
+        }
+
+        $parts = parse_url($value);
+        if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return null;
+        }
+
+        $scheme = strtolower((string) $parts['scheme']);
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            return null;
+        }
+
+        $host = strtolower((string) $parts['host']);
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+        $path = isset($parts['path']) ? rtrim((string) $parts['path'], '/') : '';
+
+        return $scheme.'://'.$host.$port.$path;
+    }
+
     private static function withPublicRoot(callable $callback): string
     {
         $appRoot = rtrim((string) config('app.url'), '/');
         $publicRoot = self::root();
+
+        if ($publicRoot === '' || ! filter_var($publicRoot, FILTER_VALIDATE_URL)) {
+            return (string) $callback();
+        }
 
         URL::forceRootUrl($publicRoot);
         self::applySchemeFromUrl($publicRoot);
@@ -85,8 +194,9 @@ class MailUrl
         try {
             return (string) $callback();
         } finally {
-            URL::forceRootUrl($appRoot);
-            self::applySchemeFromUrl($appRoot);
+            $restore = filter_var($appRoot, FILTER_VALIDATE_URL) ? $appRoot : $publicRoot;
+            URL::forceRootUrl($restore);
+            self::applySchemeFromUrl($restore);
         }
     }
 

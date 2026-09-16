@@ -82,8 +82,8 @@
     <script>
         window.__programSurvey = @json($survey);
         window.__surveyId = @json($surveyId);
-        window.__surveyLandingUrl = @json($landingUrl);
-        window.__surveySubmitUrl = @json($submitUrl);
+        window.__surveyLandingUrl = @json(\App\Support\MailUrl::sameOrigin($landingUrl));
+        window.__surveySubmitUrl = @json(\App\Support\MailUrl::sameOrigin($submitUrl));
     </script>
 </body>
 </html>

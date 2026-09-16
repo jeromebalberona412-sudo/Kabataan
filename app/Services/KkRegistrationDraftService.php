@@ -6,6 +6,7 @@ use App\Models\Barangay;
 use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Rules\ValidEmailAddress;
+use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
@@ -1293,7 +1294,7 @@ class KkRegistrationDraftService
 
         return [
             'path' => $dest,
-            'url' => Storage::disk(self::DOCUMENTS_DISK)->url($dest),
+            'url' => MailUrl::media('/storage/'.$dest),
             'original_name' => $originalName,
             'display_name' => $displayName,
             'storage' => 'local',

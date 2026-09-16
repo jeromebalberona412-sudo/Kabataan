@@ -8,6 +8,7 @@ use App\Models\KkSurveyResponse;
 use App\Models\User;
 use App\Modules\KKProfiling\Controllers\KKProfilingController;
 use App\Services\CloudinaryService;
+use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 
 class ProfileService
@@ -104,7 +105,7 @@ class ProfileService
                             'type' => $type,
                             'side' => $side,
                             'label' => $baseLabel.' ('.ucfirst($side).')',
-                            'url' => $url,
+                            'url' => MailUrl::media((string) $url),
                             'display_name' => (string) ($sideDoc['display_name'] ?? $sideDoc['original_name'] ?? ucfirst($side)),
                         ];
                     });
@@ -123,7 +124,7 @@ class ProfileService
                     'type' => $type,
                     'side' => null,
                     'label' => $baseLabel,
-                    'url' => $url,
+                    'url' => MailUrl::media((string) $url),
                     'display_name' => (string) ($document['display_name'] ?? $document['original_name'] ?? 'Document'),
                 ]]);
             })

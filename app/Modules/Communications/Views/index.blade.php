@@ -33,22 +33,22 @@
 <main class="container-fluid comms-page-main">
 @php
     $commsRoutes = [
-        'conversations' => route('api.communications.conversations.index'),
-        'storeConversation' => route('api.communications.conversations.store'),
-        'messages' => url('/api/communications/conversations/__ID__/messages'),
-        'read' => url('/api/communications/conversations/__ID__/read'),
-        'showConversation' => url('/api/communications/conversations/__ID__'),
-        'searchUsers' => route('api.communications.users.search'),
-        'unreadCount' => route('api.communications.unread-count'),
-        'react' => url('/api/communications/messages/__ID__/reactions'),
-        'updateMessage' => url('/api/communications/messages/__ID__'),
-        'deleteMessage' => url('/api/communications/messages/__ID__'),
-        'startCall' => url('/api/communications/conversations/__ID__/calls'),
-        'callStatus' => url('/api/communications/calls/__ID__/status'),
-        'calls' => route('api.communications.calls.index'),
-        'presence' => route('api.communications.presence'),
-        'callHistoryPage' => route('communications.calls'),
-        'faqSuggestions' => url('/api/communications/conversations/__ID__/faq-suggestions'),
+        'conversations' => \App\Support\MailUrl::sameOrigin(route('api.communications.conversations.index')),
+        'storeConversation' => \App\Support\MailUrl::sameOrigin(route('api.communications.conversations.store')),
+        'messages' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__/messages'),
+        'read' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__/read'),
+        'showConversation' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__'),
+        'searchUsers' => \App\Support\MailUrl::sameOrigin(route('api.communications.users.search')),
+        'unreadCount' => \App\Support\MailUrl::sameOrigin(route('api.communications.unread-count')),
+        'react' => \App\Support\MailUrl::uri('/api/communications/messages/__ID__/reactions'),
+        'updateMessage' => \App\Support\MailUrl::uri('/api/communications/messages/__ID__'),
+        'deleteMessage' => \App\Support\MailUrl::uri('/api/communications/messages/__ID__'),
+        'startCall' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__/calls'),
+        'callStatus' => \App\Support\MailUrl::uri('/api/communications/calls/__ID__/status'),
+        'calls' => \App\Support\MailUrl::sameOrigin(route('api.communications.calls.index')),
+        'presence' => \App\Support\MailUrl::sameOrigin(route('api.communications.presence')),
+        'callHistoryPage' => \App\Support\MailUrl::sameOrigin(route('communications.calls')),
+        'faqSuggestions' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__/faq-suggestions'),
     ];
 @endphp
 <div

@@ -20,7 +20,7 @@
         </div>
 
         <footer class="cp-composer" id="cpComposer">
-            <img src="{{ $userAvatarUrl ?? asset('images/SK_OnePortal_logo.png') }}" alt="You" class="cp-composer-avatar" id="cpComposerAvatar">
+            <img src="{{ $userAvatarUrl ?? \App\Support\MailUrl::uri('/images/SK_OnePortal_logo.png') }}" alt="You" class="cp-composer-avatar" id="cpComposerAvatar">
             <div class="cp-composer-box">
                 <input type="text" id="cpCommentInput" class="cp-composer-input" maxlength="1000" placeholder="Comment as {{ $user->name ?? 'Kabataan' }}" autocomplete="off">
                 <button type="button" class="cp-send-btn" id="cpSendBtn" aria-label="Send comment" disabled>

@@ -26,7 +26,7 @@
 @include('layout::kabataan-header')
 
 <main class="container-fluid py-3">
-<div class="comms-history-page" id="commsCallHistory" data-calls-url="{{ route('api.communications.calls.index') }}">
+<div class="comms-history-page" id="commsCallHistory" data-calls-url="{{ \App\Support\MailUrl::sameOrigin(route('api.communications.calls.index')) }}">
     <div class="page-header">
         <div class="comms-history-header-row">
             <div>

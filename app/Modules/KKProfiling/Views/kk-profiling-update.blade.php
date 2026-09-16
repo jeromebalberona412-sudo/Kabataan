@@ -99,7 +99,7 @@
         window.__KK_PROFILING_UPDATE_REQUIRED = true;
         window.__KK_PROFILING_FORM_DATA = @json($kkProfilingFormData ?? []);
         window.__KK_PROFILING_ORIGINAL_EMAIL = @json($kkProfilingOriginalEmail ?? '');
-        window.__KK_PROFILING_UPDATE_REDIRECT = @json(route('dashboard'));
+        window.__KK_PROFILING_UPDATE_REDIRECT = @json(\App\Support\MailUrl::sameOrigin(route('dashboard')));
         window.__KK_PROFILING_TARGET_YEAR = @json($kkProfilingTargetYear ?? null);
     </script>
 </body>

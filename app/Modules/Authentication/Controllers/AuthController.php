@@ -11,6 +11,7 @@ use App\Services\KabataanAuthService;
 use App\Services\RegistrationEvaluationService;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
+use App\Support\MailUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -91,7 +92,7 @@ class AuthController extends Controller
         $registration = KabataanRegistration::select(['id', 'user_id', 'status', 'evaluation_status', 'review_notes', 'rejection_reason', 'rejection_remarks', 'email', 'barangay_id'])
             ->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
-                  ->orWhere('email', $user->email);
+                    ->orWhere('email', $user->email);
             })
             ->latest('id')
             ->first();
@@ -162,7 +163,7 @@ class AuthController extends Controller
             now()->getTimestamp()
         );
 
-        $redirectUrl = redirect()->intended(route('dashboard'))->getTargetUrl();
+        $redirectUrl = MailUrl::sameOrigin(redirect()->intended(route('dashboard'))->getTargetUrl());
 
         if ($request->wantsJson()) {
             return response()->json(['success' => true, 'redirect' => $redirectUrl]);
@@ -212,7 +213,7 @@ class AuthController extends Controller
         ];
 
         if ($request->expectsJson() || $request->ajax()) {
-            return response()->json(['success' => true, 'redirect' => route('sign-in')], 200, $headers);
+            return response()->json(['success' => true, 'redirect' => MailUrl::sameOrigin(route('sign-in'))], 200, $headers);
         }
 
         return redirect()->route('sign-in')->withHeaders($headers);

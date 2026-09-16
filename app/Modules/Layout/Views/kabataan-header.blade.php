@@ -161,26 +161,26 @@
     data-portal-user-type="{{ config('communications.portal_user_type', 'kabataan') }}"
     data-current-user-name="{{ auth()->user()->name ?? '' }}"
     data-current-user-avatar="{{ $avatarUrl }}"
-    data-unread-count-url="{{ url('/api/communications/unread-count') }}"
+    data-unread-count-url="{{ \App\Support\MailUrl::uri('/api/communications/unread-count') }}"
 ></div>
 <script>
     window.CommsChat = window.CommsChat || {
         routes: {
-            conversations: @json(url('/api/communications/conversations')),
-            storeConversation: @json(url('/api/communications/conversations')),
-            messages: @json(url('/api/communications/conversations/__ID__/messages')),
-            react: @json(url('/api/communications/messages/__ID__/reactions')),
-            updateMessage: @json(url('/api/communications/messages/__ID__')),
-            deleteMessage: @json(url('/api/communications/messages/__ID__')),
-            read: @json(url('/api/communications/conversations/__ID__/read')),
-            showConversation: @json(url('/api/communications/conversations/__ID__')),
-            searchUsers: @json(url('/api/communications/users/search')),
-            unreadCount: @json(url('/api/communications/unread-count')),
-            startCall: @json(url('/api/communications/conversations/__ID__/calls')),
-            callStatus: @json(url('/api/communications/calls/__ID__/status')),
-            calls: @json(url('/api/communications/calls')),
-            presence: @json(url('/api/communications/presence')),
-            faqSuggestions: @json(url('/api/communications/conversations/__ID__/faq-suggestions'))
+            conversations: @json(\App\Support\MailUrl::uri('/api/communications/conversations')),
+            storeConversation: @json(\App\Support\MailUrl::uri('/api/communications/conversations')),
+            messages: @json(\App\Support\MailUrl::uri('/api/communications/conversations/__ID__/messages')),
+            react: @json(\App\Support\MailUrl::uri('/api/communications/messages/__ID__/reactions')),
+            updateMessage: @json(\App\Support\MailUrl::uri('/api/communications/messages/__ID__')),
+            deleteMessage: @json(\App\Support\MailUrl::uri('/api/communications/messages/__ID__')),
+            read: @json(\App\Support\MailUrl::uri('/api/communications/conversations/__ID__/read')),
+            showConversation: @json(\App\Support\MailUrl::uri('/api/communications/conversations/__ID__')),
+            searchUsers: @json(\App\Support\MailUrl::uri('/api/communications/users/search')),
+            unreadCount: @json(\App\Support\MailUrl::uri('/api/communications/unread-count')),
+            startCall: @json(\App\Support\MailUrl::uri('/api/communications/conversations/__ID__/calls')),
+            callStatus: @json(\App\Support\MailUrl::uri('/api/communications/calls/__ID__/status')),
+            calls: @json(\App\Support\MailUrl::uri('/api/communications/calls')),
+            presence: @json(\App\Support\MailUrl::uri('/api/communications/presence')),
+            faqSuggestions: @json(\App\Support\MailUrl::uri('/api/communications/conversations/__ID__/faq-suggestions'))
         },
         getActiveId: function () {
             return (window.__COMMS_HEADER_ACTIVE_ID__ != null) ? window.__COMMS_HEADER_ACTIVE_ID__ : null;

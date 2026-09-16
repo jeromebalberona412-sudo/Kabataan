@@ -6,8 +6,8 @@
 @endphp
 
 <script>
-    window.kabataanSignInRoute = @json(route('sign-in'));
-    window.kabataanSessionContinueRoute = @json(route('kabataan.session.continue'));
+    window.kabataanSignInRoute = @json(\App\Support\MailUrl::sameOrigin(route('sign-in')));
+    window.kabataanSessionContinueRoute = @json(\App\Support\MailUrl::sameOrigin(route('kabataan.session.continue')));
     window.kabataanSessionTimeoutConfig = {
         timeoutMinutes: {{ $kabataanTimeoutMinutes }},
         warningMinutes: {{ $kabataanWarningMinutes }},

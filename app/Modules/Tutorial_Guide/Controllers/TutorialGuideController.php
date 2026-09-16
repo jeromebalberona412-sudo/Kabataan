@@ -22,12 +22,20 @@ class TutorialGuideController extends Controller
         /** @var User $user */
         $user = $request->user();
         $tutorialKey = (string) $request->input('tutorial_key', KabataanTutorial::DEFAULT_TUTORIAL_KEY);
-        $tutorial = $this->tutorialService->getOrCreateTutorial($user, $tutorialKey);
 
-        return response()->json([
-            'success' => true,
-            'tutorial' => $this->tutorialService->formatTutorialPayload($tutorial),
-        ]);
+        try {
+            $tutorial = $this->tutorialService->getOrCreateTutorial($user, $tutorialKey);
+
+            return response()->json([
+                'success' => true,
+                'tutorial' => $this->tutorialService->formatTutorialPayload($tutorial),
+            ]);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load tutorial status.',
+            ], 500);
+        }
     }
 
     public function start(Request $request): JsonResponse

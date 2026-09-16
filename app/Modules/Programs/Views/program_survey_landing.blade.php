@@ -102,10 +102,10 @@
 
     <script>
         window.__abyipProgramId = @json($abyipProgramId);
-        window.__surveyByProgramUrl = @json($surveyByProgramUrl);
-        window.__surveyResponsesUrl = @json($surveyResponsesUrl);
-        window.__surveyAnswerBaseUrl = @json(url('/programs/survey'));
-        window.__surveyResponseBaseUrl = @json(url('/programs/survey/responses'));
+        window.__surveyByProgramUrl = @json($surveyByProgramUrl ? \App\Support\MailUrl::sameOrigin($surveyByProgramUrl) : null);
+        window.__surveyResponsesUrl = @json(\App\Support\MailUrl::sameOrigin($surveyResponsesUrl));
+        window.__surveyAnswerBaseUrl = @json(\App\Support\MailUrl::uri('/programs/survey'));
+        window.__surveyResponseBaseUrl = @json(\App\Support\MailUrl::uri('/programs/survey/responses'));
     </script>
 </body>
 </html>

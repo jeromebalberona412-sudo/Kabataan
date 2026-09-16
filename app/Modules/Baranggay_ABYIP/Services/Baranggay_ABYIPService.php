@@ -5,6 +5,7 @@ namespace App\Modules\Baranggay_ABYIP\Services;
 use App\Models\Abyip;
 use App\Models\Barangay;
 use App\Models\BarangayAbyip;
+use App\Support\MailUrl;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -93,8 +94,8 @@ class Baranggay_ABYIPService
                     'status' => $document->status ?: 'published',
                     'version' => (int) ($document->current_version ?? 1),
                     'published_at' => $publishedAt,
-                    'file_url' => route('baranggay_abyip.file', [$barangay->slug, $document->id]),
-                    'download_url' => route('baranggay_abyip.file', [$barangay->slug, $document->id]).'?download=1',
+                    'file_url' => MailUrl::sameOrigin(route('baranggay_abyip.file', [$barangay->slug, $document->id])),
+                    'download_url' => MailUrl::sameOrigin(route('baranggay_abyip.file', [$barangay->slug, $document->id]).'?download=1'),
                     'has_pdf' => true,
                 ]);
             }
@@ -121,7 +122,7 @@ class Baranggay_ABYIPService
                     'document_id' => (int) $legacy->id,
                     'year' => $year,
                     'title' => 'ABYIP CY '.$year,
-                    'file_url' => route('baranggay_abyip.legacy_file', [$barangay->slug, $legacy->id]),
+                    'file_url' => MailUrl::sameOrigin(route('baranggay_abyip.legacy_file', [$barangay->slug, $legacy->id])),
                     'has_pdf' => true,
                 ]);
             }

@@ -130,7 +130,7 @@ it('keeps the confirming browser logged in on the verify status poll', function 
         ->assertOk()
         ->assertJson([
             'state' => 'confirmed',
-            'redirect' => route('dashboard'),
+            'redirect' => '/dashboard',
         ]);
 
     $this->assertAuthenticatedAs($user);
@@ -149,7 +149,7 @@ it('logs out a waiting verify session after the password is confirmed on another
         ->assertOk()
         ->assertJson([
             'state' => 'confirmed',
-            'redirect' => route('sign-in'),
+            'redirect' => '/sign-in',
         ]);
 
     $this->assertGuest();

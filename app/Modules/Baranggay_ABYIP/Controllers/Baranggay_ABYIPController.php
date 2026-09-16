@@ -6,11 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Barangay;
 use App\Modules\Baranggay_ABYIP\Services\Baranggay_ABYIPService;
 use App\Services\BarangayLogoUrlService;
+use App\Support\MailUrl;
+use Illuminate\Contracts\View\View;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Contracts\View\View;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -65,7 +66,7 @@ class Baranggay_ABYIPController extends Controller
         return view('baranggay_abyip::baranggays.show', [
             'barangay' => $barangay,
             'logoUrl' => $logoUrl,
-            'documentsUrl' => route('baranggay_abyip.documents', $barangay->slug),
+            'documentsUrl' => MailUrl::sameOrigin(route('baranggay_abyip.documents', $barangay->slug)),
             'hideFooter' => true,
         ]);
     }

@@ -4,10 +4,11 @@ namespace App\Http\Middleware;
 
 use App\Models\KabataanRegistration;
 use App\Services\KkProfilingScheduleService;
+use App\Support\MailUrl;
 use Closure;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Auth;
+use Symfony\Component\HttpFoundation\Response;
 
 class EnsureKkProfilingUpdated
 {
@@ -56,7 +57,7 @@ class EnsureKkProfilingUpdated
         if ($request->expectsJson() || $request->ajax()) {
             return response()->json([
                 'message' => 'KK Profiling update is required before continuing.',
-                'redirect' => route('dashboard'),
+                'redirect' => MailUrl::sameOrigin(route('dashboard')),
                 'kk_profiling_update_required' => true,
                 'year' => $targetYear,
             ], 403);

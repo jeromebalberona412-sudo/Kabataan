@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\User;
 use App\Modules\Authentication\Services\TrustedDeviceService;
+use App\Support\MailUrl;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -72,7 +73,7 @@ class SessionTimeout
                 'authenticated' => false,
                 'session_expired' => true,
                 'message' => $message,
-                'redirect' => route('sign-in'),
+                'redirect' => MailUrl::sameOrigin(route('sign-in')),
             ], 401);
         }
 

@@ -6,13 +6,10 @@ use App\Mail\KabataanSetPasswordMail;
 use App\Support\MailUrl;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Mail;
 
 class KabataanSetPasswordEmail extends Notification
 {
-    public function __construct(public string $setPasswordUrl)
-    {
-    }
+    public function __construct(public string $setPasswordUrl) {}
 
     public function via($notifiable): array
     {
@@ -62,7 +59,7 @@ class KabataanSetPasswordEmail extends Notification
             ->view('emails.kkprofiling-set-password', [
                 'setPasswordUrl' => $this->setPasswordUrl,
                 'logoPath' => $logoPath,
-                'logoUrl' => MailUrl::root().'/images/'.($logoPath ? rawurlencode(basename($logoPath)) : 'SK_OnePortal_logo.png'),
+                'logoUrl' => MailUrl::to('images/'.($logoPath ? rawurlencode(basename($logoPath)) : 'SK_OnePortal_logo.png')),
             ]);
     }
 }

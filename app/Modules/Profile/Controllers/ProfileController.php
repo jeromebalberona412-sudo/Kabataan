@@ -11,6 +11,7 @@ use App\Modules\Profile\Services\ProfileParticipationService;
 use App\Modules\Profile\Services\ProfileService;
 use App\Modules\Profile\Services\ProfileSupportingDocumentsService;
 use App\Rules\ValidEmailAddress;
+use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -179,7 +180,7 @@ class ProfileController extends Controller
 
                 return response()->json([
                     'state' => 'cancelled',
-                    'redirect' => route('change-email'),
+                    'redirect' => MailUrl::sameOrigin(route('change-email')),
                     'message' => $message,
                 ]);
             }
@@ -189,7 +190,7 @@ class ProfileController extends Controller
 
             return response()->json([
                 'state' => 'completed',
-                'redirect' => route('dashboard'),
+                'redirect' => MailUrl::sameOrigin(route('dashboard')),
                 'message' => 'Email changed successfully. Taking you to your dashboard...',
             ]);
         }
@@ -199,7 +200,7 @@ class ProfileController extends Controller
 
             return response()->json([
                 'state' => 'completed',
-                'redirect' => route('dashboard'),
+                'redirect' => MailUrl::sameOrigin(route('dashboard')),
                 'message' => 'Email changed successfully. Taking you to your dashboard...',
             ]);
         }
@@ -213,7 +214,7 @@ class ProfileController extends Controller
 
             return response()->json([
                 'state' => 'completed',
-                'redirect' => route('sign-in'),
+                'redirect' => MailUrl::sameOrigin(route('sign-in')),
                 'message' => 'Email changed successfully. Please sign in with your new email.',
             ]);
         }
@@ -222,7 +223,7 @@ class ProfileController extends Controller
 
         return response()->json([
             'state' => 'cancelled',
-            'redirect' => route('change-email'),
+            'redirect' => MailUrl::sameOrigin(route('change-email')),
             'invalid_email' => $deliveryFailedMessage !== null,
             'message' => $deliveryFailedMessage
                 ?? 'Email change request is no longer active.',
@@ -386,7 +387,7 @@ class ProfileController extends Controller
 
             return response()->json([
                 'state' => 'confirmed',
-                'redirect' => route('dashboard'),
+                'redirect' => MailUrl::sameOrigin(route('dashboard')),
                 'message' => 'Password changed successfully. Taking you to your dashboard...',
             ]);
         }
@@ -400,14 +401,14 @@ class ProfileController extends Controller
 
             return response()->json([
                 'state' => 'confirmed',
-                'redirect' => route('sign-in'),
+                'redirect' => MailUrl::sameOrigin(route('sign-in')),
                 'message' => 'Password changed successfully. Please sign in with your new password.',
             ]);
         }
 
         return response()->json([
             'state' => 'cancelled',
-            'redirect' => route('change-password'),
+            'redirect' => MailUrl::sameOrigin(route('change-password')),
             'message' => 'Password change request is no longer active.',
         ]);
     }
@@ -597,8 +598,7 @@ class ProfileController extends Controller
 
     protected function wasPasswordChangeConfirmed(Request $request, User $user): bool
     {
-        return $this->passwordChangeService->wasRecentlyConfirmed($user->id)
-            || (bool) $request->session()->get('password_change_verify_active', false);
+        return $this->passwordChangeService->wasRecentlyConfirmed($user->id);
     }
 
     protected function passwordChangeCompletedInThisSession(Request $request): bool
@@ -641,8 +641,7 @@ class ProfileController extends Controller
 
     protected function wasEmailChangeConfirmed(Request $request, User $user): bool
     {
-        return $this->emailChangeService->wasRecentlyCompleted($user->id)
-            || (bool) $request->session()->get('email_change_verify_active', false);
+        return $this->emailChangeService->wasRecentlyCompleted($user->id);
     }
 
     protected function emailChangeCompletedInThisSession(Request $request): bool

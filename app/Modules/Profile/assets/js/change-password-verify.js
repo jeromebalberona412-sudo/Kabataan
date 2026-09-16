@@ -39,13 +39,17 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
-    function isLoggedOutResponse(response, payload) {
-        if (!response) return false;
-        if (response.status === 401 || response.status === 419) return true;
-        if (response.redirected) return true;
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType && !contentType.includes('application/json')) return true;
-        return payload && payload.state === 'confirmed';
+    function isUnauthorized(response) {
+        return Boolean(response) && response.status === 401;
+    }
+
+    function isJsonResponse(response) {
+        const contentType = response?.headers?.get('content-type') || '';
+        return contentType.includes('application/json');
+    }
+
+    function isConfirmedState(payload) {
+        return Boolean(payload) && payload.state === 'confirmed';
     }
 
     function clearResendCooldown() {
@@ -187,15 +191,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const payload = await parseJson(response);
 
-            if (isLoggedOutResponse(response, payload) || payload.state === 'confirmed') {
+            if (isUnauthorized(response)) {
                 redirectAfterConfirm(
-                    payload.message || 'Password changed successfully.',
-                    payload.redirect || (response.status === 401 || response.status === 419 ? LOGIN_URL : dashboardUrl),
+                    payload.message || 'Password changed successfully. Please sign in with your new password.',
+                    payload.redirect || LOGIN_URL,
                 );
                 return;
             }
 
-            if (!response.ok) {
+            if (isConfirmedState(payload)) {
+                redirectAfterConfirm(
+                    payload.message || 'Password changed successfully.',
+                    payload.redirect || dashboardUrl,
+                );
+                return;
+            }
+
+            if (!response.ok || !isJsonResponse(response)) {
                 setTimeout(checkConfirmationStatus, POLL_INTERVAL_MS + 2000);
                 return;
             }
@@ -235,15 +247,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const payload = await parseJson(response);
 
-            if (isLoggedOutResponse(response, payload) || payload.state === 'confirmed') {
+            if (isUnauthorized(response)) {
                 redirectAfterConfirm(
-                    payload.message || 'Password changed successfully.',
-                    payload.redirect || (response.status === 401 || response.status === 419 ? LOGIN_URL : dashboardUrl),
+                    payload.message || 'Password changed successfully. Please sign in with your new password.',
+                    payload.redirect || LOGIN_URL,
                 );
                 return;
             }
 
-            if (!response.ok || payload.ok === false) {
+            if (isConfirmedState(payload)) {
+                redirectAfterConfirm(
+                    payload.message || 'Password changed successfully.',
+                    payload.redirect || dashboardUrl,
+                );
+                return;
+            }
+
+            if (!response.ok || payload.ok === false || !isJsonResponse(response)) {
                 if (resendBtn) {
                     resendBtn.textContent = BTN_LABEL;
                 }

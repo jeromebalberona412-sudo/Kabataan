@@ -589,7 +589,7 @@ class KKProfilingController extends Controller
     private function updateSuccessResponse(Request $request, array $payload)
     {
         if ($request->wantsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {
-            return response()->json(array_merge(['success' => true, 'redirect' => route('dashboard')], $payload));
+            return response()->json(array_merge(['success' => true, 'redirect' => MailUrl::sameOrigin(route('dashboard'))], $payload));
         }
 
         return redirect()->route('dashboard');
@@ -873,7 +873,7 @@ class KKProfilingController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Registration successful! Please check your email for verification.',
-                'redirect' => route('kkprofiling.check-email'),
+                'redirect' => MailUrl::sameOrigin(route('kkprofiling.check-email')),
                 'email' => $registration->email,
                 'barangay' => $barangay,
             ]);

@@ -12,9 +12,7 @@ class KabataanSetPasswordMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public string $setPasswordUrl)
-    {
-    }
+    public function __construct(public string $setPasswordUrl) {}
 
     public function build(): self
     {
@@ -22,10 +20,7 @@ class KabataanSetPasswordMail extends Mailable
         // when build()/preview runs outside a live Swift/Symfony message context.
         $root = rtrim((string) MailUrl::root(), '/');
         if ($root === '') {
-            $root = rtrim((string) config('app.url'), '/');
-        }
-        if ($root === '') {
-            $root = 'http://localhost';
+            $root = rtrim((string) request()->getSchemeAndHttpHost(), '/');
         }
 
         $logoFile = 'SK_OnePortal_logo.png';

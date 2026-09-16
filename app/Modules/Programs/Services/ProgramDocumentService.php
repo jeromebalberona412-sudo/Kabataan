@@ -4,6 +4,8 @@ namespace App\Modules\Programs\Services;
 
 use App\Models\ProgramApplication;
 use App\Models\User;
+use App\Support\MailUrl;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -251,15 +253,15 @@ class ProgramDocumentService
             'mime' => 'application/pdf',
             'uploaded_at' => $uploadedAt,
             'uploaded_at_display' => $this->formatTimestamp($uploadedAt),
-            'preview_url' => route('kabataan.programs.documents.show', [
+            'preview_url' => MailUrl::sameOrigin(route('kabataan.programs.documents.show', [
                 'scheduleProgramId' => $scheduleProgramId,
                 'questionId' => $questionId,
-            ]),
-            'download_url' => route('kabataan.programs.documents.show', [
+            ])),
+            'download_url' => MailUrl::sameOrigin(route('kabataan.programs.documents.show', [
                 'scheduleProgramId' => $scheduleProgramId,
                 'questionId' => $questionId,
                 'download' => 1,
-            ]),
+            ])),
             'status' => 'uploaded',
         ];
     }
@@ -431,7 +433,7 @@ class ProgramDocumentService
         }
 
         try {
-            return \Carbon\Carbon::parse($timestamp)->format('M j, Y g:i A');
+            return Carbon::parse($timestamp)->format('M j, Y g:i A');
         } catch (\Throwable) {
             return $timestamp;
         }

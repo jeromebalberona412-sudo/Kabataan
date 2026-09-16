@@ -8,6 +8,7 @@ use App\Modules\Communications\Models\Message;
 use App\Modules\Communications\Models\MessageAttachment;
 use App\Modules\Communications\Models\MessageHide;
 use App\Modules\Communications\Models\MessageReaction;
+use App\Support\MailUrl;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -358,7 +359,7 @@ class MessageService
      */
     public function serializeAttachment(MessageAttachment $attachment): array
     {
-        $downloadUrl = url('/api/communications/attachments/'.$attachment->id);
+        $downloadUrl = MailUrl::uri('/api/communications/attachments/'.$attachment->id);
 
         return [
             'id' => (int) $attachment->id,

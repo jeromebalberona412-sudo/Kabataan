@@ -129,13 +129,17 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function isLoggedOutResponse(response, payload) {
-        if (!response) return false;
-        if (response.status === 401 || response.status === 419) return true;
-        if (response.redirected) return true;
-        const contentType = response.headers.get('content-type') || '';
-        if (contentType && !contentType.includes('application/json')) return true;
-        return payload && (payload.state === 'completed' || payload.state === 'confirmed');
+    function isUnauthorized(response) {
+        return Boolean(response) && response.status === 401;
+    }
+
+    function isJsonResponse(response) {
+        const contentType = response?.headers?.get('content-type') || '';
+        return contentType.includes('application/json');
+    }
+
+    function isCompletedState(payload) {
+        return Boolean(payload) && (payload.state === 'completed' || payload.state === 'confirmed');
     }
 
     function redirectAfterComplete(message, redirectUrl) {
@@ -215,15 +219,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const payload = await parseJson(response);
 
-            if (isLoggedOutResponse(response, payload) || payload.state === 'completed' || payload.state === 'confirmed') {
+            if (isUnauthorized(response)) {
                 redirectAfterComplete(
-                    payload.message || 'Email changed successfully.',
-                    payload.redirect || (response.status === 401 || response.status === 419 ? signInUrl : dashboardUrl),
+                    payload.message || 'Email changed successfully. Please sign in with your new email.',
+                    payload.redirect || signInUrl,
                 );
                 return;
             }
 
-            if (!response.ok) {
+            if (isCompletedState(payload)) {
+                redirectAfterComplete(
+                    payload.message || 'Email changed successfully.',
+                    payload.redirect || dashboardUrl,
+                );
+                return;
+            }
+
+            if (!response.ok || !isJsonResponse(response)) {
                 setTimeout(checkConfirmationStatus, POLL_INTERVAL_MS + 2000);
                 return;
             }
@@ -268,15 +280,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const payload = await parseJson(response);
 
-            if (isLoggedOutResponse(response, payload) || payload.state === 'completed' || payload.state === 'confirmed') {
+            if (isUnauthorized(response)) {
                 redirectAfterComplete(
-                    payload.message || 'Email changed successfully.',
-                    payload.redirect || (response.status === 401 || response.status === 419 ? signInUrl : dashboardUrl),
+                    payload.message || 'Email changed successfully. Please sign in with your new email.',
+                    payload.redirect || signInUrl,
                 );
                 return;
             }
 
-            if (!response.ok || payload.ok === false) {
+            if (isCompletedState(payload)) {
+                redirectAfterComplete(
+                    payload.message || 'Email changed successfully.',
+                    payload.redirect || dashboardUrl,
+                );
+                return;
+            }
+
+            if (!response.ok || payload.ok === false || !isJsonResponse(response)) {
                 resendInFlight = false;
                 if (resendBtn) {
                     resendBtn.textContent = BTN_LABEL;

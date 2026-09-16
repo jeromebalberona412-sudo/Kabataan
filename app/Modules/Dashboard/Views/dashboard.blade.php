@@ -847,8 +847,8 @@
     };
 
     // ── Program application redirects (frontend only — see programs.js) ──
-    window.scholarshipApplyUrl = @json(route('scholarship.apply'));
-    window.sportsApplyUrl = @json(route('sports.apply'));
+    window.scholarshipApplyUrl = @json(\App\Support\MailUrl::sameOrigin(route('scholarship.apply')));
+    window.sportsApplyUrl = @json(\App\Support\MailUrl::sameOrigin(route('sports.apply')));
 
     const educationModal = document.getElementById('educationModal');
     if (educationModal) {
@@ -892,17 +892,17 @@
     window.CommunityFeedConfig = {
         userAvatar: @json($userAvatarUrl ?? ''),
         userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
-        commentsPageUrl: @json(url('/dashboard/comments/__ID__')),
+        commentsPageUrl: @json(\App\Support\MailUrl::uri('/dashboard/comments/__ID__')),
         feedPollMs: 2500,
         prohibitedWords: @json(config('prohibited_words', [])),
     };
     window.__skProhibitedWords = window.CommunityFeedConfig.prohibitedWords;
     window.CommentPreviewConfig = {
         post: @json($commentPreviewPost ?? null),
-        defaultLogo: @json(asset('images/SK_OnePortal_logo.png')),
+        defaultLogo: @json(\App\Support\MailUrl::uri('/images/SK_OnePortal_logo.png')),
         userAvatar: @json($userAvatarUrl ?? ''),
         userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
-        feedUrl: @json(route('dashboard')),
+        feedUrl: @json(\App\Support\MailUrl::sameOrigin(route('dashboard'))),
         prohibitedWords: window.__skProhibitedWords,
     };
     </script>

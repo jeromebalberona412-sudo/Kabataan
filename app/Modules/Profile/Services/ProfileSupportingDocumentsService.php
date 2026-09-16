@@ -7,13 +7,14 @@ use App\Models\KkSurveyResponse;
 use App\Models\User;
 use App\Services\CloudinaryService;
 use App\Services\KkSurveyResponseService;
+use App\Support\MailUrl;
+use App\Support\SupportingDocumentTypes;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use App\Support\SupportingDocumentTypes;
 
 class ProfileSupportingDocumentsService
 {
@@ -174,7 +175,7 @@ class ProfileSupportingDocumentsService
 
         return [
             'public_id' => $path,
-            'url' => Storage::disk('public')->url($path),
+            'url' => MailUrl::media('/storage/'.$path),
             'version' => null,
             'storage' => 'local',
         ];

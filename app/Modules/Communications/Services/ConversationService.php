@@ -9,13 +9,13 @@ use App\Modules\Communications\Models\Conversation;
 use App\Modules\Communications\Models\ConversationParticipant;
 use App\Modules\Communications\Models\Message;
 use App\Services\BarangayLogoUrlService;
+use App\Support\MailUrl;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 
 class ConversationService
 {
@@ -668,7 +668,7 @@ class ConversationService
             }
 
             if ($type === 'sk_fed') {
-                return asset('images/SK_OnePortal_logo.png');
+                return MailUrl::uri('/images/SK_OnePortal_logo.png');
             }
         }
 
@@ -677,32 +677,7 @@ class ConversationService
 
     protected function normalizeMediaUrl(string $value): string
     {
-        $value = trim($value);
-        if ($value === '') {
-            return $value;
-        }
-
-        if (preg_match('#^https?://#i', $value) === 1) {
-            return $value;
-        }
-
-        if (str_starts_with($value, '//')) {
-            return 'https:'.$value;
-        }
-
-        if (str_starts_with($value, '/')) {
-            return url($value);
-        }
-
-        if (str_starts_with($value, 'storage/')) {
-            return asset($value);
-        }
-
-        try {
-            return Storage::disk('public')->url($value);
-        } catch (\Throwable $e) {
-            return asset($value);
-        }
+        return MailUrl::media($value);
     }
 
     protected function findPrivateConversationId(int $aId, string $aType, int $bId, string $bType): ?int

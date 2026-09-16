@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\KabataanNotificationService;
+use App\Support\MailUrl;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
@@ -23,14 +24,19 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Force HTTPS only when the request is already HTTPS (or behind an HTTPS proxy),
-        // or in production on a public host. Never force HTTPS on plain local/LAN
-        // artisan serve (http://127.0.0.1 / http://192.168.x.x) — that causes
-        // "Invalid request (Unsupported SSL request)" for CSS/JS.
-        $forwardedHttps = request()->server('HTTP_X_FORWARDED_PROTO') === 'https';
+        $forwardedHttps = false;
+        $requestIsHttps = false;
+        $host = '';
+
+        try {
+            $forwardedHttps = strtolower((string) request()->server('HTTP_X_FORWARDED_PROTO')) === 'https';
+            $requestIsHttps = request()->secure() || $forwardedHttps;
+            $host = strtolower((string) request()->getHost());
+        } catch (\Throwable) {
+            // Console, queue, and early boot have no live HTTP request.
+        }
+
         $isProdEnv = in_array(strtolower((string) $this->app->environment()), ['production', 'productions', 'prod'], true);
-        $requestIsHttps = request()->secure() || $forwardedHttps;
-        $host = strtolower((string) request()->getHost());
         $isLocalDevHost = $host === 'localhost'
             || $host === '::1'
             || $host === '127.0.0.1'
@@ -38,27 +44,41 @@ class AppServiceProvider extends ServiceProvider
             || str_starts_with($host, '10.')
             || (bool) preg_match('/^172\.(1[6-9]|2\d|3[0-1])\./', $host);
 
-        if ($requestIsHttps || ($isProdEnv && ! $isLocalDevHost)) {
-            URL::forceScheme('https');
-        }
+        $resolvedRoot = MailUrl::root();
+        if ($resolvedRoot !== '' && filter_var($resolvedRoot, FILTER_VALIDATE_URL)) {
+            URL::forceRootUrl($resolvedRoot);
+            config(['filesystems.disks.public.url' => rtrim($resolvedRoot, '/').'/storage']);
 
-        $mailRoot = \App\Support\MailUrl::root();
-        if ($mailRoot !== '' && filter_var($mailRoot, FILTER_VALIDATE_URL)) {
-            URL::forceRootUrl($mailRoot);
-            if (str_starts_with(strtolower($mailRoot), 'https://')) {
+            if (str_starts_with(strtolower($resolvedRoot), 'https://')) {
                 URL::forceScheme('https');
-            } elseif (str_starts_with(strtolower($mailRoot), 'http://')) {
+            } elseif (str_starts_with(strtolower($resolvedRoot), 'http://') && ! $requestIsHttps && ! $isProdEnv) {
                 URL::forceScheme('http');
             }
         }
 
+        // Force HTTPS when the request is already HTTPS (or behind an HTTPS proxy),
+        // or in production on a public host. Never force HTTPS on plain local/LAN
+        // artisan serve — that causes "Invalid request (Unsupported SSL request)" for CSS/JS.
+        if ($requestIsHttps || ($isProdEnv && ! $isLocalDevHost)) {
+            URL::forceScheme('https');
+        }
+
         View::composer(['layout::kabataan-header', 'dashboard::notification'], function ($view) {
-            $user = Auth::user();
-            $notificationService = app(KabataanNotificationService::class);
+            $headerNotifications = [];
+            $unreadNotificationCount = 0;
+
+            try {
+                $user = Auth::user();
+                $notificationService = app(KabataanNotificationService::class);
+                $headerNotifications = $notificationService->recentForUser($user, 8);
+                $unreadNotificationCount = $notificationService->unreadCountForUser($user);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
 
             $view->with([
-                'headerNotifications' => $notificationService->recentForUser($user, 8),
-                'unreadNotificationCount' => $notificationService->unreadCountForUser($user),
+                'headerNotifications' => $headerNotifications,
+                'unreadNotificationCount' => $unreadNotificationCount,
             ]);
         });
 

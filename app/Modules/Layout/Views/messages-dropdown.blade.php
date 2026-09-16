@@ -8,8 +8,8 @@
     $hasMsgItems = $msgItems->isNotEmpty() || $starterOfficials->isNotEmpty();
     $unreadMsgCount = (int) ($unreadMessagesCount ?? 0);
     $messagesIndexUrl = \Illuminate\Support\Facades\Route::has('communications.index')
-        ? route('communications.index')
-        : url('/communications');
+        ? \App\Support\MailUrl::sameOrigin(route('communications.index'))
+        : \App\Support\MailUrl::uri('/communications');
 @endphp
 
 <div class="comms-msg-popover" id="commsMsgPopover" role="menu" aria-label="Messages">

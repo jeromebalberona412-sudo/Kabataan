@@ -559,17 +559,17 @@
 
     <script>
     window.CommunityFeedConfig = {
-        commentsPageUrl: @json(url('/barangay/'.$slug.'/__ID__')),
+        commentsPageUrl: @json(\App\Support\MailUrl::uri('/barangay/'.$slug.'/__ID__')),
         feedPollMs: 5000,
         prohibitedWords: @json(config('prohibited_words', [])),
     };
     window.__skProhibitedWords = window.CommunityFeedConfig.prohibitedWords;
     window.CommentPreviewConfig = {
         post: @json($commentPreviewPost ?? null),
-        defaultLogo: @json(asset('images/SK_OnePortal_logo.png')),
+        defaultLogo: @json(\App\Support\MailUrl::uri('/images/SK_OnePortal_logo.png')),
         userAvatar: @json($userAvatarUrl ?? ''),
         userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
-        feedUrl: @json(url('/barangay/'.$slug)),
+        feedUrl: @json(\App\Support\MailUrl::uri('/barangay/'.$slug)),
         viewOnly: @json(! ($canEngage ?? false)),
         syncUrl: true,
         prohibitedWords: window.__skProhibitedWords,

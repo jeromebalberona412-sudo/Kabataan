@@ -346,7 +346,7 @@
     <script>
         window.__scheduleProgramId = @json($scheduleProgramId);
         window.__kkFieldLabels = @json($kkFieldLabels);
-        window.__dashboardUrl = @json(route('dashboard'));
+        window.__dashboardUrl = @json(\App\Support\MailUrl::sameOrigin(route('dashboard')));
     </script>
 
     @include('programs::scholarship.partials.data-privacy-modal')

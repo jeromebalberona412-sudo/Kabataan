@@ -203,7 +203,7 @@
                     <div
                         class="profile-avatar-wrapper profile-avatar-wrapper--interactive"
                         id="profileAvatarWrapper"
-                        data-upload-url="{{ route('profile.upload-picture') }}"
+                        data-upload-url="{{ \App\Support\MailUrl::sameOrigin(route('profile.upload-picture')) }}"
                         data-can-change="{{ $canChangeProfileImage ? '1' : '0' }}"
                         data-next-change="{{ $profileImageNextChangeDisplay ?? '' }}"
                         data-fallback-avatar="{{ $profileImageFallbackUrl }}"
@@ -305,7 +305,7 @@
                             <section
                                 class="kk-profile-section"
                                 id="profileSupportingDocsSection"
-                                data-upload-url="{{ route('profile.upload-supporting-document') }}"
+                                data-upload-url="{{ \App\Support\MailUrl::sameOrigin(route('profile.upload-supporting-document')) }}"
                                 data-has-documents="{{ !empty($supportingDocuments) ? '1' : '0' }}"
                             >
                                 <h2 class="kk-profile-section-title">

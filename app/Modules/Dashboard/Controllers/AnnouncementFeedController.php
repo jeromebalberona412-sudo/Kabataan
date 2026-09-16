@@ -16,6 +16,7 @@ use App\Services\FeedCommentRateLimiter;
 use App\Services\GoogleDriveVideoUrlService;
 use App\Services\ProhibitedWordsService;
 use App\Services\SkOfficialsNotificationDispatcher;
+use App\Support\MailUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -765,11 +766,15 @@ class AnnouncementFeedController extends Controller
         }
 
         if (str_starts_with($raw, 'http://') || str_starts_with($raw, 'https://')) {
+            if (MailUrl::isLoopback($raw)) {
+                return MailUrl::sameOrigin($raw);
+            }
+
             return $this->cloudinary->normalizeUrl($raw) ?: $raw;
         }
 
         if (str_starts_with($raw, '/storage/') || str_starts_with($raw, 'storage/')) {
-            return url('/'.ltrim($raw, '/'));
+            return MailUrl::uri('/'.ltrim($raw, '/'));
         }
 
         $normalized = $this->cloudinary->normalizeUrl($raw);

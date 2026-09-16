@@ -5,6 +5,7 @@ namespace App\Modules\KKProfiling\Controllers;
 use App\Http\Controllers\Controller;
 use App\Services\KkProfilingAccountInviteService;
 use App\Services\TurnstileService;
+use App\Support\MailUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -101,7 +102,7 @@ class KKProfilingAccountInviteController extends Controller
             return response()->json([
                 'success' => true,
                 'activated' => true,
-                'redirect_url' => route('sign-in'),
+                'redirect_url' => MailUrl::sameOrigin(route('sign-in')),
                 'message' => $successMessage,
             ]);
         }

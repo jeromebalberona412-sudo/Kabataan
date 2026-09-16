@@ -315,12 +315,25 @@ class PublicProgramAccomplishmentService
     private function officialsAppUrl(): string
     {
         $configured = rtrim((string) config('services.sk_officials_app_url', ''), '/');
-        $requestHost = request()->getHost();
-        $isLoopback = $configured === ''
-            || str_contains($configured, 'localhost')
+        if ($configured === '') {
+            return '';
+        }
+
+        $isLoopback = str_contains($configured, 'localhost')
             || str_contains($configured, '127.0.0.1');
 
-        if ($isLoopback && $requestHost !== '' && ! in_array($requestHost, ['localhost', '127.0.0.1'], true)) {
+        if (! $isLoopback) {
+            return $configured;
+        }
+
+        // LAN-only: rewrite loopback Officials URL onto the current private host.
+        // Never do this in deployment — that would mint example.com:8000 links.
+        if (! app()->environment('local')) {
+            return '';
+        }
+
+        $requestHost = request()->getHost();
+        if ($requestHost !== '' && ! in_array($requestHost, ['localhost', '127.0.0.1'], true)) {
             $scheme = request()->getScheme() ?: 'http';
             $port = parse_url($configured, PHP_URL_PORT) ?: 8000;
 
