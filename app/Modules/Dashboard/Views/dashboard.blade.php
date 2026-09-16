@@ -38,9 +38,9 @@
         'app/Modules/Dashboard/assets/css/notif.css',
         'app/Modules/Dashboard/assets/js/notif.js',
     ])
-    <link rel="preload" href="{{ url('/sounds/reactions_ux.mp3') }}" as="audio" type="audio/mpeg">
     <script>
         window.__BARANGAY_PROFILES__ = @json($barangayProfiles ?? []);
+        window.__kabataanPrograms = @json($kabataanPrograms ?? null);
     </script>
     <style>
         .post-card-new {
@@ -118,13 +118,13 @@
     <main class="dashboard-main">
         <div class="dashboard-container">
             <!-- Left Sidebar - Programs -->
-            <aside class="programs-sidebar-left">
+            <aside class="programs-sidebar-left" data-tour="programs">
                 <div class="sidebar-card">
                     <h2 class="sidebar-title">Programs in Your Barangay</h2>
                     <p class="sidebar-subtitle">Available programs in Barangay {{ $barangayName ?? ($user->barangay ?? '1') }}</p>
                     
                     <div class="program-categories" id="programCategoriesContainer">
-                        <p style="text-align:center;color:#64748b;padding:16px;font-size:14px;">Loading programs…</p>
+                        @include('programs::partials.program-categories-sidebar', ['kabataanPrograms' => $kabataanPrograms ?? []])
                     </div>
                 </div>
             </aside>
@@ -177,7 +177,7 @@
                 </div>
                 <div class="feed-filter-anchor" aria-hidden="true"></div>
                 
-                <div class="feed-header">
+                <div class="feed-header" data-tour="community-feed">
                     <div class="feed-header__intro">
                         <h1>SK Community Feed</h1>
                         <p>Posts, events, and programs from your barangay SK.</p>
@@ -207,7 +207,7 @@
             </div>
 
             <!-- Right Sidebar - Barangay SK Profiles -->
-            <aside class="barangay-sidebar-right">
+            <aside class="barangay-sidebar-right" data-tour="barangay-profiles">
                 <div class="sidebar-card">
                     <h2 class="sidebar-title">Barangay SK Profiles</h2>
                     <p class="sidebar-subtitle">Browse SK officials from each barangay.</p>
@@ -224,7 +224,7 @@
 
     <!-- Mobile Drawer -->
     <aside class="programs-sidebar" id="programsDrawerSidebar">
-        <div class="sidebar-card">
+        <div class="sidebar-card" data-tour="programs">
             <div class="programs-drawer-head">
                 <div class="programs-drawer-head__text">
                     <h2 class="sidebar-title">Programs in Your Barangay</h2>
@@ -236,12 +236,12 @@
             </div>
             
             <div class="program-categories" id="programCategoriesDrawerContainer">
-                <p style="text-align:center;color:#64748b;padding:16px;font-size:14px;">Loading programs…</p>
+                @include('programs::partials.program-categories-sidebar', ['kabataanPrograms' => $kabataanPrograms ?? []])
             </div>
         </div>
 
         {{-- Barangay SK Profiles --}}
-        <div class="sidebar-card" style="margin-top:16px;">
+        <div class="sidebar-card" style="margin-top:16px;" data-tour="barangay-profiles">
             <h2 class="sidebar-title">Barangay SK Profiles</h2>
             <p class="sidebar-subtitle">Browse SK officials from each barangay.</p>
             <div class="barangay-profiles-list">
@@ -870,45 +870,10 @@
     </script>
 
     <script>
-    // Disqualify page from bfcache — back button will always hit the server
-    window.addEventListener('unload', function () {});
+    window.addEventListener('pageshow', function (e) {
+        if (e.persisted) { window.location.replace(window.location.href); }
+    });
     </script>
-
-    <div id="feedToast" class="feed-toast" role="status" aria-live="polite"></div>
-
-    <div id="editCommentModal" class="program-modal comment-action-modal">
-        <div class="modal-overlay" onclick="closeEditCommentModal()"></div>
-        <div class="modal-container" style="max-width:440px;">
-            <div class="modal-header">
-                <h2>Edit Comment</h2>
-                <button type="button" class="modal-close" onclick="closeEditCommentModal()" aria-label="Close"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg></button>
-            </div>
-            <div class="modal-body">
-                <textarea id="editCommentBody" class="edit-comment-textarea" maxlength="2000" placeholder="Write a comment..."></textarea>
-            </div>
-            <div class="modal-footer-btns" style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid #e0e0e0;">
-                <button type="button" class="btn-secondary" onclick="closeEditCommentModal()">Cancel</button>
-                <button type="button" class="btn-primary" id="confirmEditCommentBtn" onclick="confirmEditComment()">Save</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="deleteCommentModal" class="program-modal comment-action-modal">
-        <div class="modal-overlay" onclick="closeDeleteCommentModal()"></div>
-        <div class="modal-container" style="max-width:440px;">
-            <div class="modal-header">
-                <h2>Delete Comment</h2>
-                <button type="button" class="modal-close" onclick="closeDeleteCommentModal()" aria-label="Close"><svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg></button>
-            </div>
-            <div class="modal-body">
-                <p style="font-size:14px;color:#555;line-height:1.65;margin:0;">Delete this comment? This cannot be undone.</p>
-            </div>
-            <div class="modal-footer-btns" style="display:flex;gap:10px;justify-content:flex-end;padding:14px 22px;border-top:1px solid #e0e0e0;">
-                <button type="button" class="btn-secondary" onclick="closeDeleteCommentModal()">Cancel</button>
-                <button type="button" class="btn-danger" id="confirmDeleteCommentBtn" onclick="confirmDeleteComment()">Delete</button>
-            </div>
-        </div>
-    </div>
 
     @include('dashboard::comment-preview')
 
@@ -928,7 +893,7 @@
         userAvatar: @json($userAvatarUrl ?? ''),
         userDisplayName: @json(\Illuminate\Support\Str::limit($user->name ?? 'Kabataan', 50, '...')),
         commentsPageUrl: @json(url('/dashboard/comments/__ID__')),
-        feedPollMs: 5000,
+        feedPollMs: 2500,
         prohibitedWords: @json(config('prohibited_words', [])),
     };
     window.__skProhibitedWords = window.CommunityFeedConfig.prohibitedWords;
@@ -958,6 +923,64 @@
     let feedRequestToken = 0;
     const renderedPostIds = new Set();
     const postCache = new Map();
+    const FEED_LS_KEY = 'kabataan_community_feed_v1';
+
+    function readFeedLocalCache() {
+        try {
+            const raw = localStorage.getItem(FEED_LS_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return null;
+            if (Date.now() - Number(parsed.savedAt || 0) > 30 * 60 * 1000) return null;
+            return parsed;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function writeFeedLocalCache(items, filter, search) {
+        try {
+            localStorage.setItem(FEED_LS_KEY, JSON.stringify({
+                items: (items || []).slice(0, 12),
+                filter: filter || 'all',
+                search: search || '',
+                savedAt: Date.now(),
+            }));
+        } catch (e) { /* ignore quota */ }
+    }
+
+    function paintFeedPosts(items, { reset = true, clearLoading = true } = {}) {
+        const container = document.getElementById('feed-posts');
+        if (!container || !Array.isArray(items)) return;
+        if (reset) {
+            renderedPostIds.clear();
+            container.innerHTML = '';
+        }
+        const fragment = document.createDocumentFragment();
+        items.forEach((p) => {
+            const id = Number(p.id);
+            if (!id) return;
+            mergeCachedPost(p);
+            if (renderedPostIds.has(String(id)) || container.querySelector(`.post-card[data-post-id="${id}"]`)) {
+                mountFeedPost(p, 'append');
+                return;
+            }
+            renderedPostIds.add(String(id));
+            const el = document.createElement('article');
+            el.className = 'post-card';
+            el.dataset.postId = String(id);
+            el.dataset.mediaAlbum = JSON.stringify(feedPostMediaItems(p));
+            el.innerHTML = buildFeedPost(p);
+            fragment.appendChild(el);
+            bindFeedReactionControls(el);
+            bindPostImageClicks(el);
+            window.KabataanFeedVideos?.bindFeedVideos(el);
+        });
+        container.appendChild(fragment);
+        if (clearLoading) {
+            container.querySelectorAll('.feed-loading-card').forEach((n) => n.remove());
+        }
+    }
 
     const FEED_REACTION_SOUND_URL = '/sounds/reactions_ux.mp3';
     let feedReactionAudio = null;
@@ -965,9 +988,8 @@
     function ensureFeedReactionAudio() {
         if (!feedReactionAudio) {
             feedReactionAudio = new Audio(FEED_REACTION_SOUND_URL);
-            feedReactionAudio.preload = 'auto';
+            feedReactionAudio.preload = 'none';
             feedReactionAudio.volume = 0.75;
-            try { feedReactionAudio.load(); } catch (e) {}
         }
         return feedReactionAudio;
     }
@@ -998,7 +1020,6 @@
     }
 
     window.playFeedReactionSound = playFeedReactionSound;
-    ensureFeedReactionAudio();
 
     function showFeedToast(message, type) {
         const el = document.getElementById('feedToast');
@@ -1089,6 +1110,7 @@
         const el = document.createElement('article');
         el.className = 'post-card';
         el.dataset.postId = String(id);
+        el.dataset.mediaAlbum = JSON.stringify(feedPostMediaItems(p));
         el.innerHTML = buildFeedPost(p);
         if (mode === 'prepend') {
             container.prepend(el);
@@ -1150,9 +1172,12 @@
             feedLoading = false;
             return;
         }
-        if (reset) {
+        // Keep existing posts visible while refreshing — no loading flash.
+        if (reset && !container.querySelector('.post-card[data-post-id]')) {
             renderedPostIds.clear();
             container.innerHTML = '<div class="post-card feed-loading-card">Loading community feed…</div>';
+        } else if (reset) {
+            renderedPostIds.clear();
         }
 
         try {
@@ -1175,26 +1200,10 @@
                 return;
             }
 
-            const fragment = document.createDocumentFragment();
-            items.forEach((p) => {
-                const id = Number(p.id);
-                if (!id) return;
-                mergeCachedPost(p);
-                if (renderedPostIds.has(String(id)) || container.querySelector(`.post-card[data-post-id="${id}"]`)) {
-                    mountFeedPost(p, 'append');
-                    return;
-                }
-                renderedPostIds.add(String(id));
-                const el = document.createElement('article');
-                el.className = 'post-card';
-                el.dataset.postId = String(id);
-                el.innerHTML = buildFeedPost(p);
-                fragment.appendChild(el);
-                bindFeedReactionControls(el);
-                bindPostImageClicks(el);
-                window.KabataanFeedVideos?.bindFeedVideos(el);
-            });
-            container.appendChild(fragment);
+            paintFeedPosts(items, { reset: false, clearLoading: true });
+            if (reset && feedPage === 1 && !feedSearch) {
+                writeFeedLocalCache(items, feedFilter, feedSearch);
+            }
             if (feedPage >= feedLastPage && feedLastPage >= 1) {
                 feedEndConfirmed = true;
             }
@@ -1334,6 +1343,12 @@
         btn.addEventListener('click', () => setFeedFilter(btn, btn.dataset.feedFilter || 'all'));
     });
 
+    (function hydrateFeedFromLocalCache() {
+        const cached = readFeedLocalCache();
+        if (!cached || cached.filter !== feedFilter || (cached.search || '') !== '') return;
+        paintFeedPosts(cached.items, { reset: true, clearLoading: true });
+    })();
+
     loadFeed(true);
 
     const feedSearchInput = document.getElementById('feedSearchInput');
@@ -1348,6 +1363,25 @@
 
     function feedEscape(v) {
         return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function feedLinkify(text) {
+        const escaped = feedEscape(text);
+        return escaped.replace(
+            /(https?:\/\/[^\s<]+)/g,
+            '<a href="$1" target="_blank" rel="noopener noreferrer" class="post-inline-link">$1</a>'
+        );
+    }
+
+    function feedPostMediaItems(p) {
+        const images = feedPostImages(p);
+        const videos = Array.isArray(p?.videos) ? p.videos.filter(Boolean) : [];
+        const items = images.map((url) => ({ kind: 'image', url }));
+        videos.forEach((video, videoIndex) => items.push({ kind: 'video', videoIndex, ...video }));
+        if (!videos.length && p?.google_drive_video) {
+            items.push({ kind: 'video', videoIndex: 0, ...p.google_drive_video });
+        }
+        return items;
     }
 
     function feedTruncate(str, max = 50) {
@@ -1527,7 +1561,7 @@
                         <span class="fb-comment-dot">·</span>
                         <span class="comment-time">${feedEscape(comment.time || '')}</span>
                     </div>
-                    <p class="comment-text">${feedEscape(comment.body)}</p>
+                    <p class="comment-text">${feedLinkify(comment.body)}</p>
                     <div class="comment-meta">
                         <span class="comment-like-btn">${commentLikeInner(comment.reaction_type)}</span>
                         <span class="comment-action-btn">Reply</span>
@@ -1582,7 +1616,7 @@
                    <span class="comment-time">${feedEscape(comment.time)}</span>
                    ${optionsHtml}
                  </div>
-                 <p class="comment-text" id="feed-comment-text-${comment.id}">${feedEscape(comment.body)}</p>
+                 <p class="comment-text" id="feed-comment-text-${comment.id}">${feedLinkify(comment.body)}</p>
                  <div class="comment-meta-row">
                    <div class="reaction-wrap comment-like-wrap" data-target="comment" data-post-id="${postId}" data-comment-id="${comment.id}">
                      <button type="button" class="comment-like-btn${comment.liked ? ' liked' : ''}" data-type="${feedEscape(type)}">${commentLikeInner(type)}</button>
@@ -1613,12 +1647,29 @@
         } catch (_) {
             images = [];
         }
-        if (!images.length) return;
+        let mediaItems = [];
+        try {
+            mediaItems = JSON.parse(grid.getAttribute('data-media-album') || '[]');
+        } catch (_) {
+            mediaItems = [];
+        }
+        if (!mediaItems.length && images.length) {
+            mediaItems = images.map((url) => ({ kind: 'image', url }));
+        }
+        if (!mediaItems.length) return;
         grid.querySelectorAll('[data-image-index]').forEach((el) => {
             el.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                openLightbox(images, parseInt(el.dataset.imageIndex, 10) || 0);
+                const imageIndex = parseInt(el.dataset.imageIndex, 10) || 0;
+                const startIndex = mediaItems.findIndex((item, idx) =>
+                    item.kind === 'image' && (item.url === images[imageIndex] || idx === imageIndex)
+                );
+                if (typeof window.KabataanFeedVideos?.openMediaLightbox === 'function') {
+                    window.KabataanFeedVideos.openMediaLightbox(mediaItems, startIndex >= 0 ? startIndex : imageIndex);
+                    return;
+                }
+                openLightbox(images, imageIndex);
             });
         });
     }
@@ -1627,6 +1678,7 @@
         const images = feedPostImages(p);
         const videos = Array.isArray(p?.videos) ? p.videos.filter(Boolean) : [];
         const hasLegacyDrive = !!(p?.google_drive_video) && videos.length === 0;
+        const mediaAlbum = feedEscape(JSON.stringify(feedPostMediaItems(p)));
         let media = '';
         let videoHtml = '';
 
@@ -1635,7 +1687,7 @@
             const encoded = feedEscape(JSON.stringify(images));
             const imgTag = `<img src="${feedEscape(images[0])}" loading="lazy" alt="" data-image-index="0" onerror="this.style.display='none'">`;
             const singleVideoHtml = window.KabataanFeedVideos?.buildPostVideosHtml(p) || '';
-            media = `<div class="post-media-mixed grid-2" data-all-images="${encoded}">
+            media = `<div class="post-media-mixed grid-2" data-all-images="${encoded}" data-media-album="${mediaAlbum}">
                 <div class="post-media-mixed-item post-media-mixed-image">${imgTag}</div>
                 <div class="post-media-mixed-item post-media-mixed-video">${singleVideoHtml}</div>
             </div>`;
@@ -1645,16 +1697,16 @@
                 const imgTag = (src, index) =>
                     `<img src="${feedEscape(src)}" loading="lazy" alt="" data-image-index="${index}" onerror="this.style.display='none'">`;
                 if (images.length === 1) {
-                    media = `<div class="post-image" data-all-images="${encoded}">${imgTag(images[0], 0)}</div>`;
+                    media = `<div class="post-image" data-all-images="${encoded}" data-media-album="${mediaAlbum}">${imgTag(images[0], 0)}</div>`;
                 } else if (images.length === 2) {
-                    media = `<div class="post-images-grid grid-2" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
+                    media = `<div class="post-images-grid grid-2" data-all-images="${encoded}" data-media-album="${mediaAlbum}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
                 } else if (images.length === 3) {
-                    media = `<div class="post-images-grid grid-3" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
+                    media = `<div class="post-images-grid grid-3" data-all-images="${encoded}" data-media-album="${mediaAlbum}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
                 } else if (images.length === 4) {
-                    media = `<div class="post-images-grid grid-4" data-all-images="${encoded}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
+                    media = `<div class="post-images-grid grid-4" data-all-images="${encoded}" data-media-album="${mediaAlbum}">${images.map((img, i) => imgTag(img, i)).join('')}</div>`;
                 } else {
                     const remaining = images.length - 4;
-                    media = `<div class="post-images-grid grid-4" data-all-images="${encoded}">
+                    media = `<div class="post-images-grid grid-4" data-all-images="${encoded}" data-media-album="${mediaAlbum}">
                         ${images.slice(0, 3).map((img, i) => imgTag(img, i)).join('')}
                         <div class="image-more-overlay" data-image-index="3">
                             <img src="${feedEscape(images[3])}" loading="lazy" alt="">
@@ -1684,7 +1736,7 @@
           </div>
           <div class="post-content">
             ${p.title ? `<h2 class="post-title">${feedEscape(p.title)}</h2>` : ''}
-            <p class="post-text">${feedEscape(p.body)}</p>
+            <p class="post-text">${feedLinkify(p.body)}</p>
             ${media}${videoHtml}${link}
           </div>
           ${reactionsSummary}
@@ -1939,7 +1991,15 @@
         const modal = document.getElementById('editCommentModal');
         const field = document.getElementById('editCommentBody');
         if (!modal || !field) return;
-        field.value = commentBodyText(commentId);
+        field.value = (typeof window.FeedCommentGuard?.normalizeCommentText === 'function')
+            ? window.FeedCommentGuard.normalizeCommentText(commentBodyText(commentId))
+            : String(commentBodyText(commentId) || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+        field.setAttribute('maxlength', '1000');
+        window.FeedCommentGuard?.bindLengthGuard?.(field);
+        const counter = document.getElementById('editCommentCounter');
+        if (counter) {
+            counter.textContent = field.value.length + ' / 1000';
+        }
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
         setTimeout(function () { field.focus(); }, 50);
@@ -1958,10 +2018,13 @@
         const postId = pendingCommentAction.postId;
         const commentId = pendingCommentAction.commentId;
         const isReply = pendingCommentAction.isReply;
-        const body = document.getElementById('editCommentBody')?.value.trim();
+        const raw = document.getElementById('editCommentBody')?.value || '';
+        const body = (typeof window.FeedCommentGuard?.normalizeCommentText === 'function')
+            ? window.FeedCommentGuard.normalizeCommentText(raw)
+            : String(raw).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
         if (!body) return;
-        if (body.length > 2000) {
-            notifyFeed('Comments and replies are limited to 2,000 characters.', 'error');
+        if (body.length > 1000) {
+            notifyFeed(window.FeedCommentGuard?.COMMENT_LIMIT_MSG || 'Comments and replies are limited to 1,000 characters.', 'error');
             return;
         }
         const prohibited = window.ProhibitedWords?.assertClean?.(body);
@@ -1970,7 +2033,11 @@
             return;
         }
         const btn = document.getElementById('confirmEditCommentBtn');
-        if (btn) btn.disabled = true;
+        if (btn?.classList.contains('is-loading')) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+        }
         try {
             const updated = await apiFeed(`/api/feed/${postId}/comments/${commentId}`, {
                 method: 'PUT',
@@ -1978,16 +2045,19 @@
                 body: JSON.stringify({ body }),
             });
             const feedEl = document.getElementById('feed-comment-text-' + commentId);
-            if (feedEl) feedEl.textContent = updated.body;
+            if (feedEl) feedEl.innerHTML = feedLinkify(updated.body);
             const previewEl = document.getElementById('cp-text-' + commentId);
-            if (previewEl) previewEl.textContent = updated.body;
+            if (previewEl) previewEl.innerHTML = feedLinkify(updated.body);
             document.dispatchEvent(new CustomEvent('community-feed:comment-updated', { detail: updated }));
             closeEditCommentModal();
             notifyFeed(isReply ? 'Reply updated successfully.' : 'Comment updated successfully.');
         } catch (_) {
             notifyFeed(isReply ? 'Unable to update the reply. Please try again.' : 'Unable to update the comment. Please try again.', 'error');
         } finally {
-            if (btn) btn.disabled = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+            }
         }
     }
 
@@ -2022,7 +2092,11 @@
         const commentId = pendingCommentAction.commentId;
         const isReply = pendingCommentAction.isReply;
         const btn = document.getElementById('confirmDeleteCommentBtn');
-        if (btn) btn.disabled = true;
+        if (btn?.classList.contains('is-loading')) return;
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+        }
         try {
             await apiFeed(`/api/feed/${postId}/comments/${commentId}`, { method: 'DELETE' });
             document.querySelectorAll('[data-comment-id="' + commentId + '"]').forEach(function (el) { el.remove(); });
@@ -2032,7 +2106,10 @@
         } catch (_) {
             notifyFeed(isReply ? 'Unable to delete the reply. Please try again.' : 'Unable to delete the comment. Please try again.', 'error');
         } finally {
-            if (btn) btn.disabled = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+            }
         }
     }
 
@@ -2087,12 +2164,6 @@
     }
 
     window.feedSetReaction = feedSetReaction;
-    window.editComment = editComment;
-    window.deleteComment = deleteComment;
-    window.confirmEditComment = confirmEditComment;
-    window.confirmDeleteComment = confirmDeleteComment;
-    window.closeEditCommentModal = closeEditCommentModal;
-    window.closeDeleteCommentModal = closeDeleteCommentModal;
     window.openComments = openComments;
     window.openFeedReactionViewer = openFeedReactionViewer;
     window.closeFeedReactionViewer = closeFeedReactionViewer;
@@ -2166,15 +2237,17 @@
     }
 
     async function feedSubmitComment(id, input) {
-        const text = input.value.trim();
+        const text = (typeof window.FeedCommentGuard?.normalizeCommentText === 'function')
+            ? window.FeedCommentGuard.normalizeCommentText(input.value)
+            : String(input.value || '').replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
         if (!text) return;
         const cooldownError = window.FeedCommentGuard?.assertCanComment?.();
         if (cooldownError) {
             notifyFeed(cooldownError, 'error');
             return;
         }
-        if (text.length > 2000) {
-            notifyFeed('Comments and replies are limited to 2,000 characters.', 'error');
+        if (text.length > 1000) {
+            notifyFeed(window.FeedCommentGuard?.COMMENT_LIMIT_MSG || 'Comments and replies are limited to 1,000 characters.', 'error');
             return;
         }
         const prohibited = window.ProhibitedWords?.assertClean?.(text);

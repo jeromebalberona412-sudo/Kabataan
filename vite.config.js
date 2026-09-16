@@ -39,6 +39,10 @@ export default defineConfig({
                 'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
                 'app/Modules/Homepage/assets/css/kabataan-footer.css',
 
+                // Tutorial Guide
+                'app/Modules/Tutorial_Guide/assets/css/tutorial-guide.css',
+                'app/Modules/Tutorial_Guide/assets/js/tutorial-guide.js',
+
                 // Dashboard
                 'app/Modules/Dashboard/assets/css/dashboard.css',
                 'app/Modules/Dashboard/assets/css/feed-videos.css',
@@ -98,6 +102,7 @@ export default defineConfig({
                 'app/Modules/Profile/assets/css/change-email.css',
                 'app/Modules/Profile/assets/css/change-password.css',
                 'app/Modules/Profile/assets/js/profile.js',
+                'app/Modules/Profile/assets/js/profile-document-lightbox.js',
                 'app/Modules/Profile/assets/js/profile-participation.js',
                 'app/Modules/Profile/assets/js/change-email.js',
                 'app/Modules/Profile/assets/js/change-email-verify.js',

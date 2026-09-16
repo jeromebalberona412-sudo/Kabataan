@@ -23,6 +23,7 @@
         'app/Modules/Profile/assets/css/profile-personal-info.css',
         'app/Modules/Profile/assets/css/profile-personal-info-responsive.css',
         'app/Modules/Profile/assets/js/profile.js',
+        'app/Modules/Profile/assets/js/profile-document-lightbox.js',
         'app/Modules/Profile/assets/js/profile-participation.js',
         'app/Modules/Dashboard/assets/css/notif.css',
         'app/Modules/Dashboard/assets/js/notif.js',
@@ -166,6 +167,9 @@
                 closeProfilePictureLockModal();
                 closeProfilePictureUploadModal();
                 closeProfilePictureConfirmModal();
+                if (document.getElementById('profileDocLightbox')?.classList.contains('is-open')) {
+                    return;
+                }
                 closeSupportingDocsModal();
                 if (typeof closeKkPreviewModal === 'function') {
                     closeKkPreviewModal();
@@ -576,12 +580,18 @@
             </div>
             <div class="modal-body kabataan-modal-body kkp-docs-modal-body">
                 @if(!empty($supportingDocuments))
-                <div class="kkp-profile-docs-grid kkp-profile-docs-grid--preview">
+                        <div class="kkp-profile-docs-grid kkp-profile-docs-grid--preview" id="profileSupportingDocsGrid">
                     @foreach($supportingDocuments as $document)
                         <div class="kkp-profile-doc-card">
-                            <a href="{{ $document['url'] }}" target="_blank" rel="noopener" class="kkp-profile-doc-thumb-link">
+                            <button
+                                type="button"
+                                class="kkp-profile-doc-thumb-btn"
+                                data-doc-src="{{ $document['url'] }}"
+                                data-doc-label="{{ $document['label'] }}"
+                                aria-label="View {{ $document['label'] }} with zoom"
+                            >
                                 <img src="{{ $document['url'] }}" alt="{{ $document['label'] }}" class="kkp-profile-doc-thumb" loading="lazy">
-                            </a>
+                            </button>
                             <div class="kkp-profile-doc-meta">
                                 <p class="kkp-profile-doc-label">{{ $document['label'] }}</p>
                                 <p class="kkp-profile-doc-name">{{ $document['display_name'] }}</p>
@@ -682,6 +692,42 @@
         </div>
     </div>
     @endif
+
+    <div
+        id="profileDocLightbox"
+        class="profile-doc-lightbox"
+        aria-hidden="true"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profileDocLightboxTitle"
+    >
+        <div class="profile-doc-lightbox-backdrop" data-profile-doc-lightbox-close tabindex="-1"></div>
+        <div class="profile-doc-lightbox-panel">
+            <div class="profile-doc-lightbox-header">
+                <h2 id="profileDocLightboxTitle" class="profile-doc-lightbox-title">Supporting document</h2>
+                <button
+                    type="button"
+                    class="profile-doc-lightbox-close"
+                    data-profile-doc-lightbox-close
+                    aria-label="Close"
+                >&times;</button>
+            </div>
+            <div class="profile-doc-lightbox-toolbar">
+                <button type="button" id="profileDocLightboxZoomOut" class="profile-doc-lightbox-tool" aria-label="Zoom out">−</button>
+                <span id="profileDocLightboxZoomLevel" class="profile-doc-lightbox-zoom-level">100%</span>
+                <button type="button" id="profileDocLightboxZoomIn" class="profile-doc-lightbox-tool" aria-label="Zoom in">+</button>
+                <button type="button" id="profileDocLightboxZoomReset" class="profile-doc-lightbox-tool profile-doc-lightbox-reset" aria-label="Reset zoom">Reset</button>
+            </div>
+            <div class="profile-doc-lightbox-stage">
+                <button type="button" id="profileDocLightboxPrev" class="profile-doc-lightbox-nav profile-doc-lightbox-prev" aria-label="Previous image" hidden>&#10094;</button>
+                <div class="profile-doc-lightbox-viewport" id="profileDocLightboxViewport">
+                    <img id="profileDocLightboxImage" src="" alt="Supporting document" draggable="false">
+                </div>
+                <button type="button" id="profileDocLightboxNext" class="profile-doc-lightbox-nav profile-doc-lightbox-next" aria-label="Next image" hidden>&#10095;</button>
+            </div>
+            <div id="profileDocLightboxCounter" class="profile-doc-lightbox-counter" hidden></div>
+        </div>
+    </div>
 
     <div class="modal-backdrop kabataan-modal-backdrop" id="kkPreviewModal" style="display: none;">
         <div class="modal-box kabataan-modal-box kk-preview-modal-container" id="kkPreviewModalPanel">

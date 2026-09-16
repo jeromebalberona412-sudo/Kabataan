@@ -6,6 +6,9 @@
 
     const scheduleProgramId = Number(window.__scheduleProgramId || 0);
     const startApplicationBtn = document.getElementById('startApplicationBtn');
+    const schedulePicker = document.getElementById('scholarshipSchedulePicker');
+    const scheduleSelect = document.getElementById('scholarshipScheduleSelect');
+    const startHint = document.getElementById('scholarshipStartHint');
     const previousApplicationsTable = document.getElementById('previousApplicationsTable');
     const applicationViewModal = document.getElementById('applicationViewModal');
     const applicationViewContainer = document.getElementById('applicationViewContainer');
@@ -35,6 +38,8 @@
 
     let currentApplications = [];
     let activeViewApplicationId = null;
+    let selectedScheduleId = scheduleProgramId || 0;
+    let openSchedules = [];
 
     function getCsrfToken() {
         return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -100,34 +105,118 @@
         return data.application;
     }
 
+    async function fetchOpenScholarshipSchedules() {
+        const response = await fetch('/api/kabataan/programs', {
+            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) return [];
+        const data = await response.json();
+        const schedules = Array.isArray(data.schedule_programs) ? data.schedule_programs : [];
+        return schedules.filter((schedule) => {
+            const letter = String(schedule.program_letter || '').toUpperCase();
+            const status = String(schedule.status || '').toLowerCase();
+            return letter === 'A' && status === 'open';
+        });
+    }
+
+    function setStartButtonState({ enabled, label, hint }) {
+        if (!startApplicationBtn) return;
+        startApplicationBtn.disabled = !enabled;
+        startApplicationBtn.style.opacity = enabled ? '' : '0.55';
+        startApplicationBtn.style.cursor = enabled ? '' : 'not-allowed';
+
+        const labelEl = startApplicationBtn.querySelector('span');
+        if (labelEl) {
+            labelEl.textContent = label || 'Start Scholarship Application';
+        } else {
+            startApplicationBtn.textContent = label || 'Start Scholarship Application';
+        }
+
+        if (startHint) {
+            if (hint) {
+                startHint.hidden = false;
+                startHint.textContent = hint;
+            } else {
+                startHint.hidden = true;
+                startHint.textContent = '';
+            }
+        }
+    }
+
+    function renderSchedulePicker(schedules) {
+        if (!schedulePicker || !scheduleSelect) return;
+
+        if (!schedules.length) {
+            schedulePicker.hidden = true;
+            scheduleSelect.innerHTML = '<option value="">Choose a program…</option>';
+            return;
+        }
+
+        if (schedules.length === 1) {
+            schedulePicker.hidden = true;
+            selectedScheduleId = Number(schedules[0].id) || 0;
+            return;
+        }
+
+        schedulePicker.hidden = false;
+        scheduleSelect.innerHTML = '<option value="">Choose a program…</option>' + schedules.map((schedule) => {
+            const name = escapeHtml(schedule.program_name || schedule.title || `Scholarship #${schedule.id}`);
+            const schoolYear = escapeHtml(schedule.school_year || schedule.scholarship_details?.school_year || '');
+            const label = schoolYear ? `${name} (${schoolYear})` : name;
+            return `<option value="${Number(schedule.id)}">${label}</option>`;
+        }).join('');
+
+        if (selectedScheduleId) {
+            scheduleSelect.value = String(selectedScheduleId);
+        }
+    }
+
     function updateStartButton(applications) {
         if (!startApplicationBtn) return;
 
-        const currentApplication = scheduleProgramId
-            ? applications.find((app) => Number(app.schedule_program_id) === scheduleProgramId)
+        const activeScheduleId = selectedScheduleId || scheduleProgramId;
+        const currentApplication = activeScheduleId
+            ? applications.find((app) => Number(app.schedule_program_id) === Number(activeScheduleId))
             : null;
         const hasActiveApplication = isActiveApplication(currentApplication);
 
-        if (!scheduleProgramId) {
-            startApplicationBtn.disabled = true;
-            startApplicationBtn.textContent = 'Start Scholarship Application';
-            startApplicationBtn.style.opacity = '0.5';
-            startApplicationBtn.style.cursor = 'not-allowed';
+        if (!activeScheduleId) {
+            const hasOpen = openSchedules.length > 0;
+            setStartButtonState({
+                enabled: false,
+                label: 'Start Scholarship Application',
+                hint: hasOpen
+                    ? 'Select an open scholarship program to continue.'
+                    : 'No open scholarship programs from your barangay SK Officials yet.',
+            });
             return;
         }
 
         if (hasActiveApplication) {
-            startApplicationBtn.disabled = true;
-            startApplicationBtn.textContent = 'Already Applied';
-            startApplicationBtn.style.opacity = '0.5';
-            startApplicationBtn.style.cursor = 'not-allowed';
+            setStartButtonState({
+                enabled: false,
+                label: 'Already Applied',
+                hint: 'You already have an active application for this scholarship program.',
+            });
             return;
         }
 
-        startApplicationBtn.disabled = false;
-        startApplicationBtn.textContent = 'Start Scholarship Application';
-        startApplicationBtn.style.opacity = '';
-        startApplicationBtn.style.cursor = '';
+        const selected = openSchedules.find((item) => Number(item.id) === Number(activeScheduleId));
+        if (selected && selected.can_apply === false) {
+            setStartButtonState({
+                enabled: false,
+                label: 'Not Eligible',
+                hint: selected.eligibility_message || 'You are not eligible for this scholarship program.',
+            });
+            return;
+        }
+
+        setStartButtonState({
+            enabled: true,
+            label: 'Start Scholarship Application',
+            hint: '',
+        });
     }
 
     function renderPersonalInfoItems(items) {
@@ -572,17 +661,31 @@
         }
 
         renderPreviousApplications(applications);
+
+        if (!scheduleProgramId) {
+            try {
+                openSchedules = await fetchOpenScholarshipSchedules();
+            } catch (_) {
+                openSchedules = [];
+            }
+            if (openSchedules.length === 1) {
+                selectedScheduleId = Number(openSchedules[0].id) || 0;
+            }
+            renderSchedulePicker(openSchedules);
+            updateStartButton(applications);
+        }
     }
 
     function handleStartApplication() {
-        if (!scheduleProgramId) return;
+        const targetScheduleId = selectedScheduleId || scheduleProgramId;
+        if (!targetScheduleId || startApplicationBtn?.disabled) return;
 
         const proceed = () => {
-            window.location.href = `/scholarship/apply?schedule=${encodeURIComponent(scheduleProgramId)}`;
+            window.location.href = `/scholarship/apply?schedule=${encodeURIComponent(targetScheduleId)}`;
         };
 
         if (window.ScholarshipDataPrivacy) {
-            window.ScholarshipDataPrivacy.requestConsent(scheduleProgramId, proceed);
+            window.ScholarshipDataPrivacy.requestConsent(targetScheduleId, proceed);
             return;
         }
 
@@ -594,6 +697,13 @@
 
         if (startApplicationBtn) {
             startApplicationBtn.addEventListener('click', handleStartApplication);
+        }
+
+        if (scheduleSelect) {
+            scheduleSelect.addEventListener('change', () => {
+                selectedScheduleId = Number(scheduleSelect.value) || 0;
+                updateStartButton(currentApplications);
+            });
         }
 
         if (applicationViewClose) {

@@ -1,10 +1,10 @@
 /**
- * Comment spam guard + 2k character limit helpers for Community Feed.
+ * Comment spam guard + 1k character limit helpers for Community Feed.
  */
 (function () {
     const BURST_LIMIT = 3;
-    const COMMENT_MAX_CHARS = 2000;
-    const COMMENT_LIMIT_MSG = 'Comments and replies are limited to 2,000 characters.';
+    const COMMENT_MAX_CHARS = 1000;
+    const COMMENT_LIMIT_MSG = 'Comments and replies are limited to 1,000 characters.';
     const COOLDOWN_MSG = (seconds) => (
         `Too many comments. Please wait ${seconds} second(s) before commenting again.`
     );
@@ -29,6 +29,13 @@
         return document.querySelectorAll(
             '#cpCommentInput, #editCommentBody, .comment-input, [data-reply-input]'
         );
+    }
+
+    function normalizeCommentText(text) {
+        return String(text || '')
+            .replace(/[\r\n\u2028\u2029]+/g, ' ')
+            .replace(/[ \t\f\v]+/g, ' ')
+            .trim();
     }
 
     function setInputsDisabled(disabled) {
@@ -103,7 +110,7 @@
         cooldownUntil = until;
         setInputsDisabled(true);
         updateCooldownPlaceholders(secs);
-        if (options.notify !== false) {
+        if (options.notify !== false && !options.silent) {
             notify(COOLDOWN_MSG(secs), 'error');
         }
         if (timerId) clearInterval(timerId);
@@ -134,9 +141,34 @@
         return null;
     }
 
+    function applyNormalizedValue(el, next) {
+        const cleaned = String(next || '')
+            .replace(/[\r\n\u2028\u2029]+/g, ' ')
+            .replace(/[ \t\f\v]+/g, ' ');
+        const clipped = cleaned.slice(0, COMMENT_MAX_CHARS);
+        if (el.value !== clipped) {
+            const start = el.selectionStart;
+            el.value = clipped;
+            if (typeof start === 'number') {
+                const pos = Math.min(start, clipped.length);
+                try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+            }
+        }
+        return clipped;
+    }
+
     function bindLengthGuard(el) {
         if (!el || el.dataset.commentLenBound === '1') return;
         el.dataset.commentLenBound = '1';
+        if (!el.getAttribute('maxlength')) {
+            el.setAttribute('maxlength', String(COMMENT_MAX_CHARS));
+        }
+
+        el.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+            }
+        });
 
         el.addEventListener('beforeinput', (event) => {
             if (event.isComposing) return;
@@ -144,11 +176,18 @@
             if (type.startsWith('delete') || type === 'historyUndo' || type === 'historyRedo') {
                 return;
             }
+            if (type === 'insertLineBreak' || type === 'insertParagraph') {
+                event.preventDefault();
+                return;
+            }
             let insert = '';
-            if (typeof event.data === 'string') insert = event.data;
-            else if (type === 'insertLineBreak' || type === 'insertParagraph') insert = '\n';
-            else if (type === 'insertFromPaste') return;
-            else return;
+            if (typeof event.data === 'string') {
+                insert = event.data.replace(/[\r\n\u2028\u2029]+/g, ' ').replace(/[ \t\f\v]+/g, ' ');
+            } else if (type === 'insertFromPaste') {
+                return;
+            } else {
+                return;
+            }
 
             const value = String(el.value || '');
             const start = el.selectionStart ?? value.length;
@@ -161,16 +200,26 @@
         });
 
         el.addEventListener('paste', (event) => {
+            event.preventDefault();
             const pasted = event.clipboardData?.getData('text') ?? '';
-            if (pasted === '') return;
+            const cleaned = pasted
+                .replace(/[\r\n\u2028\u2029]+/g, ' ')
+                .replace(/[ \t\f\v]+/g, ' ');
             const value = String(el.value || '');
             const start = el.selectionStart ?? value.length;
             const end = el.selectionEnd ?? start;
-            const next = value.slice(0, start) + pasted + value.slice(end);
-            if (next.length > COMMENT_MAX_CHARS) {
-                event.preventDefault();
+            const next = (value.slice(0, start) + cleaned + value.slice(end)).slice(0, COMMENT_MAX_CHARS);
+            el.value = next;
+            const pos = Math.min(start + cleaned.length, next.length);
+            try { el.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            if ((value.slice(0, start) + cleaned + value.slice(end)).length > COMMENT_MAX_CHARS) {
                 notify(COMMENT_LIMIT_MSG, 'error');
             }
+        });
+
+        el.addEventListener('input', () => {
+            applyNormalizedValue(el, el.value);
         });
     }
 
@@ -194,10 +243,15 @@
         applyFromPayload,
         assertCanComment,
         assertBodyLength,
+        normalizeCommentText,
         bindLengthGuard,
         bindAllLengthGuards,
         setInputsDisabled,
     };
 
-    document.addEventListener('DOMContentLoaded', () => bindAllLengthGuards());
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => bindAllLengthGuards());
+    } else {
+        bindAllLengthGuards();
+    }
 })();

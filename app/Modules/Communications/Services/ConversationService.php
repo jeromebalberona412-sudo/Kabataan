@@ -3,6 +3,7 @@
 namespace App\Modules\Communications\Services;
 
 use App\Models\Barangay;
+use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Modules\Communications\Models\Conversation;
 use App\Modules\Communications\Models\ConversationParticipant;
@@ -10,8 +11,8 @@ use App\Modules\Communications\Models\Message;
 use App\Services\BarangayLogoUrlService;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -182,7 +183,12 @@ class ConversationService
             })->values();
         }
 
-        return $items->sortByDesc(fn (array $item) => $item['updated_at'] ?? '')->values();
+        return $items->sortByDesc(function (array $item): int {
+            $iso = (string) ($item['updated_at'] ?? '');
+            $ts = $iso !== '' ? strtotime($iso) : false;
+
+            return $ts !== false ? (int) $ts : 0;
+        })->values();
     }
 
     public function showPayload(Conversation $conversation, Authenticatable $user): array
@@ -256,9 +262,10 @@ class ConversationService
     public function searchUsers(Authenticatable $authUser, string $query): Collection
     {
         $q = trim($query);
-        $limit = (int) config('communications.search_limit', 20);
+        $limit = (int) config('communications.search_limit', 50);
         $viewerType = $this->types->portalType();
-        $viewerBarangayId = (int) ($authUser->barangay_id ?? 0);
+        $viewerBarangayId = $this->resolveUserBarangayId($authUser);
+        $listAllBarangayOfficials = $q === '' && $viewerType === ParticipantTypeResolver::KABATAAN;
 
         if ($q === '' && $viewerType !== ParticipantTypeResolver::KABATAAN) {
             return collect();
@@ -311,9 +318,12 @@ class ConversationService
             $builder->whereIn('role', $this->types->searchableRoles());
         }
 
-        return $builder->orderBy('name')
-            ->limit($limit)
-            ->get()
+        $builder->orderBy('name');
+        if (! $listAllBarangayOfficials) {
+            $builder->limit(max($limit, 1));
+        }
+
+        return $builder->get()
             ->filter(fn (User $user) => $this->canMessage($authUser, $user))
             ->values()
             ->map(fn (User $user) => $this->serializeUser($user, $this->types->fromUser($user)));
@@ -435,7 +445,7 @@ class ConversationService
         }
 
         $fromType = $this->types->portalType();
-        $fromBarangayId = (int) ($from->barangay_id ?? 0);
+        $fromBarangayId = $this->resolveUserBarangayId($from);
         $toBarangayId = (int) ($to->barangay_id ?? 0);
 
         return match ($fromType) {
@@ -536,7 +546,7 @@ class ConversationService
     }
 
     /**
-     * Prefer fresh last_seen (2 min window). Sticky "online" without a recent last_seen is treated offline.
+     * Prefer fresh last_seen (2 min window). Explicit offline status wins.
      *
      * @return array{online_status: string, is_online: bool, last_seen: ?string}
      */
@@ -553,9 +563,18 @@ class ConversationService
             }
         }
 
+        $status = '';
+        if (Schema::hasColumn('users', 'online_status')) {
+            $status = strtolower(trim((string) ($user->online_status ?? '')));
+        }
+
         $isOnline = false;
-        if ($lastSeen) {
+        if ($status === 'offline') {
+            $isOnline = false;
+        } elseif ($lastSeen) {
             $isOnline = $lastSeen->gte(now()->subMinutes(2));
+        } elseif ($status === 'online') {
+            $isOnline = true;
         }
 
         return [
@@ -599,6 +618,25 @@ class ConversationService
         }
 
         return implode(' ', $parts);
+    }
+
+    protected function resolveUserBarangayId(Authenticatable $user): int
+    {
+        $barangayId = (int) ($user->barangay_id ?? 0);
+        if ($barangayId > 0) {
+            return $barangayId;
+        }
+
+        if (! $user instanceof User) {
+            return 0;
+        }
+
+        $registrationBarangayId = KabataanRegistration::query()
+            ->where('user_id', $user->id)
+            ->latest()
+            ->value('barangay_id');
+
+        return $registrationBarangayId !== null ? (int) $registrationBarangayId : 0;
     }
 
     /**

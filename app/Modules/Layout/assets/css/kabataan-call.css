@@ -581,9 +581,10 @@
     }
 }
 
-@media (max-width: 320px) {
-    .comms-modal .comms-btn {
-        min-width: 0;
-        flex: 1 1 120px;
+@media (max-width: 900px) {
+    .comms-remote-video,
+    .comms-local-video {
+        object-fit: contain !important;
+        object-position: center center;
     }
 }

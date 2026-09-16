@@ -1,4 +1,4 @@
-﻿/* Kabataan — Messenger-style floating chat dock */
+/* Kabataan — Messenger-style floating chat dock */
 
 /* Header chat modal â€” Messenger-style dock, right side */
 .comms-chat-modal[hidden] {
@@ -22,10 +22,10 @@
     right: 12px;
     top: calc(var(--kab-nav-h, 68px) + 10px);
     bottom: auto;
-    width: min(400px, calc(100vw - 24px));
-    height: min(72vh, calc(100dvh - var(--kab-nav-h, 68px) - 20px));
-    max-height: calc(100dvh - var(--kab-nav-h, 68px) - 16px);
-    min-height: min(560px, calc(100dvh - var(--kab-nav-h, 68px) - 20px));
+    width: min(460px, calc(100vw - 24px));
+    height: min(82vh, calc(100dvh - var(--kab-nav-h, 68px) - 16px));
+    max-height: calc(100dvh - var(--kab-nav-h, 68px) - 12px);
+    min-height: min(640px, calc(100dvh - var(--kab-nav-h, 68px) - 16px));
     display: flex;
     flex-direction: row;
     background: #fff;
@@ -1426,20 +1426,22 @@
     height: 36px;
     border: 0;
     border-radius: 999px;
-    background: transparent !important;
+    background: #e8f1ff !important;
     box-shadow: none !important;
-    color: #2c2c3e;
-    font-size: 1.4rem;
+    color: #0450a8;
+    font-size: 1.55rem;
+    font-weight: 700;
     line-height: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: background 0.15s, color 0.15s;
 }
 .comms-chat-attach-btn:hover {
-    background: transparent !important;
-    opacity: 0.85;
+    background: #d6e8ff !important;
+    opacity: 1;
+    color: #033a7a;
 }
 .comms-chat-attach-menu {
     position: absolute;
@@ -2350,5 +2352,131 @@ body.comms-messages-page #commsChatModal {
     .comms-faq-quick-replies .comms-faq-chip {
         font-size: 12px;
         padding: 0.32rem 10px;
+    }
+}
+
+/* Live camera capture (chat + attach) */
+.comms-live-camera {
+    position: fixed;
+    inset: 0;
+    z-index: 12050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(12px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+}
+.comms-live-camera[hidden] {
+    display: none !important;
+}
+.comms-live-camera-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 12, 27, 0.72);
+}
+.comms-live-camera-panel {
+    position: relative;
+    z-index: 1;
+    width: min(420px, 100%);
+    background: #0b1220;
+    color: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    max-height: min(90dvh, 720px);
+}
+.comms-live-camera-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    background: #0450a8;
+}
+.comms-live-camera-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+}
+.comms-live-camera-close {
+    border: 0;
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+.comms-live-camera-stage {
+    position: relative;
+    background: #000;
+    min-height: 280px;
+    display: grid;
+    place-items: center;
+    flex: 1 1 auto;
+}
+.comms-live-camera-stage video {
+    width: 100%;
+    height: min(56dvh, 420px);
+    object-fit: cover;
+    background: #000;
+    transform: scaleX(-1);
+}
+.comms-live-camera-stage.is-rear video {
+    transform: none;
+}
+.comms-live-camera-hint {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.55);
+    font-size: 12px;
+    text-align: center;
+}
+.comms-live-camera-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    background: #111827;
+}
+.comms-live-camera-btn {
+    flex: 1 1 0;
+    min-height: 42px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 10px;
+    background: #1f2937;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.comms-live-camera-btn--primary {
+    background: #0450a8;
+    border-color: #0450a8;
+}
+.comms-live-camera-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (max-width: 414px) {
+    .comms-live-camera-panel {
+        width: 100%;
+        max-height: 100dvh;
+        border-radius: 0;
+        min-height: 100dvh;
+    }
+    .comms-live-camera {
+        padding: 0;
+    }
+    .comms-live-camera-stage video {
+        height: min(62dvh, 520px);
     }
 }

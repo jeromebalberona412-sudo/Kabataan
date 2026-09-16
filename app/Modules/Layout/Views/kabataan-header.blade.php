@@ -32,23 +32,43 @@
         @endif
 
         <div class="kabataan-header__actions">
-            <button type="button" class="kabataan-header__icon-btn programs-drawer-btn" id="programsDrawerBtn" title="Programs & Barangay Profiles" aria-label="Programs and Barangay Profiles">
-                <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"/><path d="M3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/></svg>
+            <button type="button" class="kabataan-header__icon-btn programs-drawer-btn" id="programsDrawerBtn" data-tour="programs-menu" title="Programs & Barangay Profiles" aria-label="Programs and Barangay Profiles" aria-haspopup="true" aria-expanded="false">
+                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"/><path d="M3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/></svg>
             </button>
 
-            <a href="{{ route('dashboard') }}" class="kabataan-header__icon-btn" title="Home" aria-label="Home">
+            <a href="{{ route('dashboard') }}" class="kabataan-header__icon-btn" data-tour="home" title="Home" aria-label="Home">
                 <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/></svg>
             </a>
+
+            @auth
+            <div class="kabataan-header__tutorial-menu" id="tutorialGuideHeaderMenu">
+                <button
+                    type="button"
+                    class="kabataan-header__icon-btn tutorial-header-btn"
+                    id="tutorialGuideBtn"
+                    data-tour="tutorial-guide"
+                    aria-label="Tutorial Guide"
+                    title="Tutorial Guide"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </button>
+            </div>
+            @endauth
 
             @php
                 $unreadMsgCount = (int) ($unreadMessagesCount ?? 0);
                 $unreadMsgLabel = $unreadMsgCount > 99 ? '99+' : (string) $unreadMsgCount;
             @endphp
-            <div class="comms-header-msg notif-menu" id="commsMsgMenu">
+            <div class="comms-header-msg notif-menu" id="commsMsgMenu" data-tour="messages">
                 <button
                     type="button"
                     class="comms-header-msg-btn"
                     id="commsMsgBtn"
+                    data-tour="messages"
                     title="Messages"
                     aria-label="Messages"
                     aria-expanded="false"
@@ -70,9 +90,10 @@
 
             @include('dashboard::notification')
 
-            <div class="kabataan-header__user" id="kabataanHeaderUser">
-                <button type="button" class="kabataan-header__avatar-btn user-avatar-btn" aria-expanded="false" aria-haspopup="true">
+            <div class="kabataan-header__user" id="kabataanHeaderUser" data-tour="account-menu">
+                <button type="button" class="kabataan-header__avatar-btn user-avatar-btn" data-tour="account-menu" aria-expanded="false" aria-haspopup="true" aria-label="Account menu">
                     <img src="{{ $avatarUrl }}" alt="{{ $userName }}">
+                    <span class="kabataan-header__caret kabataan-header__caret--profile" aria-hidden="true"></span>
                 </button>
                 <div class="kabataan-header__dropdown user-dropdown">
                     <div class="kabataan-header__dropdown-user-card">
@@ -198,5 +219,13 @@
         }
     };
     window.CommsChat.messageMaxLength = {{ (int) config('communications.message_max_length', 1000) }};
+    window.__COMMS_HEADER_OFFICIALS__ = @json($headerOfficials ?? []);
+    window.__COMMS_HEADER_CONVERSATIONS__ = @json($headerConversations ?? []);
 </script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+@include('tutorial_guide::tutorial')
+@vite([
+    'app/Modules/Tutorial_Guide/assets/css/tutorial-guide.css',
+    'app/Modules/Tutorial_Guide/assets/js/tutorial-guide.js',
+])
 @endauth

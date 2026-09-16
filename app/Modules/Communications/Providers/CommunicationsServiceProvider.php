@@ -31,20 +31,25 @@ class CommunicationsServiceProvider extends ServiceProvider
             $user = Auth::user();
             $count = 0;
             $headerConversations = [];
+            $headerOfficials = [];
             if ($user) {
                 try {
                     $service = app(ConversationService::class);
                     $count = $service->unreadTotalForUser($user);
-                    $headerConversations = $service->listForUser($user)->take(8)->values()->all();
+                    $headerConversations = $service->listForUser($user)->take(30)->values()->all();
+                    // Empty search returns barangay SK Officials for Kabataan so Chats can open PMs immediately.
+                    $headerOfficials = $service->searchUsers($user, '')->values()->all();
                 } catch (\Throwable) {
                     $count = 0;
                     $headerConversations = [];
+                    $headerOfficials = [];
                 }
             }
 
             $view->with([
                 'unreadMessagesCount' => $count,
                 'headerConversations' => $headerConversations,
+                'headerOfficials' => $headerOfficials,
             ]);
         });
     }

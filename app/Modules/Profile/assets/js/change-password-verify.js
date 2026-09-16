@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const verifySection = document.getElementById('cpVerifySection');
     const statusUrl = verifySection?.dataset.statusUrl || '';
     const resendUrl = verifySection?.dataset.resendUrl || document.getElementById('cpResendForm')?.action || '';
+    const dashboardUrl = verifySection?.dataset.dashboardUrl || '/dashboard';
     const accountEmail = verifySection?.dataset.email || 'default';
     const cooldownKey = `kabataan_password_change_resend_${accountEmail}`;
 
@@ -146,18 +147,18 @@ document.addEventListener('DOMContentLoaded', function () {
             statusBadge.style.color = '#166534';
         }
         if (infoBox) {
-            infoBox.textContent = message || 'Password change confirmed. Signing you out...';
+            infoBox.textContent = message || 'Password change confirmed. Redirecting...';
         }
     }
 
-    function redirectToLogin(message, redirectUrl) {
+    function redirectAfterConfirm(message, redirectUrl) {
         clearResendCooldown();
         if (timerInterval) {
             clearInterval(timerInterval);
         }
         markConfirmedUI(message);
         setTimeout(function () {
-            window.location.replace(redirectUrl || LOGIN_URL);
+            window.location.replace(redirectUrl || dashboardUrl || LOGIN_URL);
         }, 800);
     }
 
@@ -187,9 +188,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const payload = await parseJson(response);
 
             if (isLoggedOutResponse(response, payload) || payload.state === 'confirmed') {
-                redirectToLogin(
-                    payload.message || 'Password changed successfully. Please sign in with your new password.',
-                    payload.redirect || LOGIN_URL,
+                redirectAfterConfirm(
+                    payload.message || 'Password changed successfully.',
+                    payload.redirect || (response.status === 401 || response.status === 419 ? LOGIN_URL : dashboardUrl),
                 );
                 return;
             }
@@ -235,9 +236,9 @@ document.addEventListener('DOMContentLoaded', function () {
             const payload = await parseJson(response);
 
             if (isLoggedOutResponse(response, payload) || payload.state === 'confirmed') {
-                redirectToLogin(
-                    payload.message || 'Password changed successfully. Please sign in with your new password.',
-                    payload.redirect || LOGIN_URL,
+                redirectAfterConfirm(
+                    payload.message || 'Password changed successfully.',
+                    payload.redirect || (response.status === 401 || response.status === 419 ? LOGIN_URL : dashboardUrl),
                 );
                 return;
             }

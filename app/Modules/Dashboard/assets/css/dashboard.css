@@ -498,17 +498,131 @@ body.youth-dashboard {
 }
 .comment-options-menu button:hover { background: #f0f2f5; }
 .comment-options-menu button.danger { color: #b91c1c; }
-.comment-action-modal { z-index: 4300; }
+.program-modal.comment-action-modal {
+    z-index: 4500;
+}
+.program-modal.comment-action-modal .modal-container.comment-action-container {
+    max-width: min(400px, calc(100vw - 16px));
+    width: min(400px, calc(100vw - 16px));
+    height: auto;
+    max-height: min(85vh, 360px);
+    align-self: center;
+    margin: 0 auto;
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+}
+.program-modal.comment-action-modal .modal-header {
+    padding: 12px 14px;
+}
+.program-modal.comment-action-modal .modal-header h2 {
+    font-size: 15px;
+}
+.program-modal.comment-action-modal .program-modal-toggle-btn,
+.program-modal.comment-action-modal .education-modal-toggle-btn,
+#editCommentModal .program-modal-toggle-btn,
+#deleteCommentModal .program-modal-toggle-btn {
+    display: none !important;
+}
+.program-modal.comment-action-modal.program-modal--chrome .program-modal-container.is-maximized,
+.program-modal.comment-action-modal.active.is-maximized .comment-action-container {
+    position: relative !important;
+    inset: auto !important;
+    width: min(400px, calc(100vw - 16px)) !important;
+    max-width: min(400px, calc(100vw - 16px)) !important;
+    height: auto !important;
+    max-height: min(85vh, 360px) !important;
+    border-radius: 14px !important;
+}
+.comment-action-modal .modal-body {
+    flex: 0 0 auto;
+    overflow: visible;
+    padding: 12px 14px;
+}
 .edit-comment-textarea {
-    width: 100%; min-height: 96px; resize: vertical; padding: 12px 14px;
-    border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px; font-family: inherit;
-    outline: none; line-height: 1.45;
+    width: 100%;
+    min-height: 72px;
+    max-height: 72px;
+    height: 72px;
+    resize: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    padding: 10px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    line-height: 1.35;
+    box-sizing: border-box;
+}
+.edit-comment-textarea:focus {
+    border-color: #0450a8;
+}
+.edit-comment-counter {
+    display: block;
+    margin-top: 6px;
+    text-align: right;
+    font-size: 12px;
+    color: #64748b;
+}
+.edit-comment-counter.is-near {
+    color: #b45309;
+}
+.edit-comment-counter.is-over {
+    color: #b91c1c;
+}
+.comment-action-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 10px 14px;
+    border-top: 1px solid #e0e0e0;
+}
+.comment-action-modal .btn-primary,
+.comment-action-modal .btn-danger {
+    position: relative;
+    min-width: 96px;
+}
+.comment-action-modal .btn-spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: commentActionSpin 0.7s linear infinite;
+    vertical-align: middle;
+}
+.comment-action-modal .btn-primary.is-loading .btn-label,
+.comment-action-modal .btn-danger.is-loading .btn-label {
+    visibility: hidden;
+}
+.comment-action-modal .btn-primary.is-loading .btn-spinner,
+.comment-action-modal .btn-danger.is-loading .btn-spinner {
+    display: inline-block;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin: -8px 0 0 -8px;
+}
+@keyframes commentActionSpin {
+    to { transform: rotate(360deg); }
 }
 .btn-danger {
     padding: 10px 20px; border: none; border-radius: 8px; font-size: 13px; font-weight: 700;
     cursor: pointer; background: #dc2626; color: #fff; font-family: inherit;
 }
 .btn-danger:hover { background: #b91c1c; }
+.post-inline-link,
+.cp-body .post-inline-link,
+.cp-bubble-text .post-inline-link,
+.comment-text .post-inline-link {
+    color: #0450a8;
+    text-decoration: underline;
+    word-break: break-word;
+}
 
 /* ── POST CARD ── */
 .post-card {
@@ -601,6 +715,9 @@ body.youth-dashboard {
     line-height: 1.65;
     color: var(--text-muted);
     margin-bottom: 14px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    max-width: 100%;
 }
 
 .post-image { border-radius: var(--radius-sm); overflow: hidden; margin-bottom: 14px; }
@@ -1240,7 +1357,7 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
 }
 
 .comment-author { font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 3px; }
-.comment-text   { font-size: 14px; color: var(--text-muted); margin-bottom: 3px; }
+.comment-text   { font-size: 14px; color: var(--text-muted); margin-bottom: 3px; overflow-wrap: anywhere; word-break: break-word; max-width: 100%; }
 .comment-time   { font-size: 12px; color: #94a3b8; }
 
 .comment-input-wrapper { display: flex; align-items: center; gap: 10px; }
@@ -1972,14 +2089,14 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
 
 .alert-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 
-/* ── BARANGAY PROFILES ── */
+/* ── BARANGAY PROFILES (match SK Officials Community Feed) ── */
 .barangay-profiles-list { display: flex; flex-direction: column; gap: 6px; }
 
 .brgy-profile-item {
     display: flex; align-items: center; gap: 10px;
     padding: 9px 11px;
-    background: var(--bg);
-    border-radius: var(--radius-sm);
+    background: var(--bg, #f8fafc);
+    border-radius: var(--radius-sm, 8px);
     border: 1px solid transparent;
     transition: background 0.15s, border-color 0.15s;
     cursor: pointer;
@@ -1990,11 +2107,32 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
 .brgy-profile-item:hover { background: #eff6ff; border-color: #bfdbfe; }
 
 .brgy-avatar {
-    width: 36px; height: 36px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 800; color: white; flex-shrink: 0;
-    background: linear-gradient(135deg, #1a56db 0%, #1e40af 100%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
     overflow: hidden;
+    background: #0039a8;
+    border: 1.5px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 1px 3px rgba(0, 57, 168, 0.22);
+}
+
+.brgy-avatar.has-logo {
+    background: #fff;
+    border-color: #dbe3f4;
+}
+
+.brgy-avatar-letter {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    user-select: none;
 }
 
 .brgy-avatar-logo {
@@ -2004,6 +2142,13 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
     display: block;
 }
 
+.brgy-chevron {
+    width: 16px;
+    height: 16px;
+    color: #bbb;
+    flex-shrink: 0;
+}
+
 .brgy-profiles-empty {
     font-size: 13px;
     color: #94a3b8;
@@ -2011,9 +2156,33 @@ button.reaction-summary-left:hover { background: #f0f2f5; }
     padding: 16px 8px;
 }
 
-.brgy-info { flex: 1; min-width: 0; }
-.brgy-name { font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.brgy-chair { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.brgy-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    line-height: 1.15;
+}
+
+.brgy-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.brgy-chair {
+    font-size: 11px;
+    color: var(--text-muted, #999);
+    margin: 0;
+    line-height: 1.2;
+}
 
 /* ── POST AUTHOR LINK ── */
 .post-author-link { text-decoration: none; color: inherit; transition: color 0.15s; }

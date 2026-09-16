@@ -58,6 +58,10 @@
                     </div>
                 @endif
 
+                @if (session('error'))
+                    <div class="youth-alert youth-alert-error">{{ session('error') }}</div>
+                @endif
+
                 <!-- Change Password Form -->
                 <form class="youth-signin-form" method="POST" action="{{ route('change-password.post') }}" id="changePasswordForm" novalidate>
                     @csrf

@@ -43,6 +43,7 @@
                 <div id="cpVerifySection"
                      data-status-url="{{ route('change-password.verify.status', [], false) }}"
                      data-resend-url="{{ route('change-password.resend', [], false) }}"
+                     data-dashboard-url="{{ route('dashboard', [], false) }}"
                      data-email="{{ $user->email }}">
 
                     <div class="card-header">
@@ -64,12 +65,16 @@
                             </div>
                         @endif
 
+                        @if (session('error'))
+                            <div class="youth-alert youth-alert-error">{{ session('error') }}</div>
+                        @endif
+
                         @if (session('status'))
                             <div class="ce-info-box">{{ session('status') }}</div>
                         @endif
 
                         <div class="ce-info-box" id="cpInfoBox">
-                            A confirmation link has been sent to <strong>{{ $user->email }}</strong>. Your current password stays active until you verify. After confirming on any device, you will be signed out automatically on this page.
+                            A confirmation link has been sent to <strong>{{ $user->email }}</strong>. Your current password stays active until you verify. After you confirm, you will go to your home dashboard. This waiting page will close automatically, and other devices will be signed out. If you resend, only the newest email link will work.
                         </div>
 
                         <div class="ce-status-table">

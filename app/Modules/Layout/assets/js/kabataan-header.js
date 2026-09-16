@@ -269,6 +269,18 @@ import '../../../Communications/assets/js/chat-modal.js';
                 visible += 1;
             }
         });
+        list.querySelectorAll('.comms-msg-section-label').forEach(function (label) {
+            let next = label.nextElementSibling;
+            let anyVisible = false;
+            while (next && !next.classList.contains('comms-msg-section-label')) {
+                if (next.classList.contains('comms-msg-item') && !next.classList.contains('is-filtered-out')) {
+                    anyVisible = true;
+                    break;
+                }
+                next = next.nextElementSibling;
+            }
+            label.classList.toggle('is-filtered-out', !anyVisible);
+        });
         if (empty) {
             const hasRows = list.querySelectorAll('.comms-msg-item').length > 0;
             empty.style.display = (!hasRows || visible === 0) ? 'flex' : 'none';
@@ -348,9 +360,14 @@ import '../../../Communications/assets/js/chat-modal.js';
             return;
         }
 
-        conversations = Array.isArray(conversations) ? conversations : [];
+        conversations = Array.isArray(conversations) ? conversations.slice() : [];
         officials = Array.isArray(officials) ? officials : [];
-        const items = conversations.slice(0, 8);
+        conversations.sort(function (a, b) {
+            var ta = Date.parse((a && a.updated_at) || '') || 0;
+            var tb = Date.parse((b && b.updated_at) || '') || 0;
+            return tb - ta;
+        });
+        const items = conversations;
         window.__COMMS_HEADER_CONVERSATIONS__ = conversations;
         window.__COMMS_HEADER_OFFICIALS__ = officials;
 
@@ -362,7 +379,7 @@ import '../../../Communications/assets/js/chat-modal.js';
         const starters = officials.filter(function (user) {
             const id = Number(user.id || 0);
             return id && !chatPeerIds[id];
-        }).slice(0, Math.max(0, 8 - items.length));
+        });
 
         if (!items.length && !starters.length) {
             list.innerHTML = '';
@@ -370,14 +387,14 @@ import '../../../Communications/assets/js/chat-modal.js';
             empty.style.display = 'flex';
             applyMessagesPopoverFilters();
             if (typeof window.renderFullscreenChatList === 'function') {
-                window.renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__);
+                window.renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__, window.__COMMS_HEADER_OFFICIALS__ || []);
             }
             return;
         }
 
         empty.style.display = 'none';
         list.style.display = '';
-        list.innerHTML = items.map(function (c) {
+        const conversationHtml = items.map(function (c) {
             const peer = c.other_user || {};
             const fullName = peer.name || 'User';
             const name = (window.Comms && window.Comms.truncateText)
@@ -401,7 +418,9 @@ import '../../../Communications/assets/js/chat-modal.js';
                 '</div>' +
                 (unread > 0 ? '<span class="comms-msg-unread-dot" aria-hidden="true"></span>' : '') +
                 '</button>';
-        }).join('') + starters.map(function (user) {
+        }).join('');
+
+        const starterHtml = starters.map(function (user) {
             const fullName = user.name || 'User';
             const name = (window.Comms && window.Comms.truncateText)
                 ? window.Comms.truncateText(fullName, 28)
@@ -421,10 +440,15 @@ import '../../../Communications/assets/js/chat-modal.js';
                 '<div class="comms-msg-item-preview">' + escMsg(preview) + '</div>' +
                 '</div></button>';
         }).join('');
+
+        list.innerHTML = conversationHtml
+            + (starters.length
+                ? '<div class="comms-msg-section-label" role="presentation">SK Officials</div>' + starterHtml
+                : '');
         applyMessagesPopoverFilters();
 
         if (typeof window.renderFullscreenChatList === 'function') {
-            window.renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__);
+            window.renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__, window.__COMMS_HEADER_OFFICIALS__ || []);
         }
 
         // Prefetch Officials FAQ automations so chips appear instantly when a chat opens.
@@ -538,7 +562,25 @@ import '../../../Communications/assets/js/chat-modal.js';
     window.toggleMessagesPopover = toggleMessagesPopover;
     window.refreshMessagesPopover = refreshMessagesPopover;
     window.__COMMS_PAINT_MESSAGES_POPOVER__ = paintMessagesPopover;
-    hydrateMessagesPopoverFromCache();
+
+    (function bootstrapHeaderCommsFromServer() {
+        const officials = Array.isArray(window.__COMMS_HEADER_OFFICIALS__) ? window.__COMMS_HEADER_OFFICIALS__ : [];
+        const conversations = Array.isArray(window.__COMMS_HEADER_CONVERSATIONS__) ? window.__COMMS_HEADER_CONVERSATIONS__ : [];
+        if (!officials.length && !conversations.length) {
+            hydrateMessagesPopoverFromCache();
+            return;
+        }
+        if (window.Comms) {
+            if (officials.length && typeof window.Comms.writeOfficialsCache === 'function') {
+                window.Comms.writeOfficialsCache(officials);
+            }
+            if (conversations.length && typeof window.Comms.writeInboxCache === 'function') {
+                window.Comms.writeInboxCache(conversations);
+            }
+        }
+        paintMessagesPopover(conversations, officials);
+    })();
+
     wireSeeAllMessagesLinks();
     syncMessagesPageHeaderBtn();
 

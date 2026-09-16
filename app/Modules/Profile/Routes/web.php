@@ -4,23 +4,23 @@ use App\Modules\Profile\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
-    Route::middleware('guest')->group(function () {
-        Route::get('/change-email/confirm/{id}/{token}', [ProfileController::class, 'confirmChangeEmail'])
-            ->middleware('throttle:6,1')
-            ->name('change-email.confirm');
+    // Must not use guest middleware: a logged-in user on the verify page
+    // clicking the email link would otherwise skip confirmation and hit dashboard.
+    Route::get('/change-email/confirm/{id}/{token}', [ProfileController::class, 'confirmChangeEmail'])
+        ->middleware('throttle:6,1')
+        ->name('change-email.confirm');
 
-        Route::get('/change-email/set-password/{id}/{token}', [ProfileController::class, 'showSetPasswordAfterEmailChange'])
-            ->middleware('throttle:6,1')
-            ->name('change-email.set-password');
+    Route::get('/change-email/set-password/{id}/{token}', [ProfileController::class, 'showSetPasswordAfterEmailChange'])
+        ->middleware('throttle:6,1')
+        ->name('change-email.set-password');
 
-        Route::post('/change-email/set-password/{id}/{token}', [ProfileController::class, 'updateSetPasswordAfterEmailChange'])
-            ->middleware('throttle:6,1')
-            ->name('change-email.set-password.update');
+    Route::post('/change-email/set-password/{id}/{token}', [ProfileController::class, 'updateSetPasswordAfterEmailChange'])
+        ->middleware('throttle:6,1')
+        ->name('change-email.set-password.update');
 
-        Route::get('/change-password/confirm/{id}/{token}', [ProfileController::class, 'confirmChangePassword'])
-            ->middleware('throttle:6,1')
-            ->name('change-password.confirm');
-    });
+    Route::get('/change-password/confirm/{id}/{token}', [ProfileController::class, 'confirmChangePassword'])
+        ->middleware('throttle:6,1')
+        ->name('change-password.confirm');
 
     Route::middleware('auth')->group(function () {
         Route::get('/profile', [ProfileController::class, 'index'])->name('profile');

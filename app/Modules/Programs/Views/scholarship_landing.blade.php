@@ -163,7 +163,14 @@
 
         <!-- Start Application Button -->
         <div class="sl-actions">
-            <button class="sl-btn sl-btn-primary" id="startApplicationBtn">
+            <div class="sl-schedule-picker" id="scholarshipSchedulePicker" hidden>
+                <label for="scholarshipScheduleSelect" class="sl-schedule-picker-label">Select open scholarship program</label>
+                <select id="scholarshipScheduleSelect" class="sl-schedule-select" aria-label="Select scholarship schedule">
+                    <option value="">Choose a program…</option>
+                </select>
+            </div>
+            <p class="sl-start-hint" id="scholarshipStartHint" hidden></p>
+            <button type="button" class="sl-btn sl-btn-primary" id="startApplicationBtn">
                 <span>Start Scholarship Application</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
             </button>

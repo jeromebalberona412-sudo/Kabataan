@@ -1,7 +1,7 @@
 {{-- Mobile programs drawer — include on Kabataan pages that use kabataan-header --}}
 <div id="programsDrawerBackdrop" class="programs-drawer-backdrop" aria-hidden="true"></div>
 <aside class="programs-sidebar" id="programsDrawerSidebar" aria-label="Programs menu">
-    <div class="sidebar-card">
+    <div class="sidebar-card" data-tour="programs">
         <div class="programs-drawer-head">
             <div class="programs-drawer-head__text">
                 <h2 class="sidebar-title">Programs in Your Barangay</h2>

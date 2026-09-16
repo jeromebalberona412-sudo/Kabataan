@@ -1,8 +1,12 @@
 @php
-    $msgItems = $headerConversations ?? [];
-    $hasMsgItems = is_countable($msgItems) ? count($msgItems) > 0 : false;
+    $msgItems = collect($headerConversations ?? [])->values();
+    $officialItems = collect($headerOfficials ?? []);
+    $chatPeerIds = $msgItems->map(fn ($c) => (int) data_get($c, 'other_user.id', 0))->filter()->all();
+    $starterOfficials = $officialItems
+        ->filter(fn ($u) => ($id = (int) ($u['id'] ?? 0)) && ! in_array($id, $chatPeerIds, true))
+        ->values();
+    $hasMsgItems = $msgItems->isNotEmpty() || $starterOfficials->isNotEmpty();
     $unreadMsgCount = (int) ($unreadMessagesCount ?? 0);
-    $unreadMsgLabel = $unreadMsgCount > 99 ? '99+' : (string) $unreadMsgCount;
     $messagesIndexUrl = \Illuminate\Support\Facades\Route::has('communications.index')
         ? route('communications.index')
         : url('/communications');
@@ -15,11 +19,6 @@
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </span>
             <h4>Chats</h4>
-            <span
-                class="comms-msg-count-pill"
-                id="commsMsgCountPill"
-                style="{{ $unreadMsgCount > 0 ? '' : 'display: none;' }}"
-            >{{ $unreadMsgLabel }}</span>
         </div>
         <div class="comms-msg-header-actions">
             <a
@@ -54,7 +53,7 @@
     </div>
 
     <div class="comms-msg-list" id="commsMsgList" @if(! $hasMsgItems) style="display: none;" @endif>
-        @foreach(($msgItems ?: []) as $conversation)
+        @foreach($msgItems as $conversation)
             @php
                 $peer = $conversation['other_user'] ?? [];
                 $preview = $conversation['last_message']['body'] ?? 'No messages yet';
@@ -77,18 +76,47 @@
                 <img class="comms-msg-avatar" src="{{ $avatar }}" alt="" onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=U&background=2C2C3E&color=fff'">
                 <div class="comms-msg-content">
                     <div class="comms-msg-item-top">
-                        <span class="comms-msg-item-name">{{ $name }}</span>
+                        <span class="comms-msg-item-name">{{ \Illuminate\Support\Str::limit($name, 28) }}</span>
                         <span class="comms-msg-item-time">
                             @if(!empty($conversation['updated_at']))
                                 {{ \Illuminate\Support\Carbon::parse($conversation['updated_at'])->diffForHumans(null, true) }}
                             @endif
                         </span>
                     </div>
-                    <div class="comms-msg-item-preview">{{ \Illuminate\Support\Str::limit((string) $preview, 56) }}</div>
+                    <div class="comms-msg-item-preview">{{ \Illuminate\Support\Str::limit((string) $preview, 42) }}</div>
                 </div>
                 @if($unread > 0)
                     <span class="comms-msg-unread-dot" aria-hidden="true"></span>
                 @endif
+            </button>
+        @endforeach
+        @if($starterOfficials->isNotEmpty())
+            <div class="comms-msg-section-label" role="presentation">SK Officials</div>
+        @endif
+        @foreach($starterOfficials as $official)
+            @php
+                $name = $official['name'] ?? 'SK Official';
+                $preview = $official['position'] ?? ($official['user_type_label'] ?? 'SK Official');
+                $avatar = $official['profile_image_url'] ?? ('https://ui-avatars.com/api/?name='.urlencode((string) $name).'&background=0450A8&color=fff');
+                $searchBlob = mb_strtolower(trim($name.' '.$preview));
+            @endphp
+            <button
+                type="button"
+                class="comms-msg-item"
+                data-user-id="{{ (int) ($official['id'] ?? 0) }}"
+                data-name="{{ e($name) }}"
+                data-avatar="{{ e((string) $avatar) }}"
+                data-unread="0"
+                data-search="{{ e($searchBlob) }}"
+                role="menuitem"
+            >
+                <img class="comms-msg-avatar" src="{{ $avatar }}" alt="" onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=U&background=0450A8&color=fff'">
+                <div class="comms-msg-content">
+                    <div class="comms-msg-item-top">
+                        <span class="comms-msg-item-name">{{ \Illuminate\Support\Str::limit($name, 28) }}</span>
+                    </div>
+                    <div class="comms-msg-item-preview">{{ \Illuminate\Support\Str::limit((string) $preview, 42) }}</div>
+                </div>
             </button>
         @endforeach
     </div>

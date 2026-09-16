@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\KabataanRegistration;
 use App\Modules\Dashboard\Services\BarangaySkProfileService;
 use App\Modules\Profile\Services\ProfileImageService;
+use App\Modules\Programs\Services\KabataanProgramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -34,7 +35,7 @@ class DashboardController extends Controller
         $barangayName = $registration?->barangay?->name ?? 'Santa Cruz';
 
         $tenantId = (int) ($user->tenant_id ?? $registration?->barangay?->tenant_id ?? 0);
-        
+
         // Cache barangay profiles for faster loading
         $barangayProfiles = Cache::remember(
             "kabataan_brgy_profiles_tenant_{$tenantId}",
@@ -49,11 +50,14 @@ class DashboardController extends Controller
             fn () => app(ProfileImageService::class)->resolveDisplayUrl($user)
         );
 
+        $kabataanPrograms = app(KabataanProgramService::class)->getDashboardPayload($user);
+
         $viewData = [
             'user' => $user,
             'userAvatarUrl' => $userAvatarUrl,
             'barangayName' => $barangayName,
             'barangayProfiles' => $barangayProfiles,
+            'kabataanPrograms' => $kabataanPrograms,
             'commentPreviewPost' => null,
         ];
 
@@ -131,6 +135,8 @@ class DashboardController extends Controller
             'initials' => $profile['initials'],
             'location' => $profile['location'],
             'term_label' => $profile['term_label'],
+            'term_start' => $profile['term_start'] ?? null,
+            'term_end' => $profile['term_end'] ?? null,
             'post_count' => count($posts),
             'officer_count' => $profile['officer_count'],
             'officials' => $profile['officials'],

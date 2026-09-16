@@ -5,10 +5,9 @@ return [
 
     'message_max_length' => (int) env('COMMUNICATIONS_MESSAGE_MAX_LENGTH', 1000),
 
-
     'messages_per_page' => 40,
 
-    'search_limit' => 20,
+    'search_limit' => 50,
 
     'reaction_emojis' => ['👍', '❤️', '😆', '😮', '😢', '🙏'],
 

@@ -174,13 +174,84 @@
     }
 
     function assertMediaReady() {
-        var devices = resolveMediaDevices();
-        if (!devices) {
+        if (!isSecureMediaContext()) {
             var err = new Error(mediaUnavailableMessage());
-            err.code = 'MEDIA_UNAVAILABLE';
+            err.code = 'MEDIA_INSECURE';
             throw err;
         }
+        var devices = resolveMediaDevices();
+        if (!devices) {
+            var unavailable = new Error(mediaUnavailableMessage());
+            unavailable.code = 'MEDIA_UNAVAILABLE';
+            throw unavailable;
+        }
         return devices;
+    }
+
+    async function getLocalStream(videoEnabled) {
+        var devices = assertMediaReady();
+        var isMobile = false;
+        try {
+            isMobile = window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
+        } catch (e) { /* ignore */ }
+
+        var audioConstraints = {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+        };
+        var videoConstraints = videoEnabled ? {
+            facingMode: { ideal: 'user' },
+            width: isMobile ? { ideal: 640, max: 1280 } : { ideal: 1280, max: 1920 },
+            height: isMobile ? { ideal: 480, max: 720 } : { ideal: 720, max: 1080 },
+            aspectRatio: { ideal: 4 / 3 }
+        } : false;
+
+        function mapMediaError(err, forVideo) {
+            var name = (err && err.name) || '';
+            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+                return new Error('Microphone/camera permission was denied. Allow access and try again.');
+            }
+            if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+                return new Error(forVideo
+                    ? 'No camera or microphone was found on this device.'
+                    : 'No microphone was found on this device.');
+            }
+            if (name === 'NotReadableError' || name === 'TrackStartError') {
+                return new Error('Camera/microphone is already in use by another app.');
+            }
+            return new Error((err && err.message) || mediaUnavailableMessage());
+        }
+
+        try {
+            return await devices.getUserMedia({
+                audio: audioConstraints,
+                video: videoConstraints
+            });
+        } catch (err) {
+            // Video call: if camera fails, continue with mic so audio still works.
+            if (videoEnabled) {
+                try {
+                    var audioOnly = await devices.getUserMedia({
+                        audio: audioConstraints,
+                        video: false
+                    });
+                    toast('Camera unavailable — continuing with microphone only.', 'error');
+                    cameraEnabled = false;
+                    wantsVideo = false;
+                    return audioOnly;
+                } catch (audioErr) {
+                    throw mapMediaError(audioErr, false);
+                }
+            }
+            // Voice: retry with simpler audio constraints.
+            try {
+                return await devices.getUserMedia({ audio: true, video: false });
+            } catch (retryErr) {
+                throw mapMediaError(err, false);
+            }
+        }
     }
 
     function clearRingTimeout() {
@@ -572,39 +643,6 @@
         }
     }
 
-    async function getLocalStream(videoEnabled) {
-        var devices = assertMediaReady();
-        try {
-            return await devices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    channelCount: 1
-                },
-                video: videoEnabled ? {
-                    facingMode: 'user',
-                    width: { ideal: 1280, max: 1920 },
-                    height: { ideal: 720, max: 1080 }
-                } : false
-            });
-        } catch (err) {
-            var name = (err && err.name) || '';
-            if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-                throw new Error('Microphone/camera permission was denied. Allow access and try again.');
-            }
-            if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-                throw new Error(videoEnabled
-                    ? 'No camera or microphone was found on this device.'
-                    : 'No microphone was found on this device.');
-            }
-            if (name === 'NotReadableError' || name === 'TrackStartError') {
-                throw new Error('Camera/microphone is already in use by another app.');
-            }
-            throw new Error((err && err.message) || mediaUnavailableMessage());
-        }
-    }
-
     function stunConfig() {
         return {
             iceServers: [
@@ -703,11 +741,16 @@
         if (enabled) {
             if (!videoTracks.length || videoTracks.every(function (t) { return t.readyState === 'ended'; })) {
                 var devices = assertMediaReady();
+                var isMobileCam = false;
+                try {
+                    isMobileCam = window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
+                } catch (e) { /* ignore */ }
                 var camStream = await devices.getUserMedia({
                     video: {
-                        facingMode: 'user',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        facingMode: { ideal: 'user' },
+                        width: isMobileCam ? { ideal: 640, max: 1280 } : { ideal: 1280 },
+                        height: isMobileCam ? { ideal: 480, max: 720 } : { ideal: 720 },
+                        aspectRatio: { ideal: 4 / 3 }
                     },
                     audio: false
                 });

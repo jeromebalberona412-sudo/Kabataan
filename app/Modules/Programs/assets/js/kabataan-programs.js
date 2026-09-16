@@ -342,10 +342,6 @@
     }
 
     async function fetchPrograms() {
-        if (window.__kabataanPrograms) {
-            return window.__kabataanPrograms;
-        }
-
         const response = await fetch('/api/kabataan/programs', {
             headers: { Accept: 'application/json', 'X-CSRF-TOKEN': getCsrfToken() },
             credentials: 'same-origin',
@@ -383,7 +379,11 @@
             : '';
         const subtitle = programCountLabel(program);
         const letter = String(program.letter || '').toUpperCase();
-        const title = letter ? `${letter}. ${program.title || ''}`.trim() : (program.title || '');
+        const rawTitle = String(program.title || '').trim();
+        const strippedTitle = letter
+            ? rawTitle.replace(new RegExp(`^${letter}\\s*[.)\\-:]\\s*`, 'i'), '').trim() || rawTitle
+            : rawTitle;
+        const title = letter ? `${letter}. ${strippedTitle}`.trim() : strippedTitle;
         return `
             <div class="program-category" data-category="${escapeHtml(program.category_key)}" data-letter="${escapeHtml(program.letter)}" style="cursor:pointer;">
                 <div class="category-icon ${iconClass}">
@@ -986,10 +986,10 @@
     }
 
     function initProgramModalChrome() {
-        const skip = new Set(['educationModal', 'programSuccessModal']);
+        const skip = new Set(['educationModal', 'programSuccessModal', 'editCommentModal', 'deleteCommentModal']);
 
         document.querySelectorAll('.program-modal').forEach((modal) => {
-            if (skip.has(modal.id) || modal.dataset.chromeEnhanced === '1') return;
+            if (skip.has(modal.id) || modal.classList.contains('comment-action-modal') || modal.dataset.chromeEnhanced === '1') return;
 
             const container = modal.querySelector('.modal-container');
             const header = modal.querySelector('.modal-header');
@@ -1258,17 +1258,7 @@
         educationHistoryBtn.hidden = !hasHistory;
     }
 
-    async function init() {
-        registerProgramModalHelpers();
-        initProgramModalChrome();
-
-        try {
-            programsData = await fetchPrograms();
-        } catch (error) {
-            console.error(error);
-            programsData = window.__kabataanPrograms || { abyip_programs: [], schedule_programs: [] };
-        }
-
+    function applyProgramsData() {
         renderSidebars();
         enableSurveyApplyButtons();
         syncEducationHistoryButton();
@@ -1290,6 +1280,29 @@
                 return program || null;
             };
         }
+    }
+
+    function init() {
+        registerProgramModalHelpers();
+        initProgramModalChrome();
+
+        if (window.__kabataanPrograms) {
+            programsData = window.__kabataanPrograms;
+            applyProgramsData();
+        }
+
+        fetchPrograms()
+            .then(function (data) {
+                programsData = data;
+                applyProgramsData();
+            })
+            .catch(function (error) {
+                console.error(error);
+                if (!programsData) {
+                    programsData = window.__kabataanPrograms || { abyip_programs: [], schedule_programs: [] };
+                    applyProgramsData();
+                }
+            });
     }
 
     function enableSurveyApplyButtons() {

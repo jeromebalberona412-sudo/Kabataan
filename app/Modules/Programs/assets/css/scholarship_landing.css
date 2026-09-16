@@ -977,9 +977,41 @@
 /* ── Actions ── */
 .sl-actions {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
     margin-top: 32px;
     margin-bottom: 48px;
+}
+
+.sl-schedule-picker {
+    width: min(100%, 420px);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sl-schedule-picker-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.sl-schedule-select {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: #fff;
+}
+
+.sl-start-hint {
+    margin: 0;
+    font-size: 13px;
+    color: #6b7280;
+    text-align: center;
+    max-width: 420px;
 }
 
 .sl-btn {
@@ -1006,6 +1038,14 @@
     background: linear-gradient(135deg, #1557b0, #134a9c);
     transform: translateY(-2px);
     box-shadow: 0 6px 16px rgba(26, 115, 232, 0.4);
+}
+
+.sl-btn-primary:disabled,
+.sl-btn-primary[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 .sl-btn-primary:active {

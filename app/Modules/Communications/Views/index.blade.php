@@ -60,6 +60,7 @@
     data-current-user-avatar="{{ $currentUserAvatar ?? '' }}"
     data-initial-conversation="{{ $initialConversationId ?? '' }}"
     data-message-max-length="{{ (int) config('communications.message_max_length', 1000) }}"
+    data-barangay-officials='@json($barangayOfficials ?? [])'
     data-routes='@json($commsRoutes)'
 >
     <div class="comms-shell">
@@ -128,13 +129,17 @@
 
                     <form class="comms-composer" id="commsComposer" autocomplete="off">
                     <input type="file" id="commsPhotoInput" class="visually-hidden" accept="image/jpeg,image/png,image/webp,image/gif" multiple aria-hidden="true" tabindex="-1">
+                    <input type="file" id="commsCameraInput" class="visually-hidden" accept="image/*" capture="environment" aria-hidden="true" tabindex="-1">
                     <input type="file" id="commsFileInput" class="visually-hidden" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-hidden="true" tabindex="-1">
                     <div class="comms-composer-tools">
                         <div class="comms-attach-wrap">
-                            <button type="button" class="comms-attach-btn" id="commsAttachBtn" title="Maximum 25 MB" aria-label="Attach. Maximum 25 MB" aria-expanded="false" aria-controls="commsAttachMenu">
+                            <button type="button" class="comms-attach-btn" id="commsAttachBtn" title="Add photo or file" aria-label="Add photo or file. Maximum 25 MB" aria-expanded="false" aria-controls="commsAttachMenu">
                                 <span aria-hidden="true">+</span>
                             </button>
                             <div class="comms-attach-menu" id="commsAttachMenu" hidden>
+                                <button type="button" class="comms-attach-menu-item" id="commsPickCamera" title="Take a photo">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Camera
+                                </button>
                                 <button type="button" class="comms-attach-menu-item" id="commsPickPhotos" title="Maximum 25 MB">
                                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> Photos
                                 </button>

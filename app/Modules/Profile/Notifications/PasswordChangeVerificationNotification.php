@@ -9,7 +9,7 @@ use Illuminate\Notifications\Notification;
 class PasswordChangeVerificationNotification extends Notification
 {
     public function __construct(
-        private readonly string $plainToken,
+        public readonly string $plainToken,
     ) {}
 
     public function via(object $notifiable): array
@@ -31,7 +31,8 @@ class PasswordChangeVerificationNotification extends Notification
             ->line('Email: '.$notifiable->email)
             ->action('Confirm Password Change', $url)
             ->line('Your current password stays active until you confirm this link.')
-            ->line('After confirming, you will be signed out and must log in again with your new password.')
+            ->line('After confirming, you will be taken to your home dashboard. Other devices will be signed out.')
+            ->line('If you requested a new confirmation email, only the latest link will work.')
             ->line('This link expires in 60 minutes. If you did not request this, you can ignore this email.');
     }
 }

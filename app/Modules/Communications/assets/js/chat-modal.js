@@ -548,17 +548,23 @@ function setHeaderMessagesBtnActive(active) {
 }
 
 function onCommsHeaderPresence(presenceMap) {
-    if (!presenceMap || !headerChatState.conversationId) return;
-    var peer = findCachedHeaderPeer(headerChatState.conversationId);
-    if (!peer || !peer.id) return;
     var onlineIds = {};
-    Object.keys(presenceMap).forEach(function (key) {
+    Object.keys(presenceMap || {}).forEach(function (key) {
         var metas = presenceMap[key] || [];
+        if (!metas.length) {
+            var keyId = Number(key || 0);
+            if (keyId) onlineIds[keyId] = true;
+            return;
+        }
         metas.forEach(function (meta) {
             var uid = Number((meta && meta.user_id) || key || 0);
             if (uid) onlineIds[uid] = true;
         });
     });
+    window.__COMMS_PRESENCE_ONLINE_IDS__ = onlineIds;
+    if (!headerChatState.conversationId) return;
+    var peer = findCachedHeaderPeer(headerChatState.conversationId);
+    if (!peer || !peer.id) return;
     var next = onlineIds[Number(peer.id)] ? 'online' : 'offline';
     peer.online_status = next;
     peer.is_online = next === 'online';
@@ -629,17 +635,41 @@ function setHeaderChatEmptyThread(isEmpty) {
     }
 }
 
-function renderFullscreenChatList(conversations) {
+function renderFullscreenChatList(conversations, officials) {
     var list = document.getElementById('commsChatFsList');
     var empty = document.getElementById('commsChatFsListEmpty');
     if (!list) return;
 
-    var items = Array.isArray(conversations) ? conversations : [];
+    var items = Array.isArray(conversations) ? conversations.slice() : [];
+    items.sort(function (a, b) {
+        var ta = Date.parse((a && a.updated_at) || '') || 0;
+        var tb = Date.parse((b && b.updated_at) || '') || 0;
+        return tb - ta;
+    });
+    var officialList = Array.isArray(officials)
+        ? officials
+        : (Array.isArray(window.__COMMS_HEADER_OFFICIALS__) ? window.__COMMS_HEADER_OFFICIALS__ : []);
     window.__COMMS_HEADER_CONVERSATIONS__ = items;
+    if (Array.isArray(officials)) {
+        window.__COMMS_HEADER_OFFICIALS__ = officialList;
+    }
 
-    if (!items.length) {
+    var chatPeerIds = {};
+    items.forEach(function (c) {
+        var peerId = Number((c.other_user && c.other_user.id) || 0);
+        if (peerId) chatPeerIds[peerId] = true;
+    });
+    var starters = officialList.filter(function (user) {
+        var id = Number(user && user.id || 0);
+        return id && !chatPeerIds[id];
+    });
+
+    if (!items.length && !starters.length) {
         list.innerHTML = '';
-        if (empty) empty.hidden = false;
+        if (empty) {
+            empty.hidden = false;
+            empty.innerHTML = '<p>No conversations yet</p>';
+        }
         return;
     }
 
@@ -665,6 +695,19 @@ function renderFullscreenChatList(conversations) {
             (unread > 0 ? '<span class="comms-chat-fs-item-badge">' + (unread > 99 ? '99+' : unread) + '</span>' : '') +
             '</div>' +
             '</button>';
+    }).join('') + starters.map(function (user) {
+        var fullName = user.name || 'User';
+        var name = truncateCommsName(fullName, 28);
+        var previewRaw = user.position || user.user_type_label || 'SK Official';
+        var preview = truncateCommsName(previewRaw, 40);
+        var avatar = user.profile_image_url || defaultCommsAvatar(fullName);
+        var searchBlob = String(fullName + ' ' + previewRaw).toLowerCase();
+        return '<button type="button" class="comms-chat-fs-item" data-user-id="' + escapeCommsHtml(user.id) + '" data-name="' + escapeCommsHtml(fullName) + '" data-avatar="' + escapeCommsHtml(avatar) + '" data-unread="0" data-search="' + escapeCommsHtml(searchBlob) + '" role="listitem" title="' + escapeCommsHtml(fullName) + '">' +
+            '<img class="comms-chat-fs-item-avatar" src="' + escapeCommsHtml(avatar) + '" alt="" onerror="this.onerror=null;this.src=\'' + escapeCommsHtml(defaultCommsAvatar(fullName)) + '\'">' +
+            '<div class="comms-chat-fs-item-main">' +
+            '<span class="comms-chat-fs-item-name">' + escapeCommsHtml(name) + '</span>' +
+            '<span class="comms-chat-fs-item-preview">' + escapeCommsHtml(preview) + '</span>' +
+            '</div></button>';
     }).join('');
 
     applyFullscreenChatFilters();
@@ -740,7 +783,7 @@ function clearHeaderConversationUnreadLocal(conversationId) {
         window.Comms.writeInboxCache(list);
     }
     if (typeof window.renderFullscreenChatList === 'function') {
-        window.renderFullscreenChatList(list);
+        window.renderFullscreenChatList(list, window.__COMMS_HEADER_OFFICIALS__ || []);
     }
     if (typeof window.refreshMessagesPopover === 'function') {
         // Instant paint from updated local list (no wait for network).
@@ -814,7 +857,7 @@ function clearHeaderChatFullscreenUi() {
 
 function refreshHeaderFullscreenChatList() {
     if (Array.isArray(window.__COMMS_HEADER_CONVERSATIONS__)) {
-        renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__);
+        renderFullscreenChatList(window.__COMMS_HEADER_CONVERSATIONS__, window.__COMMS_HEADER_OFFICIALS__ || []);
     }
 }
 
@@ -1035,8 +1078,18 @@ function wireFullscreenChatControls() {
             var item = e.target.closest('.comms-chat-fs-item');
             if (!item) return;
             e.preventDefault();
+            var userId = item.getAttribute('data-user-id');
+            var conversationId = item.getAttribute('data-id');
+            if (userId && !conversationId) {
+                startHeaderChatWithUser(
+                    userId,
+                    item.getAttribute('data-name') || 'Chat',
+                    item.getAttribute('data-avatar') || ''
+                );
+                return;
+            }
             openHeaderChatModal(
-                item.getAttribute('data-id'),
+                conversationId,
                 item.getAttribute('data-name') || 'Chat',
                 item.getAttribute('data-avatar') || ''
             );
@@ -2513,18 +2566,8 @@ function sendHeaderChatMessage(event, opts) {
             attachments: []
         });
         if (expectAutoReply) {
-            autoTempId = 'local-auto-' + Date.now();
-            headerChatState.messages.push({
-                id: autoTempId,
-                conversation_id: conversationId,
-                body: String(faqMatch.automated_response),
-                message_type: 'automation',
-                mine: false,
-                created_at: new Date().toISOString(),
-                reactions: [],
-                attachments: []
-            });
-            startHeaderFaqCooldown(10);
+            // Do not show automation until the user message POST succeeds.
+            autoTempId = null;
         }
     }
 
@@ -2615,7 +2658,8 @@ function sendHeaderChatMessage(event, opts) {
             } else if (autoIdx === -1) {
                 headerChatState.messages.push(data.automated_message);
             }
-        } else if (!expectAutoReply) {
+            if (expectAutoReply) startHeaderFaqCooldown(10);
+        } else {
             headerChatState.messages = headerChatState.messages.filter(function (m) {
                 return String(m.id).indexOf('local-auto-') !== 0;
             });
@@ -2680,8 +2724,10 @@ function sendHeaderChatMessage(event, opts) {
 function wireHeaderChatAttachButtons() {
     var attachBtn = document.getElementById('commsChatAttachBtn');
     var attachMenu = document.getElementById('commsChatAttachMenu');
+    var pickCamera = document.getElementById('commsChatPickCamera');
     var pickPhotos = document.getElementById('commsChatPickPhotos');
     var pickFiles = document.getElementById('commsChatPickFiles');
+    var cameraInput = document.getElementById('commsChatCameraInput');
     var photoInput = document.getElementById('commsChatPhotoInput');
     var fileInput = document.getElementById('commsChatFileInput');
     var clearBtn = document.getElementById('commsChatAttachClear');
@@ -2692,11 +2738,25 @@ function wireHeaderChatAttachButtons() {
         e.stopPropagation();
         if (attachMenu) attachMenu.hidden = !attachMenu.hidden;
     });
+    if (pickCamera) {
+        pickCamera.addEventListener('click', function () {
+            if (attachMenu) attachMenu.hidden = true;
+            openCommsLiveCamera(function (file) {
+                if (file) pushHeaderFiles([file], 'image');
+            });
+        });
+    }
     if (pickPhotos && photoInput) {
         pickPhotos.addEventListener('click', function () { photoInput.click(); if (attachMenu) attachMenu.hidden = true; });
     }
     if (pickFiles && fileInput) {
         pickFiles.addEventListener('click', function () { fileInput.click(); if (attachMenu) attachMenu.hidden = true; });
+    }
+    if (cameraInput) {
+        cameraInput.addEventListener('change', function () {
+            if (cameraInput.files && cameraInput.files.length) pushHeaderFiles(cameraInput.files, 'image');
+            cameraInput.value = '';
+        });
     }
     if (photoInput) {
         photoInput.addEventListener('change', function () {
@@ -2720,6 +2780,148 @@ function wireHeaderChatAttachButtons() {
     });
     attachBtn.dataset.wired = 'true';
 }
+
+var liveCameraState = {
+    stream: null,
+    facingMode: 'user',
+    onCapture: null,
+    wired: false,
+};
+
+function stopCommsLiveCameraStream() {
+    if (liveCameraState.stream) {
+        liveCameraState.stream.getTracks().forEach(function (track) {
+            try { track.stop(); } catch (e) { /* ignore */ }
+        });
+        liveCameraState.stream = null;
+    }
+    var video = document.getElementById('commsLiveCameraVideo');
+    if (video) video.srcObject = null;
+}
+
+function closeCommsLiveCamera() {
+    var modal = document.getElementById('commsLiveCameraModal');
+    stopCommsLiveCameraStream();
+    liveCameraState.onCapture = null;
+    if (modal) modal.hidden = true;
+    document.body.classList.remove('comms-live-camera-open');
+}
+
+async function startCommsLiveCameraStream() {
+    var video = document.getElementById('commsLiveCameraVideo');
+    var hint = document.getElementById('commsLiveCameraHint');
+    var stage = document.querySelector('.comms-live-camera-stage');
+    var captureBtn = document.getElementById('commsLiveCameraCapture');
+    if (!video || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        if (hint) hint.textContent = 'Live camera is not supported in this browser.';
+        if (captureBtn) captureBtn.disabled = true;
+        return;
+    }
+
+    stopCommsLiveCameraStream();
+    if (captureBtn) captureBtn.disabled = true;
+    if (hint) hint.textContent = 'Starting camera…';
+
+    try {
+        liveCameraState.stream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+                facingMode: { ideal: liveCameraState.facingMode },
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+            },
+        });
+        video.srcObject = liveCameraState.stream;
+        await video.play().catch(function () { /* autoplay policies */ });
+        if (stage) stage.classList.toggle('is-rear', liveCameraState.facingMode === 'environment');
+        if (hint) hint.textContent = 'Frame your shot, then tap Capture.';
+        if (captureBtn) captureBtn.disabled = false;
+    } catch (err) {
+        if (hint) {
+            hint.textContent = (err && err.name === 'NotAllowedError')
+                ? 'Camera permission denied. Allow camera access and try again.'
+                : ((err && err.message) || 'Unable to open the camera.');
+        }
+        if (captureBtn) captureBtn.disabled = true;
+    }
+}
+
+function captureCommsLiveCameraFrame() {
+    var video = document.getElementById('commsLiveCameraVideo');
+    var canvas = document.getElementById('commsLiveCameraCanvas');
+    if (!video || !canvas || !video.videoWidth) return null;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    if (liveCameraState.facingMode === 'user') {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    return new Promise(function (resolve) {
+        canvas.toBlob(function (blob) {
+            if (!blob) {
+                resolve(null);
+                return;
+            }
+            var file = new File([blob], 'camera-' + Date.now() + '.jpg', { type: 'image/jpeg' });
+            resolve(file);
+        }, 'image/jpeg', 0.92);
+    });
+}
+
+function wireCommsLiveCameraOnce() {
+    if (liveCameraState.wired) return;
+    var modal = document.getElementById('commsLiveCameraModal');
+    if (!modal) return;
+    liveCameraState.wired = true;
+
+    modal.querySelectorAll('[data-comms-live-camera-close]').forEach(function (el) {
+        el.addEventListener('click', function () { closeCommsLiveCamera(); });
+    });
+
+    document.getElementById('commsLiveCameraFlip')?.addEventListener('click', function () {
+        liveCameraState.facingMode = liveCameraState.facingMode === 'user' ? 'environment' : 'user';
+        startCommsLiveCameraStream();
+    });
+
+    document.getElementById('commsLiveCameraCapture')?.addEventListener('click', function () {
+        var btn = document.getElementById('commsLiveCameraCapture');
+        if (btn) btn.disabled = true;
+        Promise.resolve(captureCommsLiveCameraFrame()).then(function (file) {
+            var cb = liveCameraState.onCapture;
+            closeCommsLiveCamera();
+            if (file && typeof cb === 'function') cb(file);
+        }).catch(function () {
+            if (btn) btn.disabled = false;
+        });
+    });
+}
+
+function openCommsLiveCamera(onCapture) {
+    wireCommsLiveCameraOnce();
+    var modal = document.getElementById('commsLiveCameraModal');
+    if (!modal) {
+        // Fallback: native camera file input when overlay is missing.
+        var cameraInput = document.getElementById('commsChatCameraInput') || document.getElementById('commsCameraInput');
+        if (cameraInput) cameraInput.click();
+        return;
+    }
+    liveCameraState.onCapture = typeof onCapture === 'function' ? onCapture : null;
+    liveCameraState.facingMode = 'user';
+    modal.hidden = false;
+    document.body.classList.add('comms-live-camera-open');
+    startCommsLiveCameraStream();
+}
+
+window.CommsLiveCamera = {
+    open: openCommsLiveCamera,
+    close: closeCommsLiveCamera,
+};
 
 function wireHeaderChatCallButtons() {
     var voiceBtn = document.getElementById('commsChatModalVoiceBtn');

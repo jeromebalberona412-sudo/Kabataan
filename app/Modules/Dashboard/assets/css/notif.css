@@ -116,17 +116,7 @@
 }
 
 .np-count-pill {
-    background: #ef4444;
-    color: #ffffff;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 6px;
-    border-radius: 999px;
-    min-width: 18px;
-    text-align: center;
-    line-height: 16px;
-    white-space: nowrap;
-    font-variant-numeric: tabular-nums;
+    display: none !important;
 }
 
 .np-mark-all-btn {
@@ -173,7 +163,7 @@
 .np-body {
     flex: 1;
     overflow-y: auto;
-    max-height: 360px;
+    max-height: min(42vh, 280px);
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -266,12 +256,24 @@
     font-size: 0.9rem;
     font-weight: 700;
     color: #022a54;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
 }
 
 .np-item-text {
     font-size: 0.82rem;
     color: #475569;
     line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
 }
 
 .np-item-time {

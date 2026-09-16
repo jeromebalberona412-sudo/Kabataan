@@ -3,6 +3,7 @@
 namespace App\Modules\Profile\Services;
 
 use App\Models\User;
+use App\Modules\Authentication\Services\TrustedDeviceService;
 use App\Modules\Profile\Notifications\PasswordChangeVerificationNotification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -54,8 +55,8 @@ class PasswordChangeService
             ]);
         }
 
-        if ($user->password_change_last_sent_at?->isAfter(now()->subSeconds(self::RESEND_COOLDOWN_SECONDS))) {
-            $seconds = max(1, self::RESEND_COOLDOWN_SECONDS - (int) $user->password_change_last_sent_at->diffInSeconds(now()));
+        if ($user->password_change_last_sent_at?->getTimestamp() > (time() - self::RESEND_COOLDOWN_SECONDS)) {
+            $seconds = $this->resendCooldownRemaining($user);
             throw ValidationException::withMessages([
                 'password' => ["Please wait {$seconds} seconds before resending."],
             ]);
@@ -96,7 +97,7 @@ class PasswordChangeService
 
         if (! hash_equals((string) $user->password_change_token, hash('sha256', $plainToken))) {
             throw ValidationException::withMessages([
-                'token' => ['This password change link is invalid.'],
+                'token' => ['This password change link is no longer valid. Please use the latest verification email.'],
             ]);
         }
 
@@ -128,7 +129,7 @@ class PasswordChangeService
 
         $this->markRecentlyConfirmed($user->id);
 
-        app(\App\Modules\Authentication\Services\TrustedDeviceService::class)
+        app(TrustedDeviceService::class)
             ->revokeAllForUser($user);
 
         return $user->fresh();
@@ -164,6 +165,8 @@ class PasswordChangeService
             return 0;
         }
 
-        return max(0, self::RESEND_COOLDOWN_SECONDS - (int) $user->password_change_last_sent_at->diffInSeconds(now()));
+        $elapsed = time() - $user->password_change_last_sent_at->getTimestamp();
+
+        return max(0, self::RESEND_COOLDOWN_SECONDS - $elapsed);
     }
 }

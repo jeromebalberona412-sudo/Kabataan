@@ -988,15 +988,17 @@
 
     function isUserOnline(user) {
         if (!user || typeof user !== 'object') return false;
-        if (user.is_online === true) return true;
-        if (user.is_online === false) return false;
-        if (String(user.online_status || '').toLowerCase() === 'online') return true;
-        if (String(user.online_status || '').toLowerCase() === 'offline') return false;
-        // Prefer last_seen so cached presence does not stay green forever.
+        var id = Number(user.id || 0);
+        if (id && window.__COMMS_PRESENCE_ONLINE_IDS__ && window.__COMMS_PRESENCE_ONLINE_IDS__[id]) {
+            return true;
+        }
+        var status = String(user.online_status || '').toLowerCase();
+        if (status === 'offline') return false;
         var seenMs = user.last_seen ? Date.parse(user.last_seen) : NaN;
         if (!Number.isNaN(seenMs)) {
             return (Date.now() - seenMs) < (2 * 60 * 1000);
         }
+        if (user.is_online === true || status === 'online') return true;
         return false;
     }
 

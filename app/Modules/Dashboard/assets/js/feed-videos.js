@@ -256,7 +256,6 @@
                 src="${escapeHtml(src)}"
                 title="Google Drive video ${index + 1}"
                 allow="autoplay; fullscreen"
-                allowfullscreen
                 referrerpolicy="no-referrer-when-downgrade"
             ></iframe>
             <span class="cf-video-chrome-mask" aria-hidden="true"></span>
@@ -276,66 +275,14 @@
     }
 
     function playDriveVideoWrap(wrap) {
-        const frame = wrap.querySelector('.cf-drive-video-frame');
-        const fallback = wrap.querySelector('.cf-drive-video-fallback');
-        const previewSrc = wrap.dataset.previewSrc;
-        if (!frame || !previewSrc) return;
-
-        if (!prefersFineHover()) {
-            openVideoLightbox([driveVideoItemFromWrap(wrap)], 0);
-            return;
-        }
-
-        stopAllFeedMediaExcept(wrap);
-        if (!wrap.dataset.posterHtml) {
-            wrap.dataset.posterHtml = frame.innerHTML;
-        }
-        wrap.classList.add('is-playing');
-        wrap.classList.remove('is-fallback');
-        frame.classList.remove('cf-drive-video-poster');
-        frame.innerHTML = `<iframe src="${escapeHtml(previewSrc)}" title="Google Drive video" allow="autoplay; fullscreen" allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
-            <span class="cf-video-chrome-mask" aria-hidden="true"></span>
-            <button type="button" class="cf-video-expand-btn" aria-label="Fullscreen" title="Fullscreen"></button>`;
-        frame.querySelector('.cf-video-expand-btn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            openVideoLightbox([driveVideoItemFromWrap(wrap)], 0);
-        });
-        const iframe = frame.querySelector('iframe');
-        iframe?.addEventListener('error', () => {
-            wrap.classList.add('is-fallback');
-            wrap.classList.remove('is-playing');
-            if (fallback) fallback.hidden = false;
-            frame.hidden = true;
-        });
+        if (!wrap) return;
+        openVideoLightbox([driveVideoItemFromWrap(wrap)], 0);
     }
 
     function playCloudVideoWrap(wrap) {
-        const frame = wrap.querySelector('.cf-cloud-video-frame');
-        const src = wrap.dataset.cloudSrc;
-        if (!frame || !src) return;
-
-        if (!prefersFineHover()) {
-            openVideoLightbox([{ provider: 'cloudinary', video_url: src }], 0);
-            return;
-        }
-
-        stopAllFeedMediaExcept(wrap);
-        wrap.classList.add('is-playing');
-        frame.classList.remove('cf-cloud-video-poster');
-        frame.innerHTML = `<video src="${escapeHtml(src)}" playsinline preload="metadata" controlslist="nodownload noplaybackrate noremoteplayback" disablepictureinpicture autoplay></video>
-            <button type="button" class="cf-video-expand-btn" aria-label="Fullscreen" title="Fullscreen"></button>`;
-        const el = frame.querySelector('video');
-        el?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (el.paused) el.play().catch(() => {});
-            else el.pause();
-        });
-        frame.querySelector('.cf-video-expand-btn')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            openVideoLightbox([{ provider: 'cloudinary', video_url: src }], 0);
-        });
+        const src = wrap?.dataset?.cloudSrc;
+        if (!src) return;
+        openVideoLightbox([{ provider: 'cloudinary', video_url: src }], 0);
     }
 
     function renderVideoLightboxFrame() {
@@ -347,11 +294,17 @@
 
         const index = ((videoLightboxIndex % videoLightboxItems.length) + videoLightboxItems.length) % videoLightboxItems.length;
         videoLightboxIndex = index;
-        const video = videoLightboxItems[index];
+        const item = videoLightboxItems[index];
+        const isImage = item?.kind === 'image' || (!item?.provider && item?.url && !item?.video_url && !item?.preview_url && !item?.google_drive_file_id);
+        const video = item?.kind === 'video' ? (item.video || item) : (isImage ? null : item);
+        const imageUrl = isImage ? String(item.url || item.image_url || '') : '';
         const isCloud = video?.provider === 'cloudinary' && video?.video_url;
-        const src = videoPreviewSrc(video);
+        const src = video ? videoPreviewSrc(video) : '';
 
-        if (isCloud && src) {
+        if (isImage && imageUrl) {
+            frame.className = 'video-lightbox-frame is-image-embed';
+            frame.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="Post image ${index + 1}" draggable="false">`;
+        } else if (isCloud && src) {
             frame.className = 'video-lightbox-frame is-cloud-embed';
             frame.innerHTML = `<video src="${escapeHtml(src)}" controls playsinline autoplay preload="metadata" controlslist="nodownload"></video>`;
         } else if (src) {
@@ -360,12 +313,11 @@
                 src="${escapeHtml(src)}"
                 title="Video ${index + 1}"
                 allow="autoplay; fullscreen"
-                allowfullscreen
                 referrerpolicy="no-referrer-when-downgrade"
             ></iframe>`;
         } else {
             frame.className = 'video-lightbox-frame';
-            frame.innerHTML = '<p style="color:#fff;text-align:center;padding:24px;">Video unavailable.</p>';
+            frame.innerHTML = '<p style="color:#fff;text-align:center;padding:24px;">Media unavailable.</p>';
         }
 
         if (counter) {
@@ -377,11 +329,31 @@
         if (nextBtn) nextBtn.hidden = !multi;
     }
 
+    function openMediaLightbox(items, startIndex = 0) {
+        const list = (Array.isArray(items) ? items : [])
+            .map((item) => {
+                if (!item) return null;
+                if (item.kind === 'image') return { kind: 'image', url: item.url || item.image_url || '' };
+                if (item.kind === 'video') return { kind: 'video', ...(item.video || item) };
+                if (item.provider || item.video_url || item.preview_url || item.google_drive_file_id) {
+                    return { kind: 'video', ...item };
+                }
+                if (typeof item === 'string') return { kind: 'image', url: item };
+                if (item.url) return { kind: 'image', url: item.url };
+                return null;
+            })
+            .filter((item) => item && (item.kind !== 'image' || item.url));
+        openVideoLightbox(list, startIndex);
+    }
+
     function openVideoLightbox(videos, startIndex = 0) {
         const list = Array.isArray(videos) ? videos.filter(Boolean) : [];
         if (!list.length) return;
         stopAllFeedMediaExcept(null);
-        videoLightboxItems = list;
+        videoLightboxItems = list.map((item) => {
+            if (item.kind === 'image' || item.kind === 'video') return item;
+            return { kind: 'video', ...item };
+        });
         videoLightboxIndex = Math.max(0, Math.min(list.length - 1, Number(startIndex) || 0));
         const lb = document.getElementById('videoLightbox');
         if (!lb) return;
@@ -454,20 +426,44 @@
                 tile.addEventListener('click', (e) => {
                     if (e.target.closest('.cf-video-expand-btn')) return;
                     const startIndex = parseInt(tile.dataset.index, 10) || 0;
+                    const mediaItems = resolveMediaAlbum(album, videos);
 
-                    if (videos.length > 1 || tile.dataset.hasMore === '1') {
-                        openVideoLightbox(videos, startIndex);
+                    if (mediaItems.length > videos.length) {
+                        const mediaIndex = mediaItems.findIndex((item) =>
+                            item.kind === 'video' && Number(item.videoIndex) === startIndex
+                        );
+                        openMediaLightbox(mediaItems, mediaIndex >= 0 ? mediaIndex : startIndex);
                         return;
                     }
 
-                    if (tile.dataset.playing === '1') {
-                        openVideoLightbox(videos, startIndex);
-                        return;
-                    }
-                    playMediaInAlbumTile(tile, startIndex, videos);
+                    openVideoLightbox(videos, startIndex);
                 });
             });
         });
+    }
+
+    function resolveMediaAlbum(album, videos) {
+        const host = album.closest('[data-media-album]')
+            || album.closest('.post-card')
+            || album.closest('#cpPost');
+        const raw = host?.getAttribute?.('data-media-album')
+            || host?.dataset?.mediaAlbum
+            || album.closest('[data-media-album]')?.getAttribute('data-media-album')
+            || '';
+        if (raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length) return parsed;
+            } catch (_) { /* ignore */ }
+        }
+        const sibling = host?.querySelector?.('[data-media-album]');
+        if (sibling) {
+            try {
+                const parsed = JSON.parse(sibling.getAttribute('data-media-album') || '[]');
+                if (Array.isArray(parsed) && parsed.length) return parsed;
+            } catch (_) { /* ignore */ }
+        }
+        return (videos || []).map((video, videoIndex) => ({ kind: 'video', videoIndex, ...video }));
     }
 
     function bindDriveVideoEmbeds(root = document) {
@@ -523,6 +519,7 @@
         buildPostVideosHtml,
         bindFeedVideos,
         openVideoLightbox,
+        openMediaLightbox,
         closeVideoLightbox,
     };
 })();

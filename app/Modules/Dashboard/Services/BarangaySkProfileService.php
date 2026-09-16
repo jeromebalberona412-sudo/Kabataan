@@ -98,7 +98,9 @@ class BarangaySkProfileService
             ]))),
             'post_count' => $posts->count(),
             'officer_count' => $officials->count(),
-            'term_label' => $this->resolveTermLabel($barangay->id),
+            'term_label' => ($term = $this->resolveTermDates($barangay->id))['label'],
+            'term_start' => $term['start'],
+            'term_end' => $term['end'],
             'officials' => $officials->values()->all(),
             'posts' => $posts->values()->all(),
         ];
@@ -264,7 +266,7 @@ class BarangaySkProfileService
         return $chair['name'] ?? 'SK Officials';
     }
 
-    private function resolveTermLabel(int $barangayId): string
+    private function resolveTermDates(int $barangayId): array
     {
         $row = DB::table('official_terms')
             ->join('official_profiles', 'official_profiles.id', '=', 'official_terms.official_profile_id')
@@ -276,13 +278,22 @@ class BarangaySkProfileService
             ->first();
 
         if ($row?->term_start === null || $row?->term_end === null) {
-            return '—';
+            return ['start' => null, 'end' => null, 'label' => '—'];
         }
 
         $start = Carbon::parse($row->term_start);
         $end = Carbon::parse($row->term_end);
 
-        return $start->format('Y').'–'.$end->format('Y');
+        return [
+            'start' => $start->format('M j, Y'),
+            'end' => $end->format('M j, Y'),
+            'label' => $start->format('M j, Y').' – '.$end->format('M j, Y'),
+        ];
+    }
+
+    private function resolveTermLabel(int $barangayId): string
+    {
+        return $this->resolveTermDates($barangayId)['label'];
     }
 
     private function buildOfficialFullName(object $row): string
@@ -344,9 +355,9 @@ class BarangaySkProfileService
 
     private function colorForBarangay(string $name): string
     {
-        $palette = ['#4CAF50', '#2196F3', '#9C27B0', '#FF9800', '#009688', '#f44336', '#673AB7', '#0450a8', '#FF5722'];
-        $index = abs(crc32(mb_strtolower($name, 'UTF-8'))) % count($palette);
+        unset($name);
 
-        return $palette[$index];
+        // Match Barangay SK Profiles list avatar (no green / rainbow palette).
+        return '#0039a8';
     }
 }

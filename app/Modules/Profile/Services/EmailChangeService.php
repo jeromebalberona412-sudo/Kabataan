@@ -18,8 +18,6 @@ class EmailChangeService
 {
     private const TOKEN_TTL_MINUTES = 60;
 
-    private const SET_PASSWORD_TOKEN_TTL_HOURS = 2;
-
     private const RESEND_COOLDOWN_SECONDS = 60;
 
     private const COMPLETED_CACHE_TTL_MINUTES = 30;
@@ -89,8 +87,8 @@ class EmailChangeService
             'email'
         );
 
-        if ($user->email_change_last_sent_at?->isAfter(now()->subSeconds(self::RESEND_COOLDOWN_SECONDS))) {
-            $seconds = max(1, self::RESEND_COOLDOWN_SECONDS - (int) $user->email_change_last_sent_at->diffInSeconds(now()));
+        if ($user->email_change_last_sent_at?->getTimestamp() > (time() - self::RESEND_COOLDOWN_SECONDS)) {
+            $seconds = $this->resendCooldownRemaining($user);
             throw ValidationException::withMessages([
                 'email' => ["Please wait {$seconds} seconds before resending."],
             ]);
@@ -125,10 +123,7 @@ class EmailChangeService
         $this->forgetRecentlyCompleted($user->getKey());
     }
 
-    /**
-     * @return array{user: User, set_password_token: string}
-     */
-    public function confirm(int $userId, string $plainToken): array
+    public function confirm(int $userId, string $plainToken): User
     {
         $user = User::query()->find($userId);
 
@@ -140,7 +135,7 @@ class EmailChangeService
 
         if (! hash_equals((string) $user->email_change_token, hash('sha256', $plainToken))) {
             throw ValidationException::withMessages([
-                'token' => ['This email change link is invalid.'],
+                'token' => ['This email change link is no longer valid. Please use the latest verification email.'],
             ]);
         }
 
@@ -150,32 +145,13 @@ class EmailChangeService
             ]);
         }
 
-        $newEmail = $this->emailValidation->normalize((string) $user->pending_email);
+        $this->applyNewEmail($user);
+        $this->markRecentlyCompleted($user->id);
 
-        try {
-            $this->emailValidation->assertCanSend($newEmail, true, $user, 'email');
-        } catch (ValidationException $exception) {
-            $this->cancel($user);
-            throw $exception;
-        }
+        app(TrustedDeviceService::class)
+            ->revokeAllForUser($user);
 
-        $setPasswordToken = Str::random(64);
-
-        $user->forceFill([
-            'email_change_verified_at' => now(),
-            'email_change_last_sent_at' => null,
-            'email_change_token' => hash('sha256', $setPasswordToken),
-            'email_change_token_expires_at' => now()->addHours(self::SET_PASSWORD_TOKEN_TTL_HOURS),
-        ])->save();
-
-        User::query()
-            ->whereKey($user->id)
-            ->update(['must_change_password' => DB::raw("'true'::boolean")]);
-
-        return [
-            'user' => $user->fresh(),
-            'set_password_token' => $setPasswordToken,
-        ];
+        return $user->fresh();
     }
 
     public function markRecentlyCompleted(int $userId): void
@@ -216,37 +192,54 @@ class EmailChangeService
 
         if ($user === null || ! $this->hasPendingPasswordSet($user)) {
             throw ValidationException::withMessages([
-                'token' => ['This password setup link is invalid or has already been used.'],
+                'token' => ['This email change link is invalid or has already been used.'],
             ]);
         }
 
         if (! hash_equals((string) $user->email_change_token, hash('sha256', $plainToken))) {
             throw ValidationException::withMessages([
-                'token' => ['This password setup link is invalid.'],
+                'token' => ['This email change link is no longer valid. Please use the latest verification email.'],
             ]);
         }
 
         if ($user->email_change_token_expires_at === null || $user->email_change_token_expires_at->isPast()) {
             throw ValidationException::withMessages([
-                'token' => ['This password setup link has expired. Please sign in and contact support if you need help.'],
+                'token' => ['This email change link has expired. Please request a new one.'],
             ]);
         }
 
         return $user;
     }
 
-    public function completePasswordSet(User $user, string $plainPassword): void
+    public function completePendingPasswordSet(User $user): User
+    {
+        if (! $this->hasPendingPasswordSet($user)) {
+            throw ValidationException::withMessages([
+                'email' => ['No pending email change was found. Please start a new request.'],
+            ]);
+        }
+
+        $this->applyNewEmail($user);
+        $this->markRecentlyCompleted($user->id);
+
+        app(TrustedDeviceService::class)
+            ->revokeAllForUser($user);
+
+        return $user->fresh();
+    }
+
+    protected function applyNewEmail(User $user): void
     {
         $newEmail = $this->emailValidation->normalize((string) $user->pending_email);
 
         if (blank($newEmail)) {
             throw ValidationException::withMessages([
-                'password' => ['No pending email change was found. Please start a new request.'],
+                'email' => ['No pending email change was found. Please start a new request.'],
             ]);
         }
 
         try {
-            $this->emailValidation->assertCanSend($newEmail, true, $user, 'password');
+            $this->emailValidation->assertCanSend($newEmail, true, $user, 'email');
         } catch (ValidationException $exception) {
             $this->cancel($user);
             throw $exception;
@@ -255,7 +248,6 @@ class EmailChangeService
         $user->forceFill([
             'email' => $newEmail,
             'pending_email' => null,
-            'password' => Hash::make($plainPassword),
             'email_verified_at' => now(),
             'remember_token' => null,
             'email_change_token' => null,
@@ -265,9 +257,6 @@ class EmailChangeService
         ])->save();
 
         $this->invalidEmails->markVerified($newEmail);
-
-        app(TrustedDeviceService::class)
-            ->revokeAllForUser($user);
 
         User::query()
             ->whereKey($user->id)
@@ -280,7 +269,9 @@ class EmailChangeService
             return 0;
         }
 
-        return max(0, self::RESEND_COOLDOWN_SECONDS - (int) $user->email_change_last_sent_at->diffInSeconds(now()));
+        $elapsed = time() - $user->email_change_last_sent_at->getTimestamp();
+
+        return max(0, self::RESEND_COOLDOWN_SECONDS - $elapsed);
     }
 
     protected function sendVerificationMail(User $user, string $plainToken): void

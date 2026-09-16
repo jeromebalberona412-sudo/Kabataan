@@ -10,6 +10,7 @@ use App\Modules\Profile\Services\ProfileImageService;
 use App\Modules\Profile\Services\ProfileParticipationService;
 use App\Modules\Profile\Services\ProfileService;
 use App\Modules\Profile\Services\ProfileSupportingDocumentsService;
+use App\Rules\ValidEmailAddress;
 use App\Support\SupportingDocumentTypes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +24,10 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+    private const PASSWORD_CHANGE_CONFIRMED_SESSION_KEY = 'password_change_confirmed_this_session';
+
+    private const EMAIL_CHANGE_CONFIRMED_SESSION_KEY = 'email_change_confirmed_this_session';
+
     public function __construct(
         private readonly ProfileService $profileService,
         private readonly EmailChangeService $emailChangeService,
@@ -75,10 +80,6 @@ class ProfileController extends Controller
 
         $user = $request->user()->fresh();
 
-        if ($this->emailChangeService->hasPendingChange($user) || $this->emailChangeService->hasPendingPasswordSet($user)) {
-            return redirect()->route('change-email.verify');
-        }
-
         return view('profile::change-email', ['user' => $user])->withHeaders($this->noCacheHeaders());
     }
 
@@ -86,7 +87,7 @@ class ProfileController extends Controller
     {
         $validated = $request->validate([
             'current_email' => ['required', 'email', 'max:255'],
-            'new_email' => ['required', 'string', 'max:'.\App\Rules\ValidEmailAddress::MAX_LENGTH, 'different:current_email', new \App\Rules\ValidEmailAddress],
+            'new_email' => ['required', 'string', 'max:'.ValidEmailAddress::MAX_LENGTH, 'different:current_email', new ValidEmailAddress],
             'password' => ['required', 'string', 'max:64'],
         ]);
 
@@ -114,7 +115,29 @@ class ProfileController extends Controller
 
         $user = $request->user()->fresh();
 
-        if (! $this->emailChangeService->hasPendingChange($user) && ! $this->emailChangeService->hasPendingPasswordSet($user)) {
+        if (! $this->emailChangeService->hasPendingChange($user)) {
+            if ($this->emailChangeService->hasPendingPasswordSet($user)) {
+                try {
+                    $user = $this->emailChangeService->completePendingPasswordSet($user);
+                } catch (ValidationException $exception) {
+                    return $this->redirectAfterEmailChangeConfirmFailure($request, (int) $user->id, $exception);
+                }
+
+                return $this->finishEmailChangeSuccess($request, $user);
+            }
+
+            if ($this->emailChangeCompletedInThisSession($request)) {
+                return redirect()
+                    ->route('dashboard')
+                    ->with('success', 'Email changed successfully.');
+            }
+
+            if ($this->wasEmailChangeConfirmed($request, $user)) {
+                return $this->finishEmailChangeLogout($request, $user);
+            }
+
+            $request->session()->forget('email_change_verify_active');
+
             $redirect = redirect()->route('change-email');
 
             if ($request->session()->has('error')) {
@@ -128,10 +151,11 @@ class ProfileController extends Controller
             return $redirect;
         }
 
+        $request->session()->put('email_change_verify_active', true);
+
         return view('profile::change-email-verify', [
             'user' => $user,
             'resendCooldown' => $this->emailChangeService->resendCooldownRemaining($user),
-            'awaitingPassword' => $this->emailChangeService->hasPendingPasswordSet($user),
         ])->withHeaders($this->noCacheHeaders());
     }
 
@@ -147,15 +171,41 @@ class ProfileController extends Controller
         }
 
         if ($this->emailChangeService->hasPendingPasswordSet($user)) {
+            try {
+                $user = $this->emailChangeService->completePendingPasswordSet($user);
+            } catch (ValidationException $exception) {
+                $message = collect($exception->errors())->flatten()->first()
+                    ?: 'Email change request is no longer active.';
+
+                return response()->json([
+                    'state' => 'cancelled',
+                    'redirect' => route('change-email'),
+                    'message' => $message,
+                ]);
+            }
+
+            $request->session()->put(self::EMAIL_CHANGE_CONFIRMED_SESSION_KEY, true);
+            $request->session()->forget('email_change_verify_active');
+
             return response()->json([
-                'state' => 'awaiting_password',
-                'pending_email' => $user->pending_email,
-                'message' => 'Email verified. Set your new password on the other tab to finish.',
+                'state' => 'completed',
+                'redirect' => route('dashboard'),
+                'message' => 'Email changed successfully. Taking you to your dashboard...',
             ]);
         }
 
-        if ($this->emailChangeService->wasRecentlyCompleted($user->id)) {
-            $this->emailChangeService->forgetRecentlyCompleted($user->id);
+        if ($this->emailChangeCompletedInThisSession($request)) {
+            $request->session()->forget('email_change_verify_active');
+
+            return response()->json([
+                'state' => 'completed',
+                'redirect' => route('dashboard'),
+                'message' => 'Email changed successfully. Taking you to your dashboard...',
+            ]);
+        }
+
+        if ($this->wasEmailChangeConfirmed($request, $user)) {
+            $request->session()->forget('email_change_verify_active');
 
             Auth::logout();
             $request->session()->invalidate();
@@ -164,7 +214,7 @@ class ProfileController extends Controller
             return response()->json([
                 'state' => 'completed',
                 'redirect' => route('sign-in'),
-                'message' => 'Email and password updated. Please sign in with your new credentials.',
+                'message' => 'Email changed successfully. Please sign in with your new email.',
             ]);
         }
 
@@ -179,12 +229,23 @@ class ProfileController extends Controller
         ]);
     }
 
-    public function resendChangeEmail(Request $request): RedirectResponse
+    public function resendChangeEmail(Request $request): RedirectResponse|JsonResponse
     {
         try {
             $this->emailChangeService->resend($request->user()->fresh());
         } catch (ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first()
+                ?: 'Unable to resend verification email. Please try again.';
+
             $user = $request->user()->fresh();
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'resend_cooldown' => $this->emailChangeService->resendCooldownRemaining($user),
+                ], 422);
+            }
 
             if (
                 ! $this->emailChangeService->hasPendingChange($user)
@@ -198,12 +259,21 @@ class ProfileController extends Controller
             return back()->withErrors($exception->errors());
         }
 
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Verification email resent. Check your inbox.',
+                'resend_cooldown' => 60,
+            ]);
+        }
+
         return back()->with('status', 'Verification email resent.');
     }
 
     public function cancelChangeEmail(Request $request): RedirectResponse
     {
         $this->emailChangeService->cancel($request->user()->fresh());
+        $request->session()->forget('email_change_verify_active');
 
         return redirect()
             ->route('change-email')
@@ -213,69 +283,29 @@ class ProfileController extends Controller
     public function confirmChangeEmail(Request $request, int $id, string $token): RedirectResponse
     {
         try {
-            $result = $this->emailChangeService->confirm($id, $token);
+            $user = $this->emailChangeService->confirm($id, $token);
         } catch (ValidationException $exception) {
-            return redirect()->route('sign-in')->withErrors($exception->errors());
+            return $this->redirectAfterEmailChangeConfirmFailure($request, $id, $exception);
         }
 
-        return redirect()
-            ->route('change-email.set-password', [
-                'id' => $result['user']->id,
-                'token' => $result['set_password_token'],
-            ])
-            ->with('status', 'Email verified. Set a new password to complete the change.');
+        return $this->finishEmailChangeSuccess($request, $user);
     }
 
-    public function showSetPasswordAfterEmailChange(Request $request, int $id, string $token): View|RedirectResponse
+    public function showSetPasswordAfterEmailChange(Request $request, int $id, string $token): RedirectResponse
     {
         try {
             $user = $this->emailChangeService->validateSetPasswordToken($id, $token);
+            $user = $this->emailChangeService->completePendingPasswordSet($user);
         } catch (ValidationException $exception) {
-            return redirect()->route('sign-in')->withErrors($exception->errors());
+            return $this->redirectAfterEmailChangeConfirmFailure($request, $id, $exception);
         }
 
-        return view('profile::set-password', [
-            'user' => $user,
-            'token' => $token,
-        ])->withHeaders($this->noCacheHeaders());
+        return $this->finishEmailChangeSuccess($request, $user);
     }
 
     public function updateSetPasswordAfterEmailChange(Request $request, int $id, string $token): RedirectResponse
     {
-        try {
-            $user = $this->emailChangeService->validateSetPasswordToken($id, $token);
-        } catch (ValidationException $exception) {
-            return redirect()->route('sign-in')->withErrors($exception->errors());
-        }
-
-        $validated = $request->validate([
-            'password' => [
-                'required',
-                'string',
-                'confirmed',
-                'max:64',
-                PasswordRule::min(8)->mixedCase()->numbers()->symbols(),
-            ],
-        ]);
-
-        try {
-            $this->emailChangeService->completePasswordSet($user, (string) $validated['password']);
-        } catch (ValidationException $exception) {
-            return back()->withErrors($exception->errors())->withInput();
-        }
-
-        $this->emailChangeService->markRecentlyCompleted($user->id);
-
-        if (Auth::check()) {
-            Auth::logout();
-        }
-
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect()
-            ->route('sign-in')
-            ->with('status', 'Email and password updated. Sign in with your new credentials.');
+        return $this->showSetPasswordAfterEmailChange($request, $id, $token);
     }
 
     public function showChangePassword(Request $request): View|RedirectResponse
@@ -285,10 +315,6 @@ class ProfileController extends Controller
         }
 
         $user = $request->user()->fresh();
-
-        if ($this->passwordChangeService->hasPendingChange($user)) {
-            return redirect()->route('change-password.verify');
-        }
 
         return view('profile::change-password', ['user' => $user])->withHeaders($this->noCacheHeaders());
     }
@@ -321,6 +347,12 @@ class ProfileController extends Controller
         $user = $request->user()->fresh();
 
         if (! $this->passwordChangeService->hasPendingChange($user)) {
+            if ($this->passwordChangeCompletedInThisSession($request)) {
+                return redirect()
+                    ->route('dashboard')
+                    ->with('success', 'Password changed successfully.');
+            }
+
             if ($this->wasPasswordChangeConfirmed($request, $user)) {
                 return $this->finishPasswordChangeLogout($request, $user);
             }
@@ -349,9 +381,18 @@ class ProfileController extends Controller
             ]);
         }
 
+        if ($this->passwordChangeCompletedInThisSession($request)) {
+            $request->session()->forget('password_change_verify_active');
+
+            return response()->json([
+                'state' => 'confirmed',
+                'redirect' => route('dashboard'),
+                'message' => 'Password changed successfully. Taking you to your dashboard...',
+            ]);
+        }
+
         if ($this->wasPasswordChangeConfirmed($request, $user)) {
             $request->session()->forget('password_change_verify_active');
-            $this->passwordChangeService->forgetRecentlyConfirmed($user->id);
 
             Auth::logout();
             $request->session()->invalidate();
@@ -417,19 +458,32 @@ class ProfileController extends Controller
         try {
             $user = $this->passwordChangeService->confirm($id, $token);
         } catch (ValidationException $exception) {
-            return redirect()->route('sign-in')->withErrors($exception->errors());
+            return $this->redirectAfterPasswordChangeConfirmFailure($request, $id, $exception);
         }
 
-        if (Auth::check()) {
+        $authenticatedId = Auth::id();
+
+        if ($authenticatedId !== null && (int) $authenticatedId !== (int) $user->id) {
             Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('sign-in')
+                ->with('success', 'Password changed successfully. Please sign in with your new password.');
         }
 
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        if (! Auth::check()) {
+            Auth::login($user);
+        }
+
+        $request->session()->regenerate();
+        $request->session()->put(self::PASSWORD_CHANGE_CONFIRMED_SESSION_KEY, true);
+        $request->session()->forget('password_change_verify_active');
 
         return redirect()
-            ->route('sign-in')
-            ->with('status', 'Password changed successfully for '.$user->email.'. Please sign in with your new password.');
+            ->route('dashboard')
+            ->with('success', 'Password changed successfully.');
     }
 
     public function uploadSupportingDocument(Request $request): JsonResponse
@@ -547,10 +601,146 @@ class ProfileController extends Controller
             || (bool) $request->session()->get('password_change_verify_active', false);
     }
 
+    protected function passwordChangeCompletedInThisSession(Request $request): bool
+    {
+        return (bool) $request->session()->get(self::PASSWORD_CHANGE_CONFIRMED_SESSION_KEY, false);
+    }
+
+    protected function redirectAfterPasswordChangeConfirmFailure(
+        Request $request,
+        int $id,
+        ValidationException $exception,
+    ): RedirectResponse {
+        $message = collect($exception->errors())->flatten()->first()
+            ?: 'This password change link is invalid.';
+
+        if (Auth::check() && (int) Auth::id() === $id) {
+            $user = $request->user()->fresh();
+
+            if ($this->passwordChangeService->hasPendingChange($user)) {
+                return redirect()
+                    ->route('change-password.verify')
+                    ->with('error', $message);
+            }
+
+            return redirect()
+                ->route('change-password')
+                ->with('error', $message);
+        }
+
+        if (Auth::check()) {
+            return redirect()
+                ->route('dashboard')
+                ->with('error', $message);
+        }
+
+        return redirect()
+            ->route('sign-in')
+            ->with('error', $message);
+    }
+
+    protected function wasEmailChangeConfirmed(Request $request, User $user): bool
+    {
+        return $this->emailChangeService->wasRecentlyCompleted($user->id)
+            || (bool) $request->session()->get('email_change_verify_active', false);
+    }
+
+    protected function emailChangeCompletedInThisSession(Request $request): bool
+    {
+        return (bool) $request->session()->get(self::EMAIL_CHANGE_CONFIRMED_SESSION_KEY, false);
+    }
+
+    protected function redirectAfterEmailChangeConfirmFailure(
+        Request $request,
+        int $id,
+        ValidationException $exception,
+    ): RedirectResponse {
+        $message = collect($exception->errors())->flatten()->first()
+            ?: 'This email change link is invalid.';
+
+        if (Auth::check() && (int) Auth::id() === $id) {
+            $user = $request->user()->fresh();
+
+            if (
+                $this->emailChangeCompletedInThisSession($request)
+                || $this->emailChangeService->wasRecentlyCompleted($user->id)
+            ) {
+                return redirect()
+                    ->route('dashboard')
+                    ->with('success', 'Email changed successfully.');
+            }
+
+            if (
+                $this->emailChangeService->hasPendingChange($user)
+                || $this->emailChangeService->hasPendingPasswordSet($user)
+            ) {
+                return redirect()
+                    ->route('change-email.verify')
+                    ->with('error', $message);
+            }
+
+            return redirect()
+                ->route('change-email')
+                ->with('error', $message);
+        }
+
+        if (Auth::check()) {
+            return redirect()
+                ->route('dashboard')
+                ->with('error', $message);
+        }
+
+        return redirect()
+            ->route('sign-in')
+            ->with('error', $message);
+    }
+
+    protected function finishEmailChangeLogout(Request $request, User $user): RedirectResponse
+    {
+        $request->session()->forget('email_change_verify_active');
+
+        if (Auth::check()) {
+            Auth::logout();
+        }
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()
+            ->route('sign-in')
+            ->with('success', 'Email changed successfully. Please sign in with your new email.');
+    }
+
+    protected function finishEmailChangeSuccess(Request $request, User $user): RedirectResponse
+    {
+        $authenticatedId = Auth::id();
+
+        if ($authenticatedId !== null && (int) $authenticatedId !== (int) $user->id) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()
+                ->route('sign-in')
+                ->with('success', 'Email changed successfully. Please sign in with your new email.');
+        }
+
+        if (! Auth::check()) {
+            Auth::login($user);
+        }
+
+        $request->session()->regenerate();
+        $request->session()->put(self::EMAIL_CHANGE_CONFIRMED_SESSION_KEY, true);
+        $request->session()->forget('email_change_verify_active');
+
+        return redirect()
+            ->route('dashboard')
+            ->with('success', 'Email changed successfully.');
+    }
+
     protected function finishPasswordChangeLogout(Request $request, User $user): RedirectResponse
     {
         $request->session()->forget('password_change_verify_active');
-        $this->passwordChangeService->forgetRecentlyConfirmed($user->id);
 
         Auth::logout();
         $request->session()->invalidate();
@@ -558,7 +748,7 @@ class ProfileController extends Controller
 
         return redirect()
             ->route('sign-in')
-            ->with('status', 'Password changed successfully. Please sign in with your new password.');
+            ->with('success', 'Password changed successfully. Please sign in with your new password.');
     }
 
     /**

@@ -1,9 +1,13 @@
 document.addEventListener('DOMContentLoaded', function () {
     const COOLDOWN_SECONDS = 60;
     const POLL_INTERVAL_MS = 3000;
+    const BTN_LABEL = 'Resend Verification';
 
     const verifySection = document.getElementById('ceVerifySection');
     const statusUrl = verifySection?.dataset.statusUrl || '';
+    const resendUrl = verifySection?.dataset.resendUrl || document.getElementById('ceResendForm')?.action || '';
+    const signInUrl = verifySection?.dataset.signinUrl || '/sign-in';
+    const dashboardUrl = verifySection?.dataset.dashboardUrl || '/dashboard';
     const pendingEmail = document.getElementById('cePendingEmail')?.textContent?.trim() || 'default';
     const cooldownKey = `kabataan_email_change_resend_${pendingEmail}`;
 
@@ -14,10 +18,27 @@ document.addEventListener('DOMContentLoaded', function () {
     const statusTitle = document.getElementById('ceStatusTitle');
     const statusSub = document.getElementById('ceStatusSub');
     const statusBadge = document.getElementById('ceStatusBadge');
+    const infoBox = document.getElementById('ceInfoBox');
 
     let timerInterval = null;
     let confirmationHandled = false;
+    let resendInFlight = false;
     const serverCooldown = Number(window.ceResendCooldown || 0);
+
+    function csrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            || resendForm?.querySelector('input[name="_token"]')?.value
+            || '';
+    }
+
+    function jsonHeaders() {
+        return {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+        };
+    }
 
     function formatCountdown(seconds) {
         const mins = Math.floor(seconds / 60);
@@ -30,16 +51,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function setCooldownExpiry(seconds) {
-        localStorage.setItem(cooldownKey, String(Date.now() + Math.max(1, seconds) * 1000));
+        localStorage.setItem(cooldownKey, String(Date.now() + Math.max(1, seconds || COOLDOWN_SECONDS) * 1000));
     }
 
-    function getRemainingSeconds() {
+    function storedRemaining() {
         const expiry = Number.parseInt(localStorage.getItem(cooldownKey) || '0', 10);
-        if (expiry > Date.now()) {
-            return Math.max(0, Math.ceil((expiry - Date.now()) / 1000));
-        }
-
-        return serverCooldown > 0 ? serverCooldown : 0;
+        return expiry > Date.now() ? Math.max(0, Math.ceil((expiry - Date.now()) / 1000)) : 0;
     }
 
     function updateTimerDisplay(seconds) {
@@ -48,33 +65,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function timerExpired() {
         if (timerElement) timerElement.style.display = 'none';
-        if (resendBtn) {
+        if (resendBtn && !resendInFlight) {
             resendBtn.disabled = false;
-            resendBtn.textContent = 'Resend Verification';
+            resendBtn.textContent = BTN_LABEL;
         }
         clearCooldown();
     }
 
     function startTimer(seconds) {
-        let remaining = seconds;
-        if (remaining <= 0) {
+        const remainingStart = Math.max(0, seconds);
+        if (remainingStart <= 0) {
             timerExpired();
             return;
         }
 
         if (resendBtn) {
             resendBtn.disabled = true;
-            resendBtn.textContent = 'Resend Verification';
+            resendBtn.textContent = BTN_LABEL;
         }
         if (timerElement) timerElement.style.display = 'block';
-        updateTimerDisplay(remaining);
+        updateTimerDisplay(remainingStart);
 
         if (timerInterval) clearInterval(timerInterval);
 
         timerInterval = setInterval(function () {
-            remaining = getRemainingSeconds();
+            const remaining = storedRemaining();
             if (remaining <= 0) {
                 clearInterval(timerInterval);
+                timerInterval = null;
                 timerExpired();
             } else {
                 updateTimerDisplay(remaining);
@@ -83,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function bootstrapTimer() {
-        let remaining = getRemainingSeconds();
+        let remaining = storedRemaining();
 
         if (remaining <= 0 && serverCooldown > 0) {
             remaining = serverCooldown;
@@ -91,48 +109,41 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (remaining > 0) {
-            if (!localStorage.getItem(cooldownKey)) {
-                setCooldownExpiry(remaining);
-            }
             startTimer(remaining);
         } else {
             timerExpired();
         }
     }
 
-    function markAwaitingPasswordUI(message, pendingEmail) {
-        if (statusTitle) statusTitle.textContent = 'Email Verified!';
-        if (statusSub) {
-            statusSub.textContent = message || 'Set your new password on the other tab to finish the email change.';
-        }
-        if (statusBadge) {
-            statusBadge.textContent = 'Awaiting password';
-            statusBadge.style.background = '#fef3c7';
-            statusBadge.style.color = '#92400e';
-        }
-        if (pendingEmail) {
-            const pendingEmailVal = document.getElementById('cePendingEmailVal');
-            if (pendingEmailVal) pendingEmailVal.textContent = pendingEmail;
-        }
-    }
-
     function markCompletedUI(message) {
         confirmationHandled = true;
-        if (statusTitle) statusTitle.textContent = 'All Done!';
-        if (statusSub) statusSub.textContent = message || 'Signing you out so you can log in with your new credentials.';
+        if (statusTitle) statusTitle.textContent = 'Email Changed';
+        if (statusSub) statusSub.textContent = message || 'Email changed successfully.';
         if (statusBadge) {
             statusBadge.textContent = 'Completed';
             statusBadge.style.background = '#dcfce7';
             statusBadge.style.color = '#166534';
         }
+        if (infoBox) {
+            infoBox.textContent = message || 'Email changed successfully.';
+        }
     }
 
-    function redirectToLogin(message, redirectUrl) {
+    function isLoggedOutResponse(response, payload) {
+        if (!response) return false;
+        if (response.status === 401 || response.status === 419) return true;
+        if (response.redirected) return true;
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType && !contentType.includes('application/json')) return true;
+        return payload && (payload.state === 'completed' || payload.state === 'confirmed');
+    }
+
+    function redirectAfterComplete(message, redirectUrl) {
         clearCooldown();
         if (timerInterval) clearInterval(timerInterval);
         markCompletedUI(message);
         setTimeout(function () {
-            window.location.replace(redirectUrl || '/login');
+            window.location.replace(redirectUrl || dashboardUrl || signInUrl);
         }, 900);
     }
 
@@ -151,6 +162,14 @@ document.addEventListener('DOMContentLoaded', function () {
         liveError.hidden = false;
         liveError.style.display = 'flex';
         liveError.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hideLiveError() {
+        const liveError = document.getElementById('ceVerifyLiveError');
+        if (!liveError) return;
+        liveError.hidden = true;
+        liveError.style.display = 'none';
+        liveError.textContent = '';
     }
 
     function redirectToChangeEmail(message, redirectUrl, isInvalidEmail) {
@@ -173,17 +192,34 @@ document.addEventListener('DOMContentLoaded', function () {
         window.location.replace(redirectUrl || '/change-email');
     }
 
+    async function parseJson(response) {
+        try {
+            return await response.json();
+        } catch (error) {
+            return {};
+        }
+    }
+
     async function checkConfirmationStatus() {
         if (confirmationHandled || !statusUrl) return;
 
         try {
             const response = await fetch(statusUrl, {
                 method: 'GET',
-                headers: { Accept: 'application/json' },
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
                 credentials: 'same-origin',
             });
 
-            if (response.status === 401 || response.status === 419) {
+            const payload = await parseJson(response);
+
+            if (isLoggedOutResponse(response, payload) || payload.state === 'completed' || payload.state === 'confirmed') {
+                redirectAfterComplete(
+                    payload.message || 'Email changed successfully.',
+                    payload.redirect || (response.status === 401 || response.status === 419 ? signInUrl : dashboardUrl),
+                );
                 return;
             }
 
@@ -192,31 +228,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            const payload = await response.json();
-
             if (payload.state === 'pending') {
-                if (payload.resend_cooldown > 0) {
-                    const localRemaining = getRemainingSeconds();
-                    if (localRemaining <= 0) {
-                        setCooldownExpiry(payload.resend_cooldown);
-                        startTimer(payload.resend_cooldown);
-                    }
-                }
                 setTimeout(checkConfirmationStatus, POLL_INTERVAL_MS);
-                return;
-            }
-
-            if (payload.state === 'awaiting_password') {
-                markAwaitingPasswordUI(payload.message, payload.pending_email);
-                setTimeout(checkConfirmationStatus, POLL_INTERVAL_MS);
-                return;
-            }
-
-            if (payload.state === 'completed') {
-                redirectToLogin(
-                    payload.message || 'Email and password updated. Please sign in with your new credentials.',
-                    payload.redirect || '/login',
-                );
                 return;
             }
 
@@ -233,24 +246,91 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    bootstrapTimer();
+    async function submitResend() {
+        if (confirmationHandled || resendInFlight || storedRemaining() > 0 || !resendUrl) {
+            return;
+        }
 
-    if (window.ceAwaitingPassword) {
-        markAwaitingPasswordUI(
-            'Set your new password on the other tab to finish the email change.',
-            document.getElementById('cePendingEmailVal')?.textContent?.trim() || '',
-        );
+        resendInFlight = true;
+        hideLiveError();
+        if (resendBtn) {
+            resendBtn.disabled = true;
+            resendBtn.textContent = 'Sending…';
+        }
+
+        try {
+            const response = await fetch(resendUrl, {
+                method: 'POST',
+                headers: jsonHeaders(),
+                credentials: 'same-origin',
+                body: JSON.stringify({ _token: csrfToken() }),
+            });
+
+            const payload = await parseJson(response);
+
+            if (isLoggedOutResponse(response, payload) || payload.state === 'completed' || payload.state === 'confirmed') {
+                redirectAfterComplete(
+                    payload.message || 'Email changed successfully.',
+                    payload.redirect || (response.status === 401 || response.status === 419 ? signInUrl : dashboardUrl),
+                );
+                return;
+            }
+
+            if (!response.ok || payload.ok === false) {
+                resendInFlight = false;
+                if (resendBtn) {
+                    resendBtn.textContent = BTN_LABEL;
+                }
+
+                const message = payload.message || 'Unable to resend verification email. Please try again.';
+                if (/no pending email change/i.test(message)) {
+                    redirectToChangeEmail(message, '/change-email', false);
+                    return;
+                }
+                showLiveError(message);
+
+                const cooldown = Number(payload.resend_cooldown || payload.cooldown || 0);
+                if (cooldown > 0) {
+                    setCooldownExpiry(cooldown);
+                    startTimer(cooldown);
+                } else {
+                    timerExpired();
+                }
+                return;
+            }
+
+            const cooldown = Number(payload.resend_cooldown || payload.cooldown || COOLDOWN_SECONDS);
+            setCooldownExpiry(cooldown);
+            resendInFlight = false;
+            startTimer(cooldown);
+            if (infoBox) {
+                infoBox.textContent = payload.message || 'Verification email resent. Check your inbox.';
+            }
+        } catch (error) {
+            resendInFlight = false;
+            if (resendBtn) {
+                resendBtn.textContent = BTN_LABEL;
+                resendBtn.disabled = false;
+            }
+            showLiveError('Unable to resend verification email. Please try again.');
+        }
     }
+
+    bootstrapTimer();
 
     checkConfirmationStatus();
 
+    if (resendBtn) {
+        resendBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            submitResend();
+        });
+    }
+
     if (resendForm) {
-        resendForm.addEventListener('submit', function () {
-            if (resendBtn) {
-                resendBtn.disabled = true;
-                resendBtn.textContent = 'Sending…';
-            }
-            setCooldownExpiry(COOLDOWN_SECONDS);
+        resendForm.addEventListener('submit', function (event) {
+            event.preventDefault();
+            submitResend();
         });
     }
 

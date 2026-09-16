@@ -74,8 +74,10 @@ import './communication.js';
         barangayFilter: document.getElementById('commsBarangayFilter'),
         attachBtn: document.getElementById('commsAttachBtn'),
         attachMenu: document.getElementById('commsAttachMenu'),
+        pickCamera: document.getElementById('commsPickCamera'),
         pickPhotos: document.getElementById('commsPickPhotos'),
         pickFiles: document.getElementById('commsPickFiles'),
+        cameraInput: document.getElementById('commsCameraInput'),
         photoInput: document.getElementById('commsPhotoInput'),
         fileInput: document.getElementById('commsFileInput'),
         attachInput: document.getElementById('commsAttachInput'),
@@ -102,7 +104,11 @@ import './communication.js';
 
     function renderConversations(filter) {
         var q = String(filter || '').trim().toLowerCase();
-        var items = state.conversations;
+        var items = (state.conversations || []).slice().sort(function (a, b) {
+            var ta = Date.parse((a && a.updated_at) || '') || 0;
+            var tb = Date.parse((b && b.updated_at) || '') || 0;
+            return tb - ta;
+        });
         if (q) {
             items = items.filter(function (c) {
                 return String((c.other_user && c.other_user.name) || '').toLowerCase().indexOf(q) !== -1;
@@ -776,6 +782,7 @@ import './communication.js';
         state.pendingAttachment = null;
         state.pendingPreviewUrl = null;
         if (els.photoInput) els.photoInput.value = '';
+        if (els.cameraInput) els.cameraInput.value = '';
         if (els.fileInput) els.fileInput.value = '';
         if (els.attachInput) els.attachInput.value = '';
         if (els.attachPreview) els.attachPreview.hidden = true;
@@ -1336,13 +1343,33 @@ import './communication.js';
         Comms.api(Comms.route(routes.showConversation, id)).then(function (data) {
             if (!data || !data.conversation) return;
             if (Number(state.activeId) !== Number(id)) return;
-            state.activeConversation = data.conversation;
-            updatePeerHeader(data.conversation);
+            var nextConv = data.conversation;
+            var prevPeer = state.activeConversation && state.activeConversation.other_user;
+            var nextPeer = nextConv.other_user;
+            if (prevPeer && nextPeer && Number(prevPeer.id) === Number(nextPeer.id)) {
+                var presenceOnline = !!(window.__COMMS_PRESENCE_ONLINE_IDS__
+                    && window.__COMMS_PRESENCE_ONLINE_IDS__[Number(nextPeer.id)]);
+                if (presenceOnline) {
+                    nextPeer.online_status = 'online';
+                    nextPeer.is_online = true;
+                    nextPeer.last_seen = new Date().toISOString();
+                } else if (prevPeer.is_online && prevPeer.last_seen) {
+                    var prevMs = Date.parse(prevPeer.last_seen);
+                    var nextMs = nextPeer.last_seen ? Date.parse(nextPeer.last_seen) : 0;
+                    if (!Number.isNaN(prevMs) && prevMs > (Number.isNaN(nextMs) ? 0 : nextMs)) {
+                        nextPeer.online_status = prevPeer.online_status;
+                        nextPeer.is_online = prevPeer.is_online;
+                        nextPeer.last_seen = prevPeer.last_seen;
+                    }
+                }
+            }
+            state.activeConversation = nextConv;
+            updatePeerHeader(nextConv);
             var idx = state.conversations.findIndex(function (c) {
                 return Number(c.id) === Number(id);
             });
-            if (idx >= 0 && data.conversation.other_user) {
-                state.conversations[idx].other_user = data.conversation.other_user;
+            if (idx >= 0 && nextConv.other_user) {
+                state.conversations[idx].other_user = nextConv.other_user;
                 if (Comms.writeInboxCache) Comms.writeInboxCache(state.conversations);
             }
             persistActiveThreadCache();
@@ -1352,13 +1379,14 @@ import './communication.js';
     function startPeerRefresh(conversationId) {
         stopPeerRefresh();
         if (!conversationId) return;
+        refreshActivePeer();
         state.peerRefreshTimer = window.setInterval(function () {
             if (Number(state.activeId) !== Number(conversationId)) {
                 stopPeerRefresh();
                 return;
             }
             refreshActivePeer();
-        }, 30000);
+        }, 15000);
     }
 
     function updatePeerOnlineFromPresence(presenceMap) {
@@ -2203,23 +2231,11 @@ import './communication.js';
                 reactions: [],
                 attachments: []
             });
-            if (expectAutoReply) {
-                state.messages.push({
-                    id: 'local-auto-' + Date.now(),
-                    conversation_id: state.activeId,
-                    body: String(faqMatch.automated_response),
-                    message_type: 'automation',
-                    mine: false,
-                    created_at: new Date().toISOString(),
-                    reactions: [],
-                    attachments: []
-                });
-                startFaqCooldown(10);
-            }
             if (els.input) els.input.value = '';
             var payload = { body: text };
             if (faqId) payload.faq_id = faqId;
-            // Fire POST immediately (before paint) so FAQ replies feel realtime.
+            // Fire POST immediately (before paint) so the thread stays responsive.
+            // Automation reply is painted only after the server accepts the user message.
             jobs.push(Comms.api(Comms.route(routes.messages, state.activeId), {
                 method: 'POST',
                 body: JSON.stringify(payload),
@@ -2231,13 +2247,23 @@ import './communication.js';
                 } else if (data.message) {
                     appendMessage(Object.assign({}, data.message, { send_status: 'sent', mine: true }));
                 }
+                // Show automation only after the user message was accepted by the server.
                 if (data.automated_message) {
                     var autoTempIdx = state.messages.findIndex(function (m) {
                         return String(m.id).indexOf('local-auto-') === 0;
                     });
-                    if (autoTempIdx !== -1) state.messages[autoTempIdx] = data.automated_message;
-                    else appendMessage(data.automated_message);
-                } else if (!expectAutoReply) {
+                    var autoRealIdx = state.messages.findIndex(function (m) {
+                        return Number(m.id) === Number(data.automated_message.id);
+                    });
+                    if (autoRealIdx !== -1 && autoTempIdx !== -1) {
+                        state.messages.splice(autoTempIdx, 1);
+                    } else if (autoTempIdx !== -1) {
+                        state.messages[autoTempIdx] = data.automated_message;
+                    } else if (autoRealIdx === -1) {
+                        appendMessage(data.automated_message);
+                    }
+                    if (expectAutoReply) startFaqCooldown(10);
+                } else {
                     state.messages = state.messages.filter(function (m) {
                         return String(m.id).indexOf('local-auto-') !== 0;
                     });
@@ -2604,6 +2630,27 @@ import './communication.js';
             setAttachMenuOpen(open);
         });
     }
+    if (els.pickCamera) {
+        els.pickCamera.addEventListener('click', function (e) {
+            e.preventDefault();
+            setAttachMenuOpen(false);
+            if (window.CommsLiveCamera && typeof window.CommsLiveCamera.open === 'function') {
+                window.CommsLiveCamera.open(function (file) {
+                    if (file) pushPendingFiles([file], 'image');
+                });
+                return;
+            }
+            if (els.cameraInput) els.cameraInput.click();
+        });
+        if (els.cameraInput) {
+            els.cameraInput.addEventListener('change', function () {
+                if (els.cameraInput.files && els.cameraInput.files.length) {
+                    pushPendingFiles(els.cameraInput.files, 'image');
+                }
+                els.cameraInput.value = '';
+            });
+        }
+    }
     if (els.pickPhotos && els.photoInput) {
         els.pickPhotos.addEventListener('click', function (e) {
             e.preventDefault();
@@ -2781,6 +2828,18 @@ import './communication.js';
         routes: routes,
         state: state
     };
+
+    (function hydrateOfficialsFromServer() {
+        var raw = root.dataset.barangayOfficials || '';
+        if (!raw) return;
+        try {
+            var officials = JSON.parse(raw);
+            if (!Array.isArray(officials) || !officials.length) return;
+            state.barangayOfficials = officials;
+            if (Comms.writeOfficialsCache) Comms.writeOfficialsCache(officials);
+            renderConversations('');
+        } catch (e) { /* ignore */ }
+    })();
 
     hydrateFromCache();
     if (els.input) resizeComposer();

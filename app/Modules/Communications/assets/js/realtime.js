@@ -467,6 +467,29 @@ import { createClient } from '@supabase/supabase-js';
             }).catch(function () { /* ignore */ });
         }
 
+        function applyPresenceMap(stateMap) {
+            var onlineIds = {};
+            Object.keys(stateMap || {}).forEach(function (key) {
+                var metas = stateMap[key] || [];
+                if (!metas.length) {
+                    var keyId = Number(key || 0);
+                    if (keyId) onlineIds[keyId] = true;
+                    return;
+                }
+                metas.forEach(function (meta) {
+                    var uid = Number((meta && meta.user_id) || key || 0);
+                    if (uid) onlineIds[uid] = true;
+                });
+            });
+            window.__COMMS_PRESENCE_ONLINE_IDS__ = onlineIds;
+            if (window.CommsChat && typeof window.CommsChat.updatePeerOnlineFromPresence === 'function') {
+                window.CommsChat.updatePeerOnlineFromPresence(stateMap);
+            }
+            if (typeof window.onCommsHeaderPresence === 'function') {
+                window.onCommsHeaderPresence(stateMap);
+            }
+        }
+
         if (sb) {
             presenceChannel = sb.channel('comms-presence', {
                 config: { presence: { key: String(userId) } }
@@ -474,31 +497,13 @@ import { createClient } from '@supabase/supabase-js';
 
             presenceChannel
                 .on('presence', { event: 'sync' }, function () {
-                    var stateMap = presenceChannel.presenceState ? presenceChannel.presenceState() : {};
-                    if (window.CommsChat && typeof window.CommsChat.updatePeerOnlineFromPresence === 'function') {
-                        window.CommsChat.updatePeerOnlineFromPresence(stateMap);
-                    }
-                    if (typeof window.onCommsHeaderPresence === 'function') {
-                        window.onCommsHeaderPresence(stateMap);
-                    }
+                    applyPresenceMap(presenceChannel.presenceState ? presenceChannel.presenceState() : {});
                 })
                 .on('presence', { event: 'join' }, function () {
-                    var stateMap = presenceChannel.presenceState ? presenceChannel.presenceState() : {};
-                    if (window.CommsChat && typeof window.CommsChat.updatePeerOnlineFromPresence === 'function') {
-                        window.CommsChat.updatePeerOnlineFromPresence(stateMap);
-                    }
-                    if (typeof window.onCommsHeaderPresence === 'function') {
-                        window.onCommsHeaderPresence(stateMap);
-                    }
+                    applyPresenceMap(presenceChannel.presenceState ? presenceChannel.presenceState() : {});
                 })
                 .on('presence', { event: 'leave' }, function () {
-                    var stateMap = presenceChannel.presenceState ? presenceChannel.presenceState() : {};
-                    if (window.CommsChat && typeof window.CommsChat.updatePeerOnlineFromPresence === 'function') {
-                        window.CommsChat.updatePeerOnlineFromPresence(stateMap);
-                    }
-                    if (typeof window.onCommsHeaderPresence === 'function') {
-                        window.onCommsHeaderPresence(stateMap);
-                    }
+                    applyPresenceMap(presenceChannel.presenceState ? presenceChannel.presenceState() : {});
                 })
                 .subscribe(async function (status) {
                     if (status === 'SUBSCRIBED') {
@@ -514,7 +519,7 @@ import { createClient } from '@supabase/supabase-js';
         postPresence(true);
         setInterval(function () {
             if (document.visibilityState === 'visible') postPresence(true);
-        }, 45000);
+        }, 20000);
 
         document.addEventListener('visibilitychange', function () {
             postPresence(document.visibilityState === 'visible');

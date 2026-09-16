@@ -63,9 +63,8 @@
     function ensureReactionAudio() {
         if (!reactionAudio) {
             reactionAudio = new Audio(REACTION_SOUND_URL);
-            reactionAudio.preload = 'auto';
+            reactionAudio.preload = 'none';
             reactionAudio.volume = 0.75;
-            try { reactionAudio.load(); } catch (_) {}
         }
         return reactionAudio;
     }
@@ -96,7 +95,6 @@
     }
 
     window.playFeedReactionSound = playFeedReactionSound;
-    ensureReactionAudio();
 
     function resolveNextReaction(currentType, requestedType) {
         const requested = requestedType || 'like';

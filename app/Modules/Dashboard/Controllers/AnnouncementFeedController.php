@@ -324,6 +324,11 @@ class AnnouncementFeedController extends Controller
 
         $this->prohibitedWords->assertClean((string) $request->input('body'), 'body');
 
+        $body = preg_replace('/\s+/u', ' ', trim((string) $request->input('body'))) ?? '';
+        if ($body === '') {
+            return response()->json(['message' => 'Please write a comment.'], 422);
+        }
+
         $post = Announcement::query()->active()->findOrFail($id);
         abort_unless($this->canEngageWithPost($user, $post), 403, 'You can only comment on posts from your barangay.');
 
@@ -345,13 +350,13 @@ class AnnouncementFeedController extends Controller
             'user_id' => $user->id,
             'user_type' => self::USER_TYPE,
             'author_name' => Str::limit($authorName !== '' ? $authorName : $user->name, 50, '...'),
-            'body' => $request->body,
+            'body' => $body,
         ]);
 
         $comment->load(['user', 'reactions']);
         $limiter->hit(self::USER_TYPE, (int) $user->id);
 
-        $preview = Str::limit(trim((string) $request->body), 160);
+        $preview = Str::limit($body, 160);
         $this->notifyOfficialsOfPostActivity(
             $post,
             $user,
@@ -371,8 +376,13 @@ class AnnouncementFeedController extends Controller
 
         $this->prohibitedWords->assertClean((string) $request->input('body'), 'body');
 
+        $body = preg_replace('/\s+/u', ' ', trim((string) $request->input('body'))) ?? '';
+        if ($body === '') {
+            return response()->json(['message' => 'Please write a comment.'], 422);
+        }
+
         $comment = $this->ownedComment($id, $commentId, $user);
-        $comment->update(['body' => $request->body]);
+        $comment->update(['body' => $body]);
         $comment->load(['user', 'reactions']);
 
         return response()->json($this->formatComment($comment, $user->id));

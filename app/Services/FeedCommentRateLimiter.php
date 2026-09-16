@@ -19,7 +19,7 @@ class FeedCommentRateLimiter
     /** Cooldown after reaching BURST_LIMIT actions inside the window. */
     public const COOLDOWN_SECONDS = 60;
 
-    public const MAX_BODY_LENGTH = 2000;
+    public const MAX_BODY_LENGTH = 1000;
 
     public const SCOPE_COMMENT = 'feed_comment';
 

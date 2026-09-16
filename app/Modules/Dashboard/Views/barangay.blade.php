@@ -17,12 +17,13 @@
         'app/Modules/Layout/assets/js/kabataan-logout.js',
         'app/Modules/Profile/assets/css/profile.css',
         'app/Modules/Dashboard/assets/css/dashboard.css',
+        'app/Modules/Dashboard/assets/css/feed-videos.css',
         'app/Modules/Dashboard/assets/css/community-feed-comment-preview.css',
         'app/Modules/Dashboard/assets/css/barangay-profile.css',
         'app/Modules/Dashboard/assets/css/notif.css',
         'app/Modules/Dashboard/assets/js/notif.js',
+        'app/Modules/Dashboard/assets/js/feed-videos.js',
     ])
-    <link rel="preload" href="{{ url('/sounds/reactions_ux.mp3') }}" as="audio" type="audio/mpeg">
     <style>
         html:has(.brgy-stalk-page) {
             overflow-x: clip;
@@ -42,27 +43,38 @@
             width: 72px;
             height: 72px;
             border-radius: 50%;
-            border: 3px solid #fff;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            border: 1.5px solid rgba(255, 255, 255, 0.55);
+            box-shadow: 0 1px 3px rgba(0, 57, 168, 0.22);
             overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #fff;
-            font-size: 24px;
-            font-weight: 900;
+            background: #0039a8;
+            font-size: 22px;
+            font-weight: 800;
             color: #fff;
             flex-shrink: 0;
         }
         .bfp-profile-card .brgy-logo.has-logo,
         .bfp-profile-card .brgy-logo.has-logo img {
             background: #fff;
+            border-color: #dbe3f4;
         }
         .bfp-profile-card .brgy-logo img {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
             display: block;
+        }
+        .bfp-profile-card .brgy-logo-fallback {
+            color: #fff;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+            letter-spacing: 0.02em;
+        }
+        .bfp-stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
         }
         .profile-main {
             position: static !important;
@@ -452,7 +464,7 @@
 
                     <div class="bfp-profile-card">
                         <div class="bfp-profile-head">
-                            <div class="brgy-logo{{ empty($logo_url) ? '' : ' has-logo' }}" @if(empty($logo_url)) style="background:{{ $color }};" @endif>
+                            <div class="brgy-logo{{ empty($logo_url) ? '' : ' has-logo' }}"@if(empty($logo_url)) style="background:#0039a8;"@endif>
                                 @if(!empty($logo_url))
                                     <img src="{{ $logo_url }}" alt="Barangay {{ $name }} logo" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
                                     <span class="brgy-logo-fallback" hidden>{{ $initials ?? strtoupper(substr($name, 0, 2)) }}</span>
@@ -471,7 +483,14 @@
                         <div class="bfp-stats">
                             <div class="bfp-stat"><strong>{{ $post_count ?? 0 }}</strong><span>Posts</span></div>
                             <div class="bfp-stat"><strong>{{ $officer_count ?? 0 }}</strong><span>Officers</span></div>
-                            <div class="bfp-stat bfp-stat--term"><strong>{{ $term_label ?? '—' }}</strong><span>SK Term</span></div>
+                            <div class="bfp-stat bfp-stat--term">
+                                <strong>{{ $term_start ?? '—' }}</strong>
+                                <span>Term Start</span>
+                            </div>
+                            <div class="bfp-stat bfp-stat--term">
+                                <strong>{{ $term_end ?? '—' }}</strong>
+                                <span>Term End</span>
+                            </div>
                         </div>
                     </div>
 
@@ -486,7 +505,7 @@
                             <div class="officer-list">
                             @forelse ($officials as $official)
                             <div class="officer-item">
-                                <div class="officer-avatar{{ empty($official['logo_url']) ? '' : ' has-logo' }}" @if(empty($official['logo_url'])) style="background:{{ $color }};" @endif>
+                                <div class="officer-avatar{{ empty($official['logo_url']) ? '' : ' has-logo' }}"@if(empty($official['logo_url'])) style="background:#0039a8;"@endif>
                                     @if(!empty($official['logo_url']))
                                         <img src="{{ $official['logo_url'] }}" alt="{{ $official['name'] }}" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
                                         <span hidden>{{ $official['initials'] }}</span>
@@ -518,6 +537,26 @@
 
     @include('dashboard::comment-preview')
 
+    <div id="imageLightbox" class="image-lightbox" aria-hidden="true">
+        <button type="button" id="lightboxClose" class="lightbox-close" aria-label="Close">&times;</button>
+        <button type="button" id="lightboxPrev" class="lightbox-nav lightbox-prev" aria-label="Previous">&#10094;</button>
+        <div class="lightbox-viewport" id="lightboxViewport">
+            <img id="lightboxImage" src="" alt="Full size photo" draggable="false">
+        </div>
+        <button type="button" id="lightboxNext" class="lightbox-nav lightbox-next" aria-label="Next">&#10095;</button>
+        <div id="lightboxCounter" class="lightbox-counter"></div>
+    </div>
+
+    <div id="videoLightbox" class="image-lightbox video-lightbox" aria-hidden="true">
+        <button type="button" id="videoLightboxClose" class="lightbox-close" aria-label="Close">&times;</button>
+        <button type="button" id="videoLightboxPrev" class="lightbox-nav lightbox-prev" aria-label="Previous" hidden>&#10094;</button>
+        <div class="lightbox-viewport video-lightbox-viewport" id="videoLightboxViewport">
+            <div id="videoLightboxFrame" class="video-lightbox-frame"></div>
+        </div>
+        <button type="button" id="videoLightboxNext" class="lightbox-nav lightbox-next" aria-label="Next" hidden>&#10095;</button>
+        <div id="videoLightboxCounter" class="lightbox-counter" hidden></div>
+    </div>
+
     <script>
     window.CommunityFeedConfig = {
         commentsPageUrl: @json(url('/barangay/'.$slug.'/__ID__')),
@@ -548,7 +587,6 @@
         'app/Modules/Dashboard/assets/js/barangay-profile.js',
     ])
     <script>
-    window.addEventListener('unload', function () {});
     window.addEventListener('pageshow', function (e) {
         if (e.persisted) { window.location.replace(window.location.href); }
     });

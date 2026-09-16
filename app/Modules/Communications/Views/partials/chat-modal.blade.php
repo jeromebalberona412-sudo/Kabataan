@@ -92,12 +92,16 @@
 
                     <form class="comms-chat-modal-composer" id="commsChatModalForm" autocomplete="off">
                     <input type="file" id="commsChatPhotoInput" class="visually-hidden" accept="image/jpeg,image/png,image/webp,image/gif" multiple aria-hidden="true" tabindex="-1">
+                    <input type="file" id="commsChatCameraInput" class="visually-hidden" accept="image/*" capture="environment" aria-hidden="true" tabindex="-1">
                     <input type="file" id="commsChatFileInput" class="visually-hidden" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-hidden="true" tabindex="-1">
                     <div class="comms-chat-attach-wrap">
-                        <button type="button" class="comms-chat-attach-btn" id="commsChatAttachBtn" title="Maximum 25 MB" aria-label="Attach. Maximum 25 MB">
+                        <button type="button" class="comms-chat-attach-btn" id="commsChatAttachBtn" title="Add photo or file" aria-label="Add photo or file. Maximum 25 MB">
                             <span aria-hidden="true">+</span>
                         </button>
                         <div class="comms-chat-attach-menu" id="commsChatAttachMenu" hidden>
+                            <button type="button" class="comms-chat-attach-menu-item" id="commsChatPickCamera" title="Take a photo">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Camera
+                            </button>
                             <button type="button" class="comms-chat-attach-menu-item" id="commsChatPickPhotos" title="Maximum 25 MB">
                                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg> Photos
                             </button>
@@ -127,6 +131,27 @@
                     </form>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+{{-- Live camera capture for chat attach (+) --}}
+<div id="commsLiveCameraModal" class="comms-live-camera" hidden>
+    <div class="comms-live-camera-backdrop" data-comms-live-camera-close tabindex="-1"></div>
+    <div class="comms-live-camera-panel" role="dialog" aria-modal="true" aria-labelledby="commsLiveCameraTitle">
+        <div class="comms-live-camera-header">
+            <h3 id="commsLiveCameraTitle">Take a photo</h3>
+            <button type="button" class="comms-live-camera-close" data-comms-live-camera-close aria-label="Close camera">&times;</button>
+        </div>
+        <div class="comms-live-camera-stage">
+            <video id="commsLiveCameraVideo" autoplay playsinline muted></video>
+            <canvas id="commsLiveCameraCanvas" hidden></canvas>
+            <p class="comms-live-camera-hint" id="commsLiveCameraHint">Allow camera access to capture a live photo.</p>
+        </div>
+        <div class="comms-live-camera-actions">
+            <button type="button" class="comms-live-camera-btn" id="commsLiveCameraFlip" title="Flip camera">Flip</button>
+            <button type="button" class="comms-live-camera-btn comms-live-camera-btn--primary" id="commsLiveCameraCapture">Capture</button>
+            <button type="button" class="comms-live-camera-btn" data-comms-live-camera-close>Cancel</button>
         </div>
     </div>
 </div>

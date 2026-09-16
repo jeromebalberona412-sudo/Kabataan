@@ -333,6 +333,44 @@ body.kkpu-mandatory-open {
 /* Hide programs button on desktop, show on mobile */
 .programs-drawer-btn {
     display: none;
+    position: relative;
+}
+
+.programs-drawer-btn .kabataan-header__caret {
+    display: none !important;
+}
+
+.kabataan-header__tutorial-menu {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.kabataan-header__icon-btn.tutorial-header-btn {
+    color: #fff;
+}
+
+.kabataan-header__icon-btn.tutorial-header-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.kabataan-header__caret {
+    position: absolute;
+    right: 2px;
+    bottom: 3px;
+    width: 0;
+    height: 0;
+    border-left: 3.5px solid transparent;
+    border-right: 3.5px solid transparent;
+    border-top: 4.5px solid rgba(255, 255, 255, 0.98);
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+    pointer-events: none;
+    z-index: 2;
+}
+
+.comms-header-msg-btn {
+    position: relative;
 }
 
 .kabataan-header__icon-btn svg,
@@ -360,13 +398,26 @@ body.kkpu-mandatory-open {
     cursor: pointer;
     background: none;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
+    position: relative;
 }
 
 .kabataan-header__avatar-btn img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: 50%;
+    display: block;
+}
+
+.kabataan-header__caret--profile {
+    right: -1px;
+    bottom: -1px;
+    border-left-width: 3.5px;
+    border-right-width: 3.5px;
+    border-top-width: 4.5px;
+    border-top-color: #fff;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
 }
 
 .kabataan-header .notif-nav-wrapper {

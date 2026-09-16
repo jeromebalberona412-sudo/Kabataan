@@ -37,10 +37,16 @@ body.brgy-stalk-page {
 .bfp-stat--term strong {
     white-space: nowrap;
     overflow: visible;
-    font-size: 13px;
+    font-size: 12px;
     letter-spacing: -0.02em;
     overflow-wrap: normal;
     word-break: normal;
+}
+
+.bfp-profile-card .bfp-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
 }
 
 .brgy-officers-card .officer-item {
@@ -82,13 +88,14 @@ body.brgy-stalk-page {
 }
 
 .brgy-officers-card .officer-avatar.has-logo {
-    background: #fff;
+    background: #fff !important;
+    border: 1.5px solid #dbe3f4;
 }
 
 .brgy-officers-card .officer-avatar img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
+    object-fit: cover;
     background: #fff;
     display: block;
 }

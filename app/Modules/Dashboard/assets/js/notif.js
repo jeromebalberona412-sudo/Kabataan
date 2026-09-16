@@ -42,17 +42,11 @@ function npUpdateBadge(unread) {
     const count = Math.max(0, parseInt(unread, 10) || 0);
     const label = count > 0 ? npFormatCount(count) : '';
     const badge = document.getElementById('notifNavBadge');
-    const pill = document.getElementById('notifCountPill');
 
     if (badge) {
         badge.setAttribute('data-unread-total', String(count));
         badge.textContent = label;
         badge.hidden = count <= 0;
-    }
-    if (pill) {
-        pill.setAttribute('data-unread-total', String(count));
-        pill.textContent = label;
-        pill.hidden = count <= 0;
     }
 }
 

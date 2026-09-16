@@ -17,20 +17,42 @@ let viewerBound = false;
 let syncingUrl = false;
 let expandedReplies = new Set();
 
-const COMMENT_MAX_CHARS = window.FeedCommentGuard?.COMMENT_MAX_CHARS || 2000;
-const COMMENT_LIMIT_MSG = 'Comments and replies are limited to 2,000 characters.';
+const COMMENT_MAX_CHARS = window.FeedCommentGuard?.COMMENT_MAX_CHARS || 1000;
+const COMMENT_LIMIT_MSG = window.FeedCommentGuard?.COMMENT_LIMIT_MSG
+    || 'Comments and replies are limited to 1,000 characters.';
 
 const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 const cfg = () => window.CommentPreviewConfig || {};
 const REACTION_SOUND_URL = '/sounds/reactions_ux.mp3';
 let reactionAudio = null;
 
+function normalizeCommentBody(text) {
+    if (typeof window.FeedCommentGuard?.normalizeCommentText === 'function') {
+        return window.FeedCommentGuard.normalizeCommentText(text);
+    }
+    return String(text || '')
+        .replace(/[\r\n\u2028\u2029]+/g, ' ')
+        .replace(/[ \t\f\v]+/g, ' ')
+        .trim();
+}
+
+function updateEditCommentCounter() {
+    const field = document.getElementById('editCommentBody');
+    const counter = document.getElementById('editCommentCounter');
+    if (!field || !counter) return;
+    const len = String(field.value || '').length;
+    counter.textContent = len + ' / ' + COMMENT_MAX_CHARS;
+    counter.classList.toggle('is-near', len >= Math.floor(COMMENT_MAX_CHARS * 0.9));
+    counter.classList.toggle('is-over', len > COMMENT_MAX_CHARS);
+}
+
 function commentBodyError(text) {
-    if (!text) return 'Please write a comment.';
+    const normalized = normalizeCommentBody(text);
+    if (!normalized) return 'Please write a comment.';
     const cooldownError = window.FeedCommentGuard?.assertCanComment?.();
     if (cooldownError) return cooldownError;
-    if (text.length > COMMENT_MAX_CHARS) return COMMENT_LIMIT_MSG;
-    return window.ProhibitedWords?.assertClean?.(text) || null;
+    if (normalized.length > COMMENT_MAX_CHARS) return COMMENT_LIMIT_MSG;
+    return window.ProhibitedWords?.assertClean?.(normalized) || null;
 }
 
 function playReactionSound() {
@@ -41,9 +63,8 @@ function playReactionSound() {
     try {
         if (!reactionAudio) {
             reactionAudio = new Audio(REACTION_SOUND_URL);
-            reactionAudio.preload = 'auto';
+            reactionAudio.preload = 'none';
             reactionAudio.volume = 0.75;
-            try { reactionAudio.load(); } catch (_) {}
         }
         reactionAudio.muted = false;
         reactionAudio.volume = 0.75;
@@ -64,6 +85,14 @@ function escapeHtml(text) {
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function linkifyText(text) {
+    const escaped = escapeHtml(text);
+    return escaped.replace(
+        /(https?:\/\/[^\s<]+)/g,
+        '<a href="$1" target="_blank" rel="noopener noreferrer" class="post-inline-link">$1</a>'
+    );
+}
+
 function truncateName(text, max = 50) {
     const s = String(text ?? '').trim();
     return s.length > max ? s.substring(0, max) + '...' : s;
@@ -72,8 +101,26 @@ function truncateName(text, max = 50) {
 function notifyPreview(message, type = 'success') {
     if (typeof window.showFeedToast === 'function') {
         window.showFeedToast(message, type);
+        return;
     }
+    const el = document.getElementById('feedToast');
+    if (!el) return;
+    el.textContent = message;
+    el.className = 'feed-toast feed-toast--' + (type || 'success') + ' is-visible';
+    clearTimeout(window._feedToastTimer);
+    window._feedToastTimer = setTimeout(() => el.classList.remove('is-visible'), 3200);
 }
+
+function setActionButtonLoading(btn, loading) {
+    if (!btn) return;
+    btn.disabled = !!loading;
+    btn.classList.toggle('is-loading', !!loading);
+}
+
+let pendingCommentAction = null;
+let commentActionsBound = false;
+let cpLightboxImages = [];
+let cpLightboxIndex = 0;
 
 const reactionRequestSeq = new Map();
 const reactionAbort = new Map();
@@ -188,16 +235,70 @@ function commentLikeInner(type) {
     return `<span>${escapeHtml(label)}</span>`;
 }
 
+function postMediaItems(source) {
+    const images = source?.images?.length ? source.images : (source?.image_url ? [source.image_url] : []);
+    const videos = Array.isArray(source?.videos) ? source.videos.filter(Boolean) : [];
+    const items = images.filter(Boolean).map((url) => ({ kind: 'image', url }));
+    videos.forEach((video, videoIndex) => {
+        items.push({ kind: 'video', videoIndex, ...video });
+    });
+    if (!videos.length && source?.google_drive_video) {
+        items.push({ kind: 'video', videoIndex: 0, ...source.google_drive_video });
+    }
+    return items;
+}
+
+function openCpMedia(items, startIndex = 0) {
+    const list = Array.isArray(items) ? items.filter(Boolean) : [];
+    if (!list.length) return;
+    if (typeof window.KabataanFeedVideos?.openMediaLightbox === 'function') {
+        window.KabataanFeedVideos.openMediaLightbox(list, startIndex);
+        return;
+    }
+    if (typeof window.KabataanFeedVideos?.openVideoLightbox === 'function' && list.some((item) => item.kind === 'video')) {
+        window.KabataanFeedVideos.openVideoLightbox(list, startIndex);
+        return;
+    }
+    const images = list.filter((item) => item.kind === 'image').map((item) => item.url).filter(Boolean);
+    const imageStart = Math.max(0, images.indexOf(list[startIndex]?.url));
+    openCpImageLightbox(images, imageStart >= 0 ? imageStart : 0);
+}
+
+function openCpImageLightbox(images, startIndex = 0) {
+    const list = (Array.isArray(images) ? images : []).filter(Boolean);
+    if (!list.length) return;
+    if (typeof window.openLightbox === 'function') {
+        window.openLightbox(list, startIndex);
+        return;
+    }
+    cpLightboxImages = list;
+    cpLightboxIndex = Math.max(0, Math.min(list.length - 1, Number(startIndex) || 0));
+    const lb = document.getElementById('imageLightbox');
+    const img = document.getElementById('lightboxImage');
+    const counter = document.getElementById('lightboxCounter');
+    if (!lb || !img) return;
+    img.src = cpLightboxImages[cpLightboxIndex];
+    if (counter) {
+        counter.textContent = `${cpLightboxIndex + 1} / ${cpLightboxImages.length}`;
+        counter.hidden = cpLightboxImages.length < 2;
+    }
+    lb.classList.add('active');
+    lb.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
 function renderPost() {
     if (!post) return;
     document.getElementById('cpTitle').textContent = `${truncateName(post.author_name || 'SK')}'s Post`;
-    const images = post.images?.length ? post.images : (post.image_url ? [post.image_url] : []);
+    const mediaItems = postMediaItems(post);
+    const images = mediaItems.filter((item) => item.kind === 'image').map((item) => item.url);
     const mediaClass = images.length > 1 ? 'two' : 'one';
-    const media = images.length
+    const imageMedia = images.length
         ? `<div class="cp-media ${mediaClass}">${images.map((src, index) =>
-            `<button type="button" class="cp-media-btn" data-index="${index}" aria-label="View photo ${index + 1}"><img src="${escapeHtml(src)}" alt=""></button>`
+            `<button type="button" class="cp-media-btn" data-media-index="${index}" aria-label="View photo ${index + 1}"><img src="${escapeHtml(src)}" alt=""></button>`
         ).join('')}</div>`
         : '';
+    const videoMedia = window.KabataanFeedVideos?.buildPostVideosHtml?.(post) || '';
 
     document.getElementById('cpPost').innerHTML = `
         <div class="cp-post-head">
@@ -208,9 +309,14 @@ function renderPost() {
             </div>
         </div>
         ${post.title ? `<h2 class="cp-title-text">${escapeHtml(post.title)}</h2>` : ''}
-        <p class="cp-body">${escapeHtml(post.body || '')}</p>
-        ${media}
+        <p class="cp-body">${linkifyText(post.body || '')}</p>
+        ${imageMedia}
+        ${videoMedia}
     `;
+    const cpPostEl = document.getElementById('cpPost');
+    if (cpPostEl) {
+        cpPostEl.dataset.mediaAlbum = JSON.stringify(mediaItems);
+    }
 
     const likes = Number(post.likes || 0);
     const comments = countComments(post.comments);
@@ -237,11 +343,10 @@ function renderPost() {
     }
     document.querySelectorAll('.cp-media-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-            if (typeof window.openLightbox === 'function') {
-                window.openLightbox(images, Number(btn.dataset.index || 0));
-            }
+            openCpMedia(mediaItems, Number(btn.dataset.mediaIndex || 0));
         });
     });
+    window.KabataanFeedVideos?.bindFeedVideos?.(document.getElementById('cpPost'));
     document.getElementById('cpViewPostReactions')?.addEventListener('click', () => openViewer('post'));
     document.getElementById('cpFocusComments')?.addEventListener('click', () => {
         document.getElementById('cpComments')?.scrollIntoView({ block: 'nearest' });
@@ -293,7 +398,7 @@ function commentHtml(comment, isReply) {
         <div class="cp-comment-body">
             <div class="cp-bubble">
                 <span class="cp-bubble-name">${escapeHtml(truncateName(comment.author_name))}</span>
-                <span class="cp-bubble-text" id="cp-text-${comment.id}">${escapeHtml(comment.body)}</span>
+                <span class="cp-bubble-text" id="cp-text-${comment.id}">${linkifyText(comment.body)}</span>
                 ${badge}
             </div>
             <div class="cp-comment-meta">
@@ -307,7 +412,7 @@ function commentHtml(comment, isReply) {
             </div>
             ${viewReplies}
             ${isViewOnly() ? '' : `<div class="cp-reply-box" id="cp-reply-${comment.id}">
-                <input type="text" maxlength="2000" placeholder="Write a reply..." data-reply-input="${comment.id}">
+                <input type="text" maxlength="1000" placeholder="Write a reply..." data-reply-input="${comment.id}">
                 <button type="button" class="cp-send-btn" data-reply-send="${comment.id}" disabled aria-label="Send reply">${SEND_SVG}</button>
             </div>`}
             ${replies.length ? `<div class="cp-replies" id="cp-replies-${comment.id}"${repliesOpen ? '' : ' hidden'}>${replies.map((r) => commentHtml(r, true)).join('')}</div>` : ''}
@@ -811,7 +916,7 @@ function bindPage() {
     input?.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter' || e.repeat || e.isComposing) return;
         e.preventDefault();
-        const text = input.value.trim();
+        const text = normalizeCommentBody(input.value);
         if (!text) return;
         if (text.length > COMMENT_MAX_CHARS) {
             notifyPreview(COMMENT_LIMIT_MSG, 'error');
@@ -823,7 +928,7 @@ function bindPage() {
     });
     send?.addEventListener('click', () => {
         const field = composerEls().input;
-        const text = field?.value.trim();
+        const text = normalizeCommentBody(field?.value);
         if (!text) return;
         if (text.length > COMMENT_MAX_CHARS) {
             notifyPreview(COMMENT_LIMIT_MSG, 'error');
@@ -892,16 +997,12 @@ function bindPage() {
         }
         const edit = e.target.closest('[data-edit]');
         if (edit) {
-            if (typeof window.editComment === 'function') {
-                window.editComment(post.id, edit.dataset.edit);
-            }
+            editComment(post.id, edit.dataset.edit);
             return;
         }
         const del = e.target.closest('[data-del]');
         if (del) {
-            if (typeof window.deleteComment === 'function') {
-                window.deleteComment(post.id, del.dataset.del);
-            }
+            deleteComment(post.id, del.dataset.del);
             return;
         }
         const replySend = e.target.closest('[data-reply-send]');
@@ -909,7 +1010,7 @@ function bindPage() {
             if (replySend.disabled) return;
             const id = replySend.dataset.replySend;
             const field = document.querySelector(`#commentPreviewShell [data-reply-input="${id}"]`);
-            const text = field?.value.trim();
+            const text = normalizeCommentBody(field?.value);
             if (!text) return;
             if (text.length > COMMENT_MAX_CHARS) {
                 notifyPreview(COMMENT_LIMIT_MSG, 'error');
@@ -936,7 +1037,7 @@ function bindPage() {
         const field = e.target.closest('[data-reply-input]');
         if (!field || e.key !== 'Enter' || e.repeat || e.isComposing) return;
         e.preventDefault();
-        const text = field.value.trim();
+        const text = normalizeCommentBody(field.value);
         if (!text) return;
         if (text.length > COMMENT_MAX_CHARS) {
             notifyPreview(COMMENT_LIMIT_MSG, 'error');
@@ -1061,6 +1162,183 @@ window.openCommentPreview = openCommentPreview;
 window.closeCommentPreview = closeCommentPreview;
 window.openPostReactionViewer = openPostReactionViewer;
 
+function isReplyComment(commentId) {
+    const comments = post?.comments || [];
+    for (const comment of comments) {
+        if ((comment.replies || []).some((reply) => Number(reply.id) === Number(commentId))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function commentBodyText(commentId) {
+    return document.getElementById('feed-comment-text-' + commentId)?.textContent
+        || document.getElementById('cp-text-' + commentId)?.textContent
+        || findComment(post?.comments || [], commentId)?.body
+        || '';
+}
+
+function previewStillOpen() {
+    return document.getElementById('commentPreviewShell')?.classList.contains('is-open');
+}
+
+function editComment(postId, commentId) {
+    pendingCommentAction = {
+        postId: Number(postId),
+        commentId: Number(commentId),
+        isReply: isReplyComment(commentId),
+    };
+    document.querySelectorAll('.comment-options-menu.open, .cp-options-menu.open').forEach((menu) => {
+        menu.classList.remove('open');
+    });
+    const modal = document.getElementById('editCommentModal');
+    const field = document.getElementById('editCommentBody');
+    const title = document.getElementById('editCommentModalTitle');
+    if (!modal || !field) return;
+    if (title) title.textContent = pendingCommentAction.isReply ? 'Edit Reply' : 'Edit Comment';
+    field.value = normalizeCommentBody(commentBodyText(commentId));
+    field.setAttribute('maxlength', String(COMMENT_MAX_CHARS));
+    updateEditCommentCounter();
+    window.FeedCommentGuard?.bindLengthGuard?.(field);
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => field.focus(), 50);
+}
+
+function closeEditCommentModal() {
+    document.getElementById('editCommentModal')?.classList.remove('active');
+    setActionButtonLoading(document.getElementById('confirmEditCommentBtn'), false);
+    pendingCommentAction = null;
+    if (!previewStillOpen()) document.body.style.overflow = '';
+}
+
+async function confirmEditComment() {
+    if (!pendingCommentAction) return;
+    const { postId, commentId, isReply } = pendingCommentAction;
+    const body = normalizeCommentBody(document.getElementById('editCommentBody')?.value);
+    const bodyError = commentBodyError(body);
+    if (bodyError) {
+        notifyPreview(bodyError, 'error');
+        return;
+    }
+    const btn = document.getElementById('confirmEditCommentBtn');
+    if (btn?.classList.contains('is-loading')) return;
+    setActionButtonLoading(btn, true);
+    try {
+        const updated = await apiFetch(`/api/feed/${postId}/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body }),
+        });
+        const feedEl = document.getElementById('feed-comment-text-' + commentId);
+        if (feedEl) feedEl.innerHTML = linkifyText(updated.body);
+        const previewEl = document.getElementById('cp-text-' + commentId);
+        if (previewEl) previewEl.innerHTML = linkifyText(updated.body);
+        const found = findComment(post?.comments || [], commentId);
+        if (found) found.body = updated.body;
+        document.dispatchEvent(new CustomEvent('community-feed:comment-updated', { detail: updated }));
+        closeEditCommentModal();
+        notifyPreview(isReply ? 'Reply updated successfully.' : 'Comment updated successfully.');
+    } catch (err) {
+        notifyPreview(err?.message || (isReply ? 'Unable to update the reply. Please try again.' : 'Unable to update the comment. Please try again.'), 'error');
+        setActionButtonLoading(btn, false);
+    }
+}
+
+function deleteComment(postId, commentId) {
+    pendingCommentAction = {
+        postId: Number(postId),
+        commentId: Number(commentId),
+        isReply: isReplyComment(commentId),
+    };
+    document.querySelectorAll('.comment-options-menu.open, .cp-options-menu.open').forEach((menu) => {
+        menu.classList.remove('open');
+    });
+    const modal = document.getElementById('deleteCommentModal');
+    if (!modal) return;
+    const title = document.getElementById('deleteCommentModalTitle') || modal.querySelector('h2');
+    const body = document.getElementById('deleteCommentModalBody') || modal.querySelector('.modal-body p');
+    if (title) title.textContent = pendingCommentAction.isReply ? 'Delete Reply' : 'Delete Comment';
+    if (body) {
+        body.textContent = pendingCommentAction.isReply
+            ? 'Are you sure you want to delete this reply?'
+            : 'Are you sure you want to delete this comment?';
+    }
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeDeleteCommentModal() {
+    document.getElementById('deleteCommentModal')?.classList.remove('active');
+    setActionButtonLoading(document.getElementById('confirmDeleteCommentBtn'), false);
+    pendingCommentAction = null;
+    if (!previewStillOpen()) document.body.style.overflow = '';
+}
+
+async function confirmDeleteComment() {
+    if (!pendingCommentAction) return;
+    const { postId, commentId, isReply } = pendingCommentAction;
+    const btn = document.getElementById('confirmDeleteCommentBtn');
+    if (btn?.classList.contains('is-loading')) return;
+    setActionButtonLoading(btn, true);
+    try {
+        await apiFetch(`/api/feed/${postId}/comments/${commentId}`, { method: 'DELETE' });
+        document.querySelectorAll('[data-comment-id="' + commentId + '"]').forEach((el) => el.remove());
+        document.dispatchEvent(new CustomEvent('community-feed:comment-deleted', { detail: { postId, commentId } }));
+        closeDeleteCommentModal();
+        notifyPreview(isReply ? 'Reply deleted successfully.' : 'Comment deleted successfully.');
+    } catch (err) {
+        notifyPreview(err?.message || (isReply ? 'Unable to delete the reply. Please try again.' : 'Unable to delete the comment. Please try again.'), 'error');
+        setActionButtonLoading(btn, false);
+    }
+}
+
+function bindCommentActionModals() {
+    if (commentActionsBound) return;
+    commentActionsBound = true;
+    document.querySelectorAll('[data-close-edit-comment]').forEach((el) => {
+        el.addEventListener('click', closeEditCommentModal);
+    });
+    document.querySelectorAll('[data-close-delete-comment]').forEach((el) => {
+        el.addEventListener('click', closeDeleteCommentModal);
+    });
+    document.getElementById('confirmEditCommentBtn')?.addEventListener('click', confirmEditComment);
+    document.getElementById('confirmDeleteCommentBtn')?.addEventListener('click', confirmDeleteComment);
+    document.getElementById('editCommentBody')?.addEventListener('input', updateEditCommentCounter);
+    document.getElementById('lightboxClose')?.addEventListener('click', () => {
+        const lb = document.getElementById('imageLightbox');
+        lb?.classList.remove('active');
+        lb?.setAttribute('aria-hidden', 'true');
+        if (!previewStillOpen() && !document.getElementById('videoLightbox')?.classList.contains('active')) {
+            document.body.style.overflow = '';
+        }
+    });
+    document.getElementById('lightboxPrev')?.addEventListener('click', () => {
+        if (cpLightboxImages.length < 2) return;
+        cpLightboxIndex = (cpLightboxIndex - 1 + cpLightboxImages.length) % cpLightboxImages.length;
+        const img = document.getElementById('lightboxImage');
+        const counter = document.getElementById('lightboxCounter');
+        if (img) img.src = cpLightboxImages[cpLightboxIndex];
+        if (counter) counter.textContent = `${cpLightboxIndex + 1} / ${cpLightboxImages.length}`;
+    });
+    document.getElementById('lightboxNext')?.addEventListener('click', () => {
+        if (cpLightboxImages.length < 2) return;
+        cpLightboxIndex = (cpLightboxIndex + 1) % cpLightboxImages.length;
+        const img = document.getElementById('lightboxImage');
+        const counter = document.getElementById('lightboxCounter');
+        if (img) img.src = cpLightboxImages[cpLightboxIndex];
+        if (counter) counter.textContent = `${cpLightboxIndex + 1} / ${cpLightboxImages.length}`;
+    });
+}
+
+window.editComment = editComment;
+window.deleteComment = deleteComment;
+window.confirmEditComment = confirmEditComment;
+window.confirmDeleteComment = confirmDeleteComment;
+window.closeEditCommentModal = closeEditCommentModal;
+window.closeDeleteCommentModal = closeDeleteCommentModal;
+
 window.addEventListener('popstate', () => {
     if (syncingUrl || cfg().syncUrl === false) return;
     const match = window.location.pathname.match(/\/dashboard\/comments\/(\d+)\/?$/)
@@ -1099,7 +1377,9 @@ document.addEventListener('community-feed:comment-deleted', (event) => {
 
 document.addEventListener('DOMContentLoaded', () => {
     bindReactionViewer();
+    bindCommentActionModals();
     if (post) openCommentPreview(post, { skipUrl: true });
 });
 bindReactionViewer();
+bindCommentActionModals();
 })();

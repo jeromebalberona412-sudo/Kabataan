@@ -41,7 +41,10 @@
         <div class="youth-signin-section">
             <div class="youth-signin-card">
                 <div id="ceVerifySection"
-                     data-status-url="{{ route('change-email.verify.status', [], false) }}">
+                     data-status-url="{{ route('change-email.verify.status', [], false) }}"
+                     data-resend-url="{{ route('change-email.resend', [], false) }}"
+                     data-signin-url="{{ route('sign-in', [], false) }}"
+                     data-dashboard-url="{{ route('dashboard', [], false) }}">
                     <div class="card-header ce-card-header">
                         <h2 class="card-title">Verify Email Change</h2>
                         <p class="card-helper-text">Check your new email and tap the confirmation link. This page will detect it automatically.</p>
@@ -79,8 +82,8 @@
                             </div>
                         @endif
 
-                        <div class="ce-info-box">
-                            A confirmation link has been sent to <strong id="cePendingEmail">{{ $user->pending_email }}</strong>. Your current email stays active until you verify the new one.
+                        <div class="ce-info-box" id="ceInfoBox">
+                            A confirmation link has been sent to <strong id="cePendingEmail">{{ $user->pending_email }}</strong>. Your current email stays active until you verify the new one. After you confirm, you will be taken to your dashboard.
                         </div>
 
                         <div class="ce-status-table">
@@ -95,35 +98,29 @@
                             <div class="ce-status-row">
                                 <span class="ce-status-key">Status</span>
                                 <span class="ce-status-val">
-                                    <span class="ce-badge-awaiting" id="ceStatusBadge" @if($awaitingPassword) style="background:#fef3c7;color:#92400e;" @endif>{{ $awaitingPassword ? 'Awaiting password' : 'Awaiting verification' }}</span>
+                                    <span class="ce-badge-awaiting" id="ceStatusBadge">Awaiting verification</span>
                                 </span>
                             </div>
                         </div>
 
-                        @unless($awaitingPassword)
-                            <div class="ce-resend-timer" id="ceTimer" @if($resendCooldown <= 0) style="display:none;" @endif>
-                                Resend available in <strong id="ceTimerCount">{{ $resendCooldown > 0 ? sprintf('%d:%02d', intdiv($resendCooldown, 60), $resendCooldown % 60) : '1:00' }}</strong>
-                            </div>
+                        <div class="ce-resend-timer" id="ceTimer" @if($resendCooldown <= 0) style="display:none;" @endif>
+                            Resend available in <strong id="ceTimerCount">{{ $resendCooldown > 0 ? sprintf('%d:%02d', intdiv($resendCooldown, 60), $resendCooldown % 60) : '1:00' }}</strong>
+                        </div>
 
-                            <div class="ce-actions">
-                                <form action="{{ route('change-email.resend') }}" method="POST" id="ceResendForm">
-                                    @csrf
-                                    <button type="submit" class="ce-btn-resend" id="ceResendBtn" @if($resendCooldown > 0) disabled @endif>
-                                        Resend Verification
-                                    </button>
-                                </form>
-                                <form action="{{ route('change-email.cancel') }}" method="POST" id="ceCancelForm">
-                                    @csrf
-                                    <button type="submit" class="ce-btn-cancel" id="ceCancelBtn">
-                                        Cancel Request
-                                    </button>
-                                </form>
-                            </div>
-                        @else
-                            <div class="ce-info-box">
-                                Complete the <strong>Set New Password</strong> step on the tab where you opened the confirmation link. This page will sign you out automatically once your password is set.
-                            </div>
-                        @endunless
+                        <div class="ce-actions">
+                            <form action="{{ route('change-email.resend') }}" method="POST" id="ceResendForm">
+                                @csrf
+                                <button type="submit" class="ce-btn-resend" id="ceResendBtn" @if($resendCooldown > 0) disabled @endif>
+                                    Resend Verification
+                                </button>
+                            </form>
+                            <form action="{{ route('change-email.cancel') }}" method="POST" id="ceCancelForm">
+                                @csrf
+                                <button type="submit" class="ce-btn-cancel" id="ceCancelBtn">
+                                    Cancel Request
+                                </button>
+                            </form>
+                        </div>
 
                         <div class="youth-register-section ce-back-section">
                             <p class="register-text">
@@ -138,7 +135,6 @@
 
     <script>
         window.ceResendCooldown = {{ (int) $resendCooldown }};
-        window.ceAwaitingPassword = {{ $awaitingPassword ? 'true' : 'false' }};
     </script>
 </body>
 </html>
