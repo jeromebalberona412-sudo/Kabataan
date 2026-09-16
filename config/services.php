@@ -30,6 +30,10 @@ return [
 
     'sk_officials_app_url' => env('SK_OFFICIALS_APP_URL'),
 
+    'sk_fed_app_url' => env('SK_FED_APP_URL'),
+
+    'kabataan_app_url' => env('KABATAAN_APP_URL', env('APP_PUBLIC_URL')),
+
     'cloudinary' => [
         'cloud_name' => env('CLOUDINARY_CLOUD_NAME'),
         'api_key' => env('CLOUDINARY_API_KEY'),

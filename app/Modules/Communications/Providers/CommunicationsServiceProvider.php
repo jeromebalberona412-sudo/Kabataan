@@ -5,6 +5,7 @@ namespace App\Modules\Communications\Providers;
 use App\Modules\Communications\Models\Conversation;
 use App\Modules\Communications\Policies\ConversationPolicy;
 use App\Modules\Communications\Services\ConversationService;
+use App\Support\ModulePath;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
@@ -20,10 +21,13 @@ class CommunicationsServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadViewsFrom(__DIR__.'/../Views', 'communications');
+        $this->loadViewsFrom(ModulePath::views(__DIR__), 'communications');
 
-        Route::middleware('web')
-            ->group(__DIR__.'/../Routes/communications.php');
+        $routesFile = ModulePath::routes(__DIR__, 'communications.php');
+
+        if ($routesFile !== null) {
+            Route::middleware('web')->group($routesFile);
+        }
 
         Gate::policy(Conversation::class, ConversationPolicy::class);
 

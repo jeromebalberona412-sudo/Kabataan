@@ -2,6 +2,7 @@
 
 namespace App\Modules\KKProfiling\Providers;
 
+use App\Support\ModulePath;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -20,9 +21,12 @@ class KKProfilingServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        $this->loadViewsFrom(__DIR__ . '/../Views', 'kkprofiling');
+        $this->loadViewsFrom(ModulePath::views(__DIR__), 'kkprofiling');
 
-        Route::middleware('web')
-            ->group(__DIR__ . '/../Routes/web.php');
+        $routesFile = ModulePath::routes(__DIR__, 'web.php');
+
+        if ($routesFile !== null) {
+            Route::middleware('web')->group($routesFile);
+        }
     }
 }

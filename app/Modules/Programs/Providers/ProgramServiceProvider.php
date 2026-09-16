@@ -2,6 +2,7 @@
 
 namespace App\Modules\Programs\Providers;
 
+use App\Support\ModulePath;
 use Illuminate\Support\ServiceProvider;
 
 class ProgramServiceProvider extends ServiceProvider
@@ -19,10 +20,12 @@ class ProgramServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Load routes
-        $this->loadRoutesFrom(__DIR__ . '/../Routes/web.php');
-        
-        // Load views
-        $this->loadViewsFrom(__DIR__ . '/../Views', 'programs');
+        $routesFile = ModulePath::routes(__DIR__, 'web.php');
+
+        if ($routesFile !== null) {
+            $this->loadRoutesFrom($routesFile);
+        }
+
+        $this->loadViewsFrom(ModulePath::views(__DIR__), 'programs');
     }
 }

@@ -34,6 +34,23 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->reportable(function (\Throwable $e): bool {
+            $message = $e->getMessage();
+
+            if (
+                $e instanceof \Illuminate\Foundation\ViteManifestNotFoundException
+                || str_contains($message, 'Vite manifest')
+                || str_contains($message, 'Unable to locate file in Vite manifest')
+            ) {
+                \Illuminate\Support\Facades\Log::error(
+                    'Production Vite assets are missing. Run npm run build and deploy public/build/.',
+                    ['exception' => $message]
+                );
+            }
+
+            return true;
+        });
+
         $exceptions->render(function (\Illuminate\Session\TokenMismatchException $e, \Illuminate\Http\Request $request) {
             if ($request->is('forgot-password*') || $request->is('reset-password*')) {
                 if ($request->expectsJson() || $request->header('X-Requested-With') === 'XMLHttpRequest') {

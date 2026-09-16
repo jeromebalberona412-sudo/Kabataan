@@ -265,7 +265,18 @@ class AuthController extends Controller
                 ->with('turnstile_required', (bool) $attempt['turnstile_required']);
         }
 
-        $status = Password::sendResetLink($request->only('email'));
+        $status = Password::RESET_LINK_SENT;
+
+        try {
+            $status = Password::sendResetLink($request->only('email'));
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()
+                ->withInput($request->only('email'))
+                ->with('forgot_password_error', 'We could not send the password reset email. Please try again later.')
+                ->with('turnstile_required', true);
+        }
 
         if ($status === Password::RESET_THROTTLED) {
             $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);
@@ -383,7 +394,17 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $status = Password::sendResetLink(['email' => (string) $state['email']]);
+        try {
+            $status = Password::sendResetLink(['email' => (string) $state['email']]);
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'We could not send the password reset email. Please try again later.',
+                'turnstile_required' => true,
+            ], 422);
+        }
 
         if ($status !== Password::RESET_LINK_SENT) {
             $attempt = $this->turnstileGuard->recordRequest(TurnstileAttemptGuard::ACTION_FORGOT_PASSWORD, $request);

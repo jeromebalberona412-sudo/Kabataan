@@ -109,7 +109,11 @@ class TurnstileAttemptGuard
 
     public function clear(string $action, Request $request): void
     {
-        Cache::forget($this->cacheKey($action, $request));
+        try {
+            Cache::forget($this->cacheKey($action, $request));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**
@@ -188,7 +192,13 @@ class TurnstileAttemptGuard
      */
     private function getState(string $action, Request $request): array
     {
-        $raw = Cache::get($this->cacheKey($action, $request), []);
+        try {
+            $raw = Cache::get($this->cacheKey($action, $request), []);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
 
         return is_array($raw) ? $raw : [];
     }
@@ -198,7 +208,11 @@ class TurnstileAttemptGuard
      */
     private function putState(string $action, Request $request, array $state): void
     {
-        Cache::put($this->cacheKey($action, $request), $state, $this->ttlSeconds());
+        try {
+            Cache::put($this->cacheKey($action, $request), $state, $this->ttlSeconds());
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     private function cacheKey(string $action, Request $request): string

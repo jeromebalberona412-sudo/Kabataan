@@ -2,6 +2,7 @@
 
 namespace App\Modules\Layout\Providers;
 
+use App\Support\ModulePath;
 use Illuminate\Support\ServiceProvider;
 
 class LayoutServiceProvider extends ServiceProvider
@@ -13,6 +14,6 @@ class LayoutServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadViewsFrom(__DIR__ . '/../Views', 'layout');
+        $this->loadViewsFrom(ModulePath::views(__DIR__), 'layout');
     }
 }

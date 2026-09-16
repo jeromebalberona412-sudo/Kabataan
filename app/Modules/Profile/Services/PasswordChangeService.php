@@ -44,7 +44,7 @@ class PasswordChangeService
             'password_change_last_sent_at' => now(),
         ])->save();
 
-        $user->notify(new PasswordChangeVerificationNotification($plainToken));
+        $this->sendVerificationMail($user, $plainToken);
     }
 
     public function resend(User $user): void
@@ -70,7 +70,7 @@ class PasswordChangeService
             'password_change_last_sent_at' => now(),
         ])->save();
 
-        $user->notify(new PasswordChangeVerificationNotification($plainToken));
+        $this->sendVerificationMail($user, $plainToken);
     }
 
     public function cancel(User $user): void
@@ -168,5 +168,18 @@ class PasswordChangeService
         $elapsed = time() - $user->password_change_last_sent_at->getTimestamp();
 
         return max(0, self::RESEND_COOLDOWN_SECONDS - $elapsed);
+    }
+
+    private function sendVerificationMail(User $user, string $plainToken): void
+    {
+        try {
+            $user->notify(new PasswordChangeVerificationNotification($plainToken));
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages([
+                'password' => ['We could not send the verification email. Please try again later.'],
+            ]);
+        }
     }
 }

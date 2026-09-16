@@ -5,6 +5,7 @@ namespace App\Modules\Authentication\Providers;
 use App\Models\User;
 use App\Modules\Authentication\Services\DeviceFingerprintService;
 use App\Modules\Authentication\Services\TrustedDeviceService;
+use App\Support\ModulePath;
 use Illuminate\Auth\Events\Logout;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
@@ -21,7 +22,7 @@ class AuthenticationServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadRoutes();
-        $this->loadViewsFrom(__DIR__.'/../Views', 'authentication');
+        $this->loadViewsFrom(ModulePath::views(__DIR__), 'authentication');
         $this->loadMigrationsFrom(__DIR__.'/../Database/Migrations');
 
         Event::listen(Logout::class, function (Logout $event): void {
@@ -33,7 +34,12 @@ class AuthenticationServiceProvider extends ServiceProvider
 
     protected function loadRoutes(): void
     {
-        Route::middleware('web')
-            ->group(__DIR__.'/../Routes/auth.php');
+        $routesFile = ModulePath::routes(__DIR__, 'auth.php');
+
+        if ($routesFile === null) {
+            return;
+        }
+
+        Route::middleware('web')->group($routesFile);
     }
 }

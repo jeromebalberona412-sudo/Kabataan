@@ -65,7 +65,7 @@ return [
     |
     */
 
-    'public_url' => env('APP_PUBLIC_URL'),
+    'public_url' => env('APP_PUBLIC_URL', env('KABATAAN_APP_URL')),
 
     /*
     |--------------------------------------------------------------------------

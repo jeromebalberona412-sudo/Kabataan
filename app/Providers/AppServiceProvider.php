@@ -5,35 +5,42 @@ namespace App\Providers;
 use App\Services\KabataanNotificationService;
 use App\Support\MailUrl;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
+    {
+        $this->configureUrlDefaults();
+        $this->warnProductionMisconfiguration();
+        $this->shareHeaderNotifications();
+
+        $lifetimeDays = max(1, (int) config('kabataan_auth.remember.lifetime_days', 7));
+        Auth::guard('web')->setRememberDuration($lifetimeDays * 24 * 60);
+    }
+
+    private function configureUrlDefaults(): void
     {
         $forwardedHttps = false;
         $requestIsHttps = false;
         $host = '';
 
-        try {
-            $forwardedHttps = strtolower((string) request()->server('HTTP_X_FORWARDED_PROTO')) === 'https';
-            $requestIsHttps = request()->secure() || $forwardedHttps;
-            $host = strtolower((string) request()->getHost());
-        } catch (\Throwable) {
-            // Console, queue, and early boot have no live HTTP request.
+        if (! $this->app->runningInConsole()) {
+            try {
+                $forwardedHttps = strtolower((string) request()->server('HTTP_X_FORWARDED_PROTO')) === 'https';
+                $requestIsHttps = request()->secure() || $forwardedHttps;
+                $host = strtolower((string) request()->getHost());
+            } catch (\Throwable) {
+                // Early HTTP boot without a captured request.
+            }
         }
 
         $isProdEnv = in_array(strtolower((string) $this->app->environment()), ['production', 'productions', 'prod'], true);
@@ -56,13 +63,37 @@ class AppServiceProvider extends ServiceProvider
             }
         }
 
-        // Force HTTPS when the request is already HTTPS (or behind an HTTPS proxy),
-        // or in production on a public host. Never force HTTPS on plain local/LAN
-        // artisan serve — that causes "Invalid request (Unsupported SSL request)" for CSS/JS.
         if ($requestIsHttps || ($isProdEnv && ! $isLocalDevHost)) {
             URL::forceScheme('https');
         }
+    }
 
+    private function warnProductionMisconfiguration(): void
+    {
+        if (! $this->app->environment('production')) {
+            return;
+        }
+
+        if (trim((string) config('app.key')) === '') {
+            Log::critical('APP_KEY is missing. Set the existing production APP_KEY in .env. Do not generate a new key.');
+        }
+
+        if (config('database.default') === 'sqlite') {
+            Log::critical('Production is using SQLite. Set DB_CONNECTION to mysql (or pgsql) with Hostinger credentials.');
+        }
+
+        $root = MailUrl::root();
+        if (MailUrl::isLoopback($root) || MailUrl::isPrivateLan($root)) {
+            Log::critical('Production APP_URL is still a local address. Set APP_URL and KABATAAN_APP_URL to https://kabataan.skoneportal.com');
+        }
+
+        if (! is_file(public_path('build/manifest.json'))) {
+            Log::critical('Vite manifest missing at public/build/manifest.json. Run npm run build and deploy public/build.');
+        }
+    }
+
+    private function shareHeaderNotifications(): void
+    {
         View::composer(['layout::kabataan-header', 'dashboard::notification'], function ($view) {
             $headerNotifications = [];
             $unreadNotificationCount = 0;
@@ -81,8 +112,5 @@ class AppServiceProvider extends ServiceProvider
                 'unreadNotificationCount' => $unreadNotificationCount,
             ]);
         });
-
-        $lifetimeDays = max(1, (int) config('kabataan_auth.remember.lifetime_days', 7));
-        Auth::guard('web')->setRememberDuration($lifetimeDays * 24 * 60);
     }
 }

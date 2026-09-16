@@ -1,16 +1,17 @@
 <?php
 
-uses(TestCase::class);
-
 use App\Support\MailUrl;
 use Illuminate\Http\Request;
 use Tests\TestCase;
+
+uses(TestCase::class);
 
 it('prefers APP_PUBLIC_URL over localhost APP_URL', function () {
     app()->detectEnvironment(fn () => 'production');
     config([
         'app.url' => 'http://localhost:8002',
         'app.public_url' => 'https://kabataan.example.com',
+        'services.kabataan_app_url' => null,
     ]);
 
     expect(MailUrl::root())->toBe('https://kabataan.example.com');
@@ -21,6 +22,7 @@ it('uses the current request host in production when APP_URL is localhost', func
     config([
         'app.url' => 'http://localhost:8002',
         'app.public_url' => null,
+        'services.kabataan_app_url' => null,
     ]);
 
     $this->app->instance('request', Request::create('https://kabataan.live.test/dashboard', 'GET'));

@@ -16,13 +16,14 @@ class MailUrl
     public static function root(): string
     {
         $candidates = [
+            config('services.kabataan_app_url'),
             config('app.public_url'),
             config('app.url'),
         ];
 
         try {
             $requestRoot = request()->getSchemeAndHttpHost();
-            if ($requestRoot !== '' && ! self::isLoopback($requestRoot)) {
+            if ($requestRoot !== '' && ! self::isLoopback($requestRoot) && ! self::isPrivateLan($requestRoot)) {
                 $candidates[] = $requestRoot;
             }
         } catch (\Throwable) {
@@ -31,7 +32,7 @@ class MailUrl
 
         foreach ($candidates as $candidate) {
             $normalized = self::normalize($candidate);
-            if ($normalized !== null && ! self::isLoopback($normalized)) {
+            if ($normalized !== null && ! self::isLoopback($normalized) && ! self::isPrivateLan($normalized)) {
                 return rtrim($normalized, '/');
             }
         }
@@ -42,6 +43,13 @@ class MailUrl
                 if ($normalized !== null) {
                     return rtrim($normalized, '/');
                 }
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $normalized = self::normalize($candidate);
+            if ($normalized !== null && ! self::isLoopback($normalized)) {
+                return rtrim($normalized, '/');
             }
         }
 
@@ -145,6 +153,25 @@ class MailUrl
             || $host === '127.0.0.1'
             || $host === '[::1]'
             || str_ends_with($host, '.localhost');
+    }
+
+    public static function isPrivateLan(?string $url): bool
+    {
+        $host = strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+
+        if ($host === '' || str_ends_with($host, '.local')) {
+            return $host !== '';
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return ! filter_var(
+                $host,
+                FILTER_VALIDATE_IP,
+                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+            );
+        }
+
+        return false;
     }
 
     public static function normalize(mixed $url): ?string
