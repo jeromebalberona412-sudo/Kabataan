@@ -348,15 +348,16 @@ import {
         }
     }
 
-    function playToneBurst(ctx, freqs, when, duration, volume, type) {
+    function playToneBurst(ctx, freqs, when, duration, volume) {
+        var level = Math.max(0.01, Math.min(Number(volume) || 0.14, 0.2));
         freqs.forEach(function (freq) {
             var osc = ctx.createOscillator();
             var gain = ctx.createGain();
-            osc.type = type || 'sine';
+            osc.type = 'sine';
             osc.frequency.value = freq;
             gain.gain.setValueAtTime(0.0001, when);
-            gain.gain.exponentialRampToValueAtTime(volume, when + 0.02);
-            gain.gain.setValueAtTime(volume, when + Math.max(0.05, duration - 0.05));
+            gain.gain.exponentialRampToValueAtTime(level, when + 0.03);
+            gain.gain.setValueAtTime(level, when + Math.max(0.06, duration - 0.08));
             gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
             osc.connect(gain);
             gain.connect(ctx.destination);
@@ -387,23 +388,16 @@ import {
             if (!ringCtx) return;
             var now = ringCtx.currentTime;
             if (incoming) {
-                // Loud dual-tone ring for incoming
-                playToneBurst(ringCtx, [440, 480], now, 0.5, 0.58, 'sine');
-                playToneBurst(ringCtx, [440, 480], now, 0.5, 0.28, 'triangle');
-                playToneBurst(ringCtx, [520, 560], now + 0.08, 0.4, 0.2, 'square');
-                playToneBurst(ringCtx, [440, 480], now + 0.55, 0.5, 0.58, 'sine');
-                playToneBurst(ringCtx, [440, 480], now + 0.55, 0.5, 0.28, 'triangle');
-                playToneBurst(ringCtx, [520, 560], now + 0.63, 0.4, 0.2, 'square');
+                // Soft classic double-ring (no harsh square/triangle stacks).
+                playToneBurst(ringCtx, [440, 480], now, 0.42, 0.14);
+                playToneBurst(ringCtx, [440, 480], now + 0.52, 0.42, 0.14);
             } else {
-                // Strong outbound ring while waiting for answer
-                playToneBurst(ringCtx, [440, 480], now, 1.55, 0.62, 'sine');
-                playToneBurst(ringCtx, [440, 480], now, 1.55, 0.3, 'triangle');
-                playToneBurst(ringCtx, [350, 440], now + 0.12, 1.25, 0.24, 'square');
+                playToneBurst(ringCtx, [440, 480], now, 1.15, 0.11);
             }
         }
 
         scheduleCycle();
-        ringTimer = setInterval(scheduleCycle, incoming ? 2000 : 3200);
+        ringTimer = setInterval(scheduleCycle, incoming ? 2800 : 3600);
     }
 
     function ringTimeoutForCall(callType) {
@@ -822,6 +816,13 @@ import {
         }
         if (!els.incoming || !call) return;
 
+        // Re-bind DOM nodes in case the modal was remounted.
+        els.incoming = document.getElementById('commsIncomingCall') || els.incoming;
+        els.incomingPeer = document.getElementById('commsIncomingPeer') || els.incomingPeer;
+        els.incomingType = document.getElementById('commsIncomingType') || els.incomingType;
+        els.accept = document.getElementById('commsAcceptCall') || els.accept;
+        els.reject = document.getElementById('commsRejectCall') || els.reject;
+
         var callId = call.id != null ? Number(call.id) : null;
         if (callId && callId === Number(lastIncomingCallId)
             && els.incoming && !els.incoming.hidden
@@ -857,12 +858,19 @@ import {
         }
         els.incoming.hidden = false;
         els.incoming.removeAttribute('hidden');
+        els.incoming.style.display = 'flex';
+        els.incoming.setAttribute('aria-hidden', 'false');
         startRingtone('incoming');
         armRingTimeout(call.call_type || 'voice');
     }
 
     function hideIncoming() {
-        if (els.incoming) els.incoming.hidden = true;
+        if (els.incoming) {
+            els.incoming.hidden = true;
+            els.incoming.setAttribute('hidden', '');
+            els.incoming.style.display = '';
+            els.incoming.setAttribute('aria-hidden', 'true');
+        }
         // Ringtone may continue for outgoing ring UI; stop only if not showing in-call ringing.
     }
 
@@ -1937,4 +1945,15 @@ import {
         },
         suggestedHttpsUrl: suggestedHttpsUrl
     };
+
+    if (window.CommsRealtime && typeof window.CommsRealtime.flushPendingSignals === 'function') {
+        window.CommsRealtime.flushPendingSignals();
+    }
+    // Fallback poll so Answer/Decline still appears if a broadcast was missed.
+    setInterval(function () {
+        if (role === 'caller' || callConnected) return;
+        if (els.incoming && !els.incoming.hidden) return;
+        syncIncomingFromServer(null);
+    }, 4000);
 })();
+

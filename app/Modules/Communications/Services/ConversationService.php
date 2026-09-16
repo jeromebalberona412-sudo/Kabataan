@@ -465,9 +465,7 @@ class ConversationService
                 default => false,
             },
             ParticipantTypeResolver::SK_FED => in_array($toType, [
-                ParticipantTypeResolver::KABATAAN,
                 ParticipantTypeResolver::SK_OFFICIAL,
-                ParticipantTypeResolver::SK_FED,
             ], true),
             default => false,
         };
@@ -551,11 +549,7 @@ class ConversationService
                 ParticipantTypeResolver::SK_FED,
             ], true),
             ParticipantTypeResolver::KABATAAN => $toType === ParticipantTypeResolver::SK_OFFICIAL,
-            ParticipantTypeResolver::SK_FED => in_array($toType, [
-                ParticipantTypeResolver::KABATAAN,
-                ParticipantTypeResolver::SK_OFFICIAL,
-                ParticipantTypeResolver::SK_FED,
-            ], true),
+            ParticipantTypeResolver::SK_FED => $toType === ParticipantTypeResolver::SK_OFFICIAL,
             default => false,
         };
     }
