@@ -630,6 +630,12 @@ body.kkpu-mandatory-open {
     }
 }
 
+@media (max-width: 768px) {
+    .kabataan-header__title {
+        display: none !important;
+    }
+}
+
 @media (max-width: 640px) {
     .kabataan-header__title small {
         display: none;
@@ -654,11 +660,7 @@ body.kkpu-mandatory-open {
     }
 
     .kabataan-header__title {
-        font-size: 15px;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        display: none !important;
     }
 
     .kabataan-header__actions {
@@ -835,7 +837,7 @@ body.kkpu-mandatory-open {
     }
 
     .kabataan-header__title {
-        font-size: 14px;
+        display: none !important;
     }
 
     .kabataan-header__icon-btn,
@@ -854,7 +856,7 @@ body.kkpu-mandatory-open {
 
 @media (max-width: 375px) {
     .kabataan-header__title {
-        font-size: 13px;
+        display: none !important;
     }
 
     .kabataan-header__actions {
@@ -877,18 +879,13 @@ body.kkpu-mandatory-open {
 
 @media (max-width: 320px) {
     .kabataan-header__title {
-        display: inline-block !important;
-        font-size: 12px;
-        max-width: 7.5rem;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        display: none !important;
     }
 
     .kabataan-header__brand {
-        flex: 0 1 auto;
+        flex: 0 0 auto;
         min-width: 0;
-        max-width: calc(100% - 168px);
+        max-width: none;
     }
 
     .kabataan-header__logo {

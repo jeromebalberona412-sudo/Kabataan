@@ -191,6 +191,7 @@ function initProfileAvatarChange() {
     const confirmSubmitBtn = document.getElementById('profilePictureConfirmSubmitBtn');
     let pendingProfileFile = null;
     let pendingPreviewUrl = null;
+    let isUploading = false;
 
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     const maxBytes = 10 * 1024 * 1024;
@@ -248,6 +249,16 @@ function initProfileAvatarChange() {
         if (lockDateEl && nextChangeDisplay) {
             lockDateEl.textContent = nextChangeDisplay;
         }
+    }
+
+    function unlockUploadForRetry() {
+        if (wrapper.dataset.canChange === '0' && wrapper.dataset.nextChange) {
+            return;
+        }
+        wrapper.dataset.canChange = '1';
+        wrapper.setAttribute('aria-label', 'Change profile picture');
+        wrapper.setAttribute('title', 'Click to change profile picture');
+        if (fileInput) fileInput.disabled = false;
     }
 
     function showLockModal() {
@@ -361,6 +372,13 @@ function initProfileAvatarChange() {
             return;
         }
 
+        if (isUploading) {
+            if (typeof window.showProfileToast === 'function') {
+                window.showProfileToast('Upload already in progress. Please wait.', 'error');
+            }
+            return;
+        }
+
         const validationError = validateFile(file);
         if (validationError) {
             if (typeof window.showProfileToast === 'function') {
@@ -376,6 +394,8 @@ function initProfileAvatarChange() {
         formData.append('profile_picture', file);
         formData.append('_token', csrfToken);
 
+        isUploading = true;
+        if (fileInput) fileInput.disabled = true;
         if (confirmSubmitBtn) {
             confirmSubmitBtn.disabled = true;
             confirmSubmitBtn.textContent = 'Uploading...';
@@ -404,8 +424,15 @@ function initProfileAvatarChange() {
                     if (typeof window.showProfileToast === 'function') {
                         window.showProfileToast(message, 'success');
                     }
+                    // Lock immediately so cooldown shows in realtime (no page refresh).
+                    lockUpload(payload.next_change_display || payload.next_change_available_at || '');
                     if (payload.next_change_display) {
-                        lockUpload(payload.next_change_display);
+                        showLockModal();
+                        window.setTimeout(() => {
+                            if (typeof window.closeProfilePictureLockModal === 'function') {
+                                window.closeProfilePictureLockModal();
+                            }
+                        }, 2800);
                     }
                     return;
                 }
@@ -416,14 +443,19 @@ function initProfileAvatarChange() {
                 throw new Error(message);
             })
             .catch((error) => {
+                unlockUploadForRetry();
                 if (typeof window.showProfileToast === 'function') {
                     window.showProfileToast(error.message || 'Network error while uploading. Please try again.', 'error');
                 }
             })
             .finally(() => {
+                isUploading = false;
                 if (confirmSubmitBtn) {
                     confirmSubmitBtn.disabled = false;
                     confirmSubmitBtn.textContent = 'Confirm & Save';
+                }
+                if (fileInput && wrapper.dataset.canChange === '1') {
+                    fileInput.disabled = false;
                 }
             });
     }
@@ -485,6 +517,9 @@ function initProfileAvatarChange() {
     });
 
     confirmSubmitBtn?.addEventListener('click', () => {
+        if (isUploading) {
+            return;
+        }
         if (!pendingProfileFile) {
             window.closeProfilePictureConfirmModal();
             return;

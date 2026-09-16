@@ -5,6 +5,7 @@ namespace App\Modules\Profile\Services;
 use App\Models\User;
 use App\Services\CloudinaryService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -149,82 +150,105 @@ class ProfileImageService
     {
         $this->assertValidFile($file);
 
-        if (! $this->canChangeProfileImage($user)) {
-            $date = $user->profile_image_change_available_at?->format('F j, Y') ?? 'a later date';
+        return DB::transaction(function () use ($user, $file) {
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->first();
+            if (! $lockedUser) {
+                throw ValidationException::withMessages([
+                    'profile_picture' => ['Unable to upload profile picture. Please try again.'],
+                ]);
+            }
 
-            throw ValidationException::withMessages([
-                'profile_picture' => [
-                    "You can change your profile picture again on {$date}. Profile pictures can only be updated once every 30 days.",
-                ],
-            ]);
-        }
+            if (! $this->canChangeProfileImage($lockedUser)) {
+                $date = $lockedUser->profile_image_change_available_at?->format('F j, Y') ?? 'a later date';
 
-        $oldPublicId = $user->profile_image_public_id;
-        $publicId = 'user_'.$user->id;
+                throw ValidationException::withMessages([
+                    'profile_picture' => [
+                        "You can change your profile picture again on {$date}. Profile pictures can only be updated once every 30 days.",
+                    ],
+                ]);
+            }
 
-        if ($this->cloudinary->isConfigured()) {
-            $folder = trim((string) config('services.cloudinary.profile_folder', 'kabataan_profile_images'), '/');
-            $candidates = array_values(array_unique(array_filter([
-                $oldPublicId,
-                $folder !== '' ? $folder.'/'.$publicId : null,
-                $publicId,
-            ])));
+            // Claim the cooldown slot immediately so concurrent uploads cannot race.
+            $previousChangeAvailableAt = $lockedUser->profile_image_change_available_at;
+            $uploadedAt = now();
+            $nextChangeAt = $uploadedAt->copy()->addDays(30);
+            $lockedUser->forceFill([
+                'profile_image_change_available_at' => $nextChangeAt,
+            ])->save();
 
-            foreach ($candidates as $candidate) {
-                try {
-                    $this->cloudinary->delete((string) $candidate);
-                } catch (\Throwable) {
-                    // Asset may not exist yet under this id.
+            $oldPublicId = $lockedUser->profile_image_public_id;
+            $publicId = 'user_'.$lockedUser->id;
+
+            if ($this->cloudinary->isConfigured()) {
+                $folder = trim((string) config('services.cloudinary.profile_folder', 'kabataan_profile_images'), '/');
+                $candidates = array_values(array_unique(array_filter([
+                    $oldPublicId,
+                    $folder !== '' ? $folder.'/'.$publicId : null,
+                    $publicId,
+                ])));
+
+                foreach ($candidates as $candidate) {
+                    try {
+                        $this->cloudinary->delete((string) $candidate);
+                    } catch (\Throwable) {
+                        // Asset may not exist yet under this id.
+                    }
                 }
             }
-        }
 
-        $result = $this->uploadToCloudOrLocal($user, $file, $publicId);
+            try {
+                $result = $this->uploadToCloudOrLocal($lockedUser, $file, $publicId);
+            } catch (\Throwable $exception) {
+                // Release cooldown claim if the upload itself failed.
+                $lockedUser->forceFill([
+                    'profile_image_change_available_at' => $previousChangeAvailableAt,
+                ])->save();
 
-        $uploadedAt = now();
-        $nextChangeAt = $uploadedAt->copy()->addDays(30);
+                throw $exception;
+            }
 
-        $saved = $user->forceFill([
-            'profile_image_url' => $result['url'],
-            'profile_image_public_id' => $result['public_id'],
-            'profile_image_uploaded_at' => $uploadedAt,
-            'profile_image_change_available_at' => $nextChangeAt,
-        ])->save();
+            $saved = $lockedUser->forceFill([
+                'profile_image_url' => $result['url'],
+                'profile_image_public_id' => $result['public_id'],
+                'profile_image_uploaded_at' => $uploadedAt,
+                'profile_image_change_available_at' => $nextChangeAt,
+            ])->save();
 
-        if (! $saved) {
-            Log::error('Kabataan profile image database save failed', ['user_id' => $user->id]);
-            throw ValidationException::withMessages([
-                'profile_picture' => ['Failed to save profile picture. Please try again.'],
+            if (! $saved) {
+                Log::error('Kabataan profile image database save failed', ['user_id' => $lockedUser->id]);
+                throw ValidationException::withMessages([
+                    'profile_picture' => ['Failed to save profile picture. Please try again.'],
+                ]);
+            }
+
+            $fresh = $lockedUser->fresh();
+
+            if (! $fresh?->profile_image_url) {
+                Log::error('Kabataan profile image URL missing after save', [
+                    'user_id' => $lockedUser->id,
+                    'public_id' => $result['public_id'],
+                ]);
+                throw ValidationException::withMessages([
+                    'profile_picture' => ['Failed to save profile picture. Please try again.'],
+                ]);
+            }
+
+            if ($oldPublicId && $oldPublicId !== $result['public_id']) {
+                $this->deleteStoredImage($oldPublicId);
+            }
+
+            Log::info('Kabataan profile image saved', [
+                'user_id' => $fresh->id,
+                'public_id' => $fresh->profile_image_public_id,
             ]);
-        }
 
-        $fresh = $user->fresh();
-
-        if (! $fresh?->profile_image_url) {
-            Log::error('Kabataan profile image URL missing after save', [
-                'user_id' => $user->id,
-                'public_id' => $result['public_id'],
-            ]);
-            throw ValidationException::withMessages([
-                'profile_picture' => ['Failed to save profile picture. Please try again.'],
-            ]);
-        }
-
-        if ($oldPublicId && $oldPublicId !== $result['public_id']) {
-            $this->deleteStoredImage($oldPublicId);
-        }
-
-        Log::info('Kabataan profile image saved', [
-            'user_id' => $user->id,
-            'public_id' => $fresh->profile_image_public_id,
-        ]);
-
-        return [
-            'picture_url' => $this->resolveDisplayUrl($fresh),
-            'next_change_available_at' => $nextChangeAt->toIso8601String(),
-            'next_change_display' => $nextChangeAt->format('F j, Y'),
-            'can_change' => false,
-        ];
+            return [
+                'picture_url' => $this->resolveDisplayUrl($fresh),
+                'next_change_available_at' => $nextChangeAt->toIso8601String(),
+                'next_change_display' => $nextChangeAt->format('F j, Y'),
+                'can_change' => false,
+            ];
+        });
     }
 
     /**

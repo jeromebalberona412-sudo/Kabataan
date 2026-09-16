@@ -632,8 +632,20 @@ import {
     function hasLiveRemoteVideo() {
         var stream = els.remoteVideo && els.remoteVideo.srcObject;
         if (!stream || typeof stream.getVideoTracks !== 'function') return false;
+        // Do not require track.enabled — remote tracks can start muted until frames arrive.
         return stream.getVideoTracks().some(function (track) {
-            return !!(track && track.readyState === 'live' && track.enabled !== false);
+            return !!(track && track.readyState === 'live');
+        });
+    }
+
+    function scheduleRemoteVideoUiRefresh() {
+        [200, 600, 1200, 2000].forEach(function (ms) {
+            setTimeout(function () {
+                if (!currentCall || !pc) return;
+                if (remoteStream) bindRemoteMedia(remoteStream);
+                unlockRemotePlayback();
+                updateCameraUi();
+            }, ms);
         });
     }
 
@@ -718,6 +730,7 @@ import {
             remoteStream.addTrack(track);
             track.addEventListener('unmute', function () {
                 bindRemoteMedia(remoteStream);
+                scheduleRemoteVideoUiRefresh();
             });
             track.addEventListener('mute', function () {
                 updateCameraUi();
@@ -898,6 +911,10 @@ import {
             if (ev.track && ev.track.kind === 'audio') {
                 ensureRemoteAudioPlaying();
             }
+            if (ev.track && ev.track.kind === 'video') {
+                updateCameraUi();
+                scheduleRemoteVideoUiRefresh();
+            }
             unlockRemotePlayback();
         };
         pc.oniceconnectionstatechange = function () {
@@ -976,21 +993,24 @@ import {
     }
 
     async function attachLocalVideoTrack(newTrack) {
-        localStream.addTrack(newTrack);
+        if (!localStream.getVideoTracks().some(function (t) { return t.id === newTrack.id; })) {
+            localStream.addTrack(newTrack);
+        }
         var sender = pc.getSenders().find(function (s) {
             return s.track && s.track.kind === 'video';
         });
         if (sender) {
             await sender.replaceTrack(newTrack);
-            return false;
+            return true;
         }
         var videoTx = pc.getTransceivers().find(function (t) {
-            return t.receiver && t.receiver.track && t.receiver.track.kind === 'video';
+            return (t.receiver && t.receiver.track && t.receiver.track.kind === 'video')
+                || (t.sender && (!t.sender.track || t.sender.track.kind === 'video'));
         });
         if (videoTx && videoTx.sender) {
             await videoTx.sender.replaceTrack(newTrack);
             try { videoTx.direction = 'sendrecv'; } catch (e) { /* ignore */ }
-            return false;
+            return true;
         }
         pc.addTrack(newTrack, localStream);
         return true;
@@ -1011,6 +1031,7 @@ import {
                 if (!newTrack) {
                     throw new Error('No camera was found on this device.');
                 }
+                // Voice→video always needs SDP renegotiation so the peer receives frames.
                 needsRenegotiate = await attachLocalVideoTrack(newTrack);
                 if (els.localVideo) {
                     els.localVideo.srcObject = localStream;
@@ -1032,15 +1053,15 @@ import {
                 }
             }
             cameraEnabled = true;
+            updateCameraUi();
             if (needsRenegotiate) {
                 await renegotiateForCamera();
             }
         } else {
             videoTracks.forEach(function (t) { t.enabled = false; });
             cameraEnabled = false;
+            updateCameraUi();
         }
-
-        updateCameraUi();
 
         if (currentCall) {
             signalPeer({
@@ -1518,23 +1539,32 @@ import {
     }
 
     async function applyPeerAnswerSdp(payload) {
+        if (!payload) return;
+
+        // Mid-call camera renegotiation answers apply for either role.
+        var isRenego = !!(payload.renegotiate) || (callConnected && pc && pc.signalingState === 'have-local-offer');
+        if (role !== 'caller' && !isRenego) return;
+
+        if (pc && payload.sdp && pc.signalingState === 'have-local-offer') {
+            try {
+                await pc.setRemoteDescription(payload.sdp);
+                while (iceQueue.length) {
+                    await pc.addIceCandidate(iceQueue.shift());
+                }
+            } catch (e) { /* ignore duplicate/stale SDP */ }
+        }
+
+        if (isRenego && callConnected) {
+            unlockRemotePlayback();
+            updateCameraUi();
+            scheduleRemoteVideoUiRefresh();
+            return;
+        }
+
         if (role !== 'caller') return;
         applyPeerAnswered();
         if (els.timer && !callStartedAt) {
             startTimer();
-        }
-        if (pc && payload && payload.sdp) {
-            var desc = pc.signalingState === 'have-local-offer' || pc.signalingState === 'have-remote-pranswer'
-                ? payload.sdp
-                : payload.sdp;
-            try {
-                if (pc.signalingState === 'have-local-offer') {
-                    await pc.setRemoteDescription(payload.sdp);
-                    while (iceQueue.length) {
-                        await pc.addIceCandidate(iceQueue.shift());
-                    }
-                }
-            } catch (e) { /* ignore duplicate/stale SDP */ }
         }
         markCallConnected();
         setCallStatus('Connected');
@@ -1554,7 +1584,10 @@ import {
             if (payload.type === 'offer' && payload.sdp && currentCall && pc && callConnected
                 && Number(currentCall.id) === Number(payload.call_id)) {
                 try {
-                    if (pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer') {
+                    if (pc.signalingState === 'have-local-offer') {
+                        try { await pc.setLocalDescription({ type: 'rollback' }); } catch (rbErr) { /* ignore */ }
+                    }
+                    if (pc.signalingState === 'stable') {
                         await pc.setRemoteDescription(payload.sdp);
                         var answer = await pc.createAnswer();
                         await pc.setLocalDescription(answer);
@@ -1567,6 +1600,7 @@ import {
                         });
                         unlockRemotePlayback();
                         updateCameraUi();
+                        scheduleRemoteVideoUiRefresh();
                     } else {
                         currentCall._remoteOffer = payload.sdp;
                     }
@@ -1633,10 +1667,10 @@ import {
         if (payload.type === 'camera') {
             if (remoteStream) {
                 bindRemoteMedia(remoteStream);
-            } else {
-                updateCameraUi();
             }
             unlockRemotePlayback();
+            updateCameraUi();
+            scheduleRemoteVideoUiRefresh();
             return;
         }
 
