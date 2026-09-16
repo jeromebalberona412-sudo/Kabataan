@@ -74,7 +74,7 @@
                         @endif
 
                         <div class="ce-info-box" id="cpInfoBox">
-                            A confirmation link has been sent to <strong>{{ $user->email }}</strong>. Your current password stays active until you verify. After you confirm, you will go to your home dashboard. This waiting page will close automatically, and other devices will be signed out. If you resend, only the newest email link will work.
+                            A confirmation link has been sent to <strong>{{ $user->email }}</strong>. Your current password stays active until you verify. After you confirm, this waiting page will take you to your home dashboard. The email link itself only shows a success page with a Go to Login button. If you resend, only the newest email link will work.
                         </div>
 
                         <div class="ce-status-table">

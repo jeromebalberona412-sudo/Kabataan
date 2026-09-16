@@ -45,7 +45,8 @@
     const MIN_HEIGHT = 300;
 
     const cfg = {
-        autoCapture: modal.dataset.autoCapture !== '0',
+        // Manual capture only — never auto-detect / auto-snap.
+        autoCapture: false,
         stabilityMs: Math.max(350, Number(modal.dataset.stabilityMs) || 700),
         sampleIntervalMs: Math.max(100, Number(modal.dataset.sampleIntervalMs) || 180),
         helpAfterMs: Math.max(4000, Number(modal.dataset.helpAfterMs) || 10000),
@@ -200,13 +201,11 @@
             titleEl.textContent = `Capture the ${label} of your ID`;
         }
         if (hintEl) {
-            hintEl.textContent = cfg.autoCapture
-                ? 'Position your ID inside the frame. Hold steady for automatic capture, or capture manually.'
-                : 'Position your ID inside the frame, then capture manually.';
+            hintEl.textContent = 'Position your ID inside the frame, then tap Capture to take the photo yourself.';
         }
         if (captureBtn) {
-            captureBtn.setAttribute('aria-label', `Capture ${label} ID manually`);
-            captureBtn.textContent = 'Capture Manually';
+            captureBtn.setAttribute('aria-label', `Capture ${label} ID`);
+            captureBtn.textContent = 'Capture';
         }
     }
 
@@ -365,79 +364,9 @@
 
     function startDetectionLoop() {
         stopDetectionLoop();
-        if (!cfg.autoCapture) {
-            setGuideState('idle');
-            setDetectMessage('Position your ID, then tap Capture Manually.');
-            return;
-        }
-
-        setGuideState('searching');
-        setDetectMessage('Looking for an ID inside the frame…');
-
-        helpTimer = window.setTimeout(() => {
-            if (!capturing && mediaStream) {
-                showHelpPanel(true);
-                setDetectMessage('Having trouble detecting the ID? Capture manually or upload a photo.');
-            }
-        }, cfg.helpAfterMs);
-
-        detectionTimer = window.setInterval(() => {
-            if (capturing || !mediaStream || Date.now() < captureLockUntil) {
-                return;
-            }
-
-            const analysis = analyzeGuideRegion();
-            if (!analysis) {
-                return;
-            }
-
-            if (!analysis.lightingOk) {
-                stableSince = null;
-                detectedStreak = 0;
-                setGuideState('searching');
-                setDetectMessage(analysis.mean < cfg.minBrightness
-                    ? 'Too dark — improve lighting.'
-                    : 'Too bright / glare — adjust lighting.');
-                return;
-            }
-
-            if (!analysis.detected) {
-                stableSince = null;
-                detectedStreak = 0;
-                setGuideState('searching');
-                setDetectMessage('Position your ID inside the frame.');
-                return;
-            }
-
-            detectedStreak += 1;
-
-            if (!analysis.stable) {
-                stableSince = null;
-                setGuideState('detected');
-                setDetectMessage('ID detected — hold steady…');
-                return;
-            }
-
-            const now = Date.now();
-            if (!stableSince) {
-                stableSince = now;
-                setGuideState('steady');
-                setDetectMessage('Hold steady…');
-                return;
-            }
-
-            const held = now - stableSince;
-            if (held < cfg.stabilityMs) {
-                setGuideState('steady');
-                setDetectMessage('Hold steady…');
-                return;
-            }
-
-            setGuideState('capturing');
-            setDetectMessage('Capturing…');
-            captureLockUntil = Date.now() + 1500;
-            captureFrame({ auto: true });
-        }, cfg.sampleIntervalMs);
+        setGuideState('idle');
+        setDetectMessage('Position your ID, then tap Capture.');
+        showHelpPanel(false);
     }
 
     function isLocalhostHost() {

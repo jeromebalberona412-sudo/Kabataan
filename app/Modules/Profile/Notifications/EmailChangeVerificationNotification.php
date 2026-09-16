@@ -34,7 +34,8 @@ class EmailChangeVerificationNotification extends Notification
             ->line('New email: '.$this->user->pending_email)
             ->action('Confirm Email Change', $url)
             ->line('Your current email stays active until you confirm this link.')
-            ->line('After confirming, you will be taken to your dashboard.')
+            ->line('This email link only shows a confirmation page and will not sign you into the dashboard.')
+            ->line('If Kabataan is still open on the verify page, that page will take you to the dashboard after you confirm.')
             ->line('If you requested a new confirmation email, only the latest link will work.')
             ->line('This link expires in 60 minutes. If you did not request this, you can ignore this email.');
     }

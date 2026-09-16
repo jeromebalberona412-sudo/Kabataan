@@ -249,6 +249,13 @@ import { createClient } from '@supabase/supabase-js';
                 updateHeaderBadge(next);
             }
         }
+        if (String(row.message_type || '') === 'call'
+            && /started/i.test(String(row.body || ''))
+            && !message.mine
+            && window.CommsWebRTC
+            && typeof window.CommsWebRTC.syncIncomingFromServer === 'function') {
+            window.CommsWebRTC.syncIncomingFromServer(row.conversation_id);
+        }
         scheduleInboxReload();
         refreshUnread();
     }

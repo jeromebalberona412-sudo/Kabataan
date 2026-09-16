@@ -83,7 +83,7 @@
                         @endif
 
                         <div class="ce-info-box" id="ceInfoBox">
-                            A confirmation link has been sent to <strong id="cePendingEmail">{{ $user->pending_email }}</strong>. Your current email stays active until you verify the new one. After you confirm, you will be taken to your dashboard.
+                            A confirmation link has been sent to <strong id="cePendingEmail">{{ $user->pending_email }}</strong>. Your current email stays active until you verify the new one. After you confirm, this waiting page will take you to your dashboard. The email link itself only shows a success page with a Go to Login button.
                         </div>
 
                         <div class="ce-status-table">

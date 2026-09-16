@@ -68,7 +68,7 @@ return [
     | Live camera smart scanning (client-side detection only — OCR runs after capture).
     */
     'camera' => [
-        'auto_capture_enabled' => (bool) env('DOCUMENT_CAMERA_AUTO_CAPTURE', true),
+        'auto_capture_enabled' => (bool) env('DOCUMENT_CAMERA_AUTO_CAPTURE', false),
         // How long the ID must remain stable before auto-capture.
         'auto_capture_stability_ms' => (int) env('DOCUMENT_CAMERA_STABILITY_MS', 700),
         // How often to sample the guide region for lightweight detection (not OCR).

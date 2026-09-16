@@ -41,7 +41,7 @@ function latestPasswordChangeToken(User $user): string
     return $notification->plainToken;
 }
 
-it('confirms a password change from email while logged in and redirects to the dashboard', function () {
+it('confirms a password change from email while logged in and shows the success page', function () {
     Notification::fake();
 
     $user = createPasswordChangeYouth();
@@ -52,8 +52,12 @@ it('confirms a password change from email while logged in and redirects to the d
             'id' => $user->id,
             'token' => latestPasswordChangeToken($user),
         ]))
-        ->assertRedirect(route('dashboard'))
-        ->assertSessionHas('success', 'Password changed successfully.');
+        ->assertRedirect(route('change-password.success'));
+
+    $this->get(route('change-password.success'))
+        ->assertOk()
+        ->assertSee('Password changed successfully')
+        ->assertSee('Go to Login');
 
     $this->assertAuthenticatedAs($user);
     expect(Hash::check('NewPass1!', $user->fresh()->password))->toBeTrue();
@@ -61,7 +65,7 @@ it('confirms a password change from email while logged in and redirects to the d
     expect($user->fresh()->password_change_token)->toBeNull();
 });
 
-it('logs a guest in and sends them to the dashboard after they confirm from email', function () {
+it('shows the success page for guests who confirm from email without signing them into the dashboard', function () {
     Notification::fake();
 
     $user = createPasswordChangeYouth();
@@ -71,10 +75,13 @@ it('logs a guest in and sends them to the dashboard after they confirm from emai
         'id' => $user->id,
         'token' => latestPasswordChangeToken($user),
     ]))
-        ->assertRedirect(route('dashboard'))
-        ->assertSessionHas('success', 'Password changed successfully.');
+        ->assertRedirect(route('change-password.success'));
 
-    $this->assertAuthenticatedAs($user);
+    $this->get(route('change-password.success'))
+        ->assertOk()
+        ->assertSee('Go to Login');
+
+    $this->assertGuest();
     expect(Hash::check('NewPass1!', $user->fresh()->password))->toBeTrue();
 });
 
@@ -111,7 +118,7 @@ it('rejects an old verification link after a newer email is resent', function ()
             'id' => $user->id,
             'token' => $newToken,
         ]))
-        ->assertRedirect(route('dashboard'));
+        ->assertRedirect(route('change-password.success'));
 
     expect(Hash::check('NewPass1!', $user->fresh()->password))->toBeTrue();
 });
@@ -136,7 +143,7 @@ it('keeps the confirming browser logged in on the verify status poll', function 
     $this->assertAuthenticatedAs($user);
 });
 
-it('logs out a waiting verify session after the password is confirmed on another device', function () {
+it('redirects a waiting verify session to the dashboard after password is confirmed elsewhere', function () {
     $user = createPasswordChangeYouth();
 
     app(PasswordChangeService::class)->markRecentlyConfirmed($user->id);
@@ -149,8 +156,8 @@ it('logs out a waiting verify session after the password is confirmed on another
         ->assertOk()
         ->assertJson([
             'state' => 'confirmed',
-            'redirect' => '/sign-in',
+            'redirect' => '/dashboard',
         ]);
 
-    $this->assertGuest();
+    $this->assertAuthenticatedAs($user);
 });

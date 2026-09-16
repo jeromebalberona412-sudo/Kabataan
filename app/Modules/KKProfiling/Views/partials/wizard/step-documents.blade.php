@@ -238,7 +238,7 @@
             id="kkpIdCameraModal"
             hidden
             aria-labelledby="kkpIdCameraTitle"
-            data-auto-capture="{{ config('documents.camera.auto_capture_enabled', true) ? '1' : '0' }}"
+            data-auto-capture="{{ config('documents.camera.auto_capture_enabled', false) ? '1' : '0' }}"
             data-stability-ms="{{ (int) config('documents.camera.auto_capture_stability_ms', 700) }}"
             data-sample-interval-ms="{{ (int) config('documents.camera.sample_interval_ms', 180) }}"
             data-help-after-ms="{{ (int) config('documents.camera.help_after_ms', 10000) }}"
@@ -257,12 +257,12 @@
                     </div>
                 </div>
                 <p class="kkp-id-camera-instructions" id="kkpIdCameraHint">
-                    Position your ID inside the frame. Hold steady for automatic capture, or capture manually.
+                    Position your ID inside the frame, then tap Capture to take the photo yourself.
                 </p>
                 <ul class="kkp-id-camera-tips">
                     <li>Place the entire ID inside the guide</li>
                     <li>Keep the ID flat and avoid glare</li>
-                    <li>Auto-capture starts when your ID is detected and held steady</li>
+                    <li>Tap Capture when the ID looks clear — nothing is captured automatically</li>
                 </ul>
                 <div class="kkp-id-camera-stage" id="kkpIdCameraStage">
                     <video id="kkpIdCameraVideo" playsinline muted autoplay aria-label="Live camera preview"></video>
@@ -273,7 +273,7 @@
                     </div>
                 </div>
                 <canvas id="kkpIdCameraCanvas" hidden></canvas>
-                <p class="kkp-id-camera-detect" id="kkpIdCameraDetect" role="status" aria-live="polite">Position your ID inside the frame.</p>
+                <p class="kkp-id-camera-detect" id="kkpIdCameraDetect" role="status" aria-live="polite">Position your ID, then tap Capture.</p>
                 <p class="kkp-id-camera-status" id="kkpIdCameraStatus" role="status" hidden></p>
                 <div class="kkp-id-camera-fallback" id="kkpIdCameraFallback" hidden>
                     <p data-fallback-message>Unable to open the camera. Please allow camera access, or upload an ID photo instead.</p>
@@ -288,7 +288,7 @@
                 </div>
                 <div class="kkp-id-camera-footer">
                     <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera kkp-id-capture-btn--primary" id="kkpIdCameraCapture">
-                        Capture Manually
+                        Capture
                     </button>
                     <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpIdCameraFooterUpload">
                         Upload ID Photo

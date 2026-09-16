@@ -101,6 +101,7 @@ export default defineConfig({
                 'app/Modules/Profile/assets/css/profile-personal-info-responsive.css',
                 'app/Modules/Profile/assets/css/change-email.css',
                 'app/Modules/Profile/assets/css/change-password.css',
+                'app/Modules/Profile/assets/css/account-change-success.css',
                 'app/Modules/Profile/assets/js/profile.js',
                 'app/Modules/Profile/assets/js/profile-document-lightbox.js',
                 'app/Modules/Profile/assets/js/profile-participation.js',

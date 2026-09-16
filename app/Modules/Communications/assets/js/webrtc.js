@@ -38,6 +38,8 @@ import {
     var endedAutoClose = null;
     var role = null; // 'caller' | 'callee'
     var lastEndedCallId = null;
+    var lastIncomingCallId = null;
+    var incomingSyncTimer = null;
     var pendingStartTimer = null;
     var pendingStartTick = null;
     var pendingStart = null;
@@ -149,10 +151,18 @@ import {
         var peerType = null;
         var peers = [];
         if (!currentCall) return { peerId: peerId, peerType: peerType, peers: peers };
-        var isGroup = Number(currentCall.caller_id) === Number(currentCall.receiver_id)
-            && portalTypesMatch(currentCall.caller_type, currentCall.receiver_type);
+        var isGroup = !!(currentCall.is_group_call)
+            || (Number(currentCall.caller_id) === Number(currentCall.receiver_id)
+                && portalTypesMatch(currentCall.caller_type, currentCall.receiver_type));
         if (!isGroup && currentCall.receiver_id != null && currentCall.caller_id != null) {
-            var iAmCaller = Number(currentCall.caller_id) === me.id && portalTypesMatch(currentCall.caller_type, me.type);
+            var idIsCaller = Number(currentCall.caller_id) === me.id;
+            var idIsReceiver = Number(currentCall.receiver_id) === me.id;
+            var typeIsCaller = !me.type || portalTypesMatch(currentCall.caller_type, me.type);
+            var typeIsReceiver = !me.type || portalTypesMatch(currentCall.receiver_type, me.type);
+            var iAmCaller = role === 'caller'
+                || currentCall.direction === 'outgoing'
+                || (idIsCaller && typeIsCaller && !(idIsReceiver && typeIsReceiver))
+                || (idIsCaller && !idIsReceiver);
             if (iAmCaller) {
                 peerId = currentCall.receiver_id;
                 peerType = currentCall.receiver_type;
@@ -174,6 +184,16 @@ import {
         if (a === b) return true;
         var kab = { kabataan: 1, user: 1 };
         return !!(kab[a] && kab[b]);
+    }
+
+    function isMeOnCallRow(row, asReceiver) {
+        var me = myIdentity();
+        if (!me.id || !row) return false;
+        var id = asReceiver ? Number(row.receiver_id) : Number(row.caller_id);
+        var type = asReceiver ? row.receiver_type : row.caller_type;
+        if (id !== me.id) return false;
+        if (!type || !me.type) return true;
+        return portalTypesMatch(type, me.type);
     }
 
     function toast(message, type) {
@@ -717,19 +737,50 @@ import {
     }
 
     function showIncoming(call) {
-        if (!els.incoming) return;
+        if (!els.incoming) {
+            els.incoming = document.getElementById('commsIncomingCall');
+            els.incomingPeer = document.getElementById('commsIncomingPeer');
+            els.incomingType = document.getElementById('commsIncomingType');
+            els.accept = document.getElementById('commsAcceptCall');
+            els.reject = document.getElementById('commsRejectCall');
+        }
+        if (!els.incoming || !call) return;
+
+        var callId = call.id != null ? Number(call.id) : null;
+        if (callId && callId === Number(lastIncomingCallId)
+            && els.incoming && !els.incoming.hidden
+            && currentCall && Number(currentCall.id) === callId) {
+            if (call._remoteOffer && currentCall) {
+                currentCall._remoteOffer = call._remoteOffer;
+            }
+            return;
+        }
+        if (callId) lastIncomingCallId = callId;
+
         role = 'callee';
         callConnected = false;
+        hideEnded();
+        if (els.inCall && !els.inCall.hidden && !callConnected) {
+            els.inCall.hidden = true;
+        }
         currentCall = Object.assign({}, currentCall || {}, call);
         rememberCallContext(currentCall);
-        hideEnded();
         if (els.incomingPeer) {
-            els.incomingPeer.textContent = (call.peer && call.peer.name) || 'Incoming caller';
+            els.incomingPeer.textContent = (call.peer && call.peer.name)
+                || call.peer_name
+                || call.from_name
+                || 'Incoming caller';
+        }
+        var titleEl = document.getElementById('commsIncomingTitle');
+        var isVideo = String(call.call_type || '') === 'video';
+        if (titleEl) {
+            titleEl.textContent = isVideo ? 'Incoming Video Call' : 'Incoming Voice Call';
         }
         if (els.incomingType) {
-            els.incomingType.textContent = (call.call_type === 'video' ? 'Video call' : 'Voice call');
+            els.incomingType.textContent = isVideo ? 'Video call' : 'Voice call';
         }
         els.incoming.hidden = false;
+        els.incoming.removeAttribute('hidden');
         startRingtone('incoming');
         armRingTimeout(call.call_type || 'voice');
     }
@@ -1099,6 +1150,22 @@ import {
             }), 'Calling...');
             startRingtone('outgoing');
             armRingTimeout(callType);
+            var callerDisplayName = (myIdentity().name)
+                || (conversation && conversation.other_user && conversation.other_user.name)
+                || 'Caller';
+            await signalPeer({
+                type: 'incoming-call',
+                call_id: currentCall.id,
+                conversation_id: conversationId,
+                call_type: callType,
+                peer_name: callerDisplayName,
+                from_name: callerDisplayName,
+                caller_id: currentCall.caller_id,
+                caller_type: currentCall.caller_type,
+                receiver_id: currentCall.receiver_id,
+                receiver_type: currentCall.receiver_type
+            });
+            setCallStatus('Ringing...');
             await ensurePeerConnection(wantsVideo);
             var offer = await pc.createOffer({
                 offerToReceiveAudio: true,
@@ -1111,7 +1178,8 @@ import {
                 conversation_id: conversationId,
                 sdp: offer,
                 call_type: callType,
-                peer_name: document.getElementById('commsPeerName')?.textContent || 'Caller',
+                peer_name: callerDisplayName,
+                from_name: callerDisplayName,
                 caller_id: currentCall.caller_id,
                 caller_type: currentCall.caller_type,
                 receiver_id: currentCall.receiver_id,
@@ -1326,13 +1394,14 @@ import {
     async function handleSignal(payload) {
         if (!payload || !payload.type) return;
 
-        if (payload.type === 'offer') {
+        if (payload.type === 'incoming-call' || payload.type === 'offer') {
             var meOffer = myIdentity();
             var iAmOfferCaller = Number(payload.caller_id) === meOffer.id
-                && portalTypesMatch(payload.caller_type, meOffer.type);
+                && (!meOffer.type || portalTypesMatch(payload.caller_type, meOffer.type));
             if (iAmOfferCaller) return;
             if (role === 'caller' && sameCall(payload)) return;
-            if (currentCall && currentCall._remoteOffer && Number(currentCall.id) === Number(payload.call_id)) {
+            if (payload.type === 'offer' && currentCall && currentCall._remoteOffer
+                && Number(currentCall.id) === Number(payload.call_id)) {
                 currentCall._remoteOffer = payload.sdp;
                 return;
             }
@@ -1342,12 +1411,16 @@ import {
                 id: payload.call_id,
                 conversation_id: payload.conversation_id || (window.CommsChat && window.CommsChat.getActiveId()),
                 call_type: payload.call_type || 'voice',
-                peer: { name: payload.peer_name || payload.from_name || 'Incoming caller' },
+                peer: {
+                    name: payload.peer_name || payload.from_name
+                        || (currentCall && currentCall.peer && currentCall.peer.name)
+                        || 'Incoming caller'
+                },
                 caller_id: payload.caller_id,
                 caller_type: payload.caller_type,
                 receiver_id: payload.receiver_id,
                 receiver_type: payload.receiver_type,
-                _remoteOffer: payload.sdp
+                _remoteOffer: payload.type === 'offer' ? payload.sdp : (currentCall && currentCall._remoteOffer)
             });
             subscribeCallChannel(currentCall.conversation_id);
             showIncoming(currentCall);
@@ -1403,12 +1476,8 @@ import {
     function handleCallRow(payload) {
         var row = (payload && payload.new) || null;
         if (!row) return;
-        var root = getCallRoot();
-        if (!root) return;
-        var myId = Number(root.dataset.currentUserId);
-        var myType = root.dataset.portalUserType;
-        var isReceiver = Number(row.receiver_id) === myId && portalTypesMatch(row.receiver_type, myType);
-        var isCaller = Number(row.caller_id) === myId && portalTypesMatch(row.caller_type, myType);
+        var isReceiver = isMeOnCallRow(row, true);
+        var isCaller = isMeOnCallRow(row, false);
         if (!isReceiver && !isCaller) return;
 
         if (row.status === 'ringing' && isReceiver) {
@@ -1424,9 +1493,7 @@ import {
                 peer: (currentCall && currentCall.peer) || { name: 'Incoming caller' }
             });
             subscribeCallChannel(row.conversation_id);
-            if (!els.inCall || els.inCall.hidden) {
-                showIncoming(currentCall);
-            }
+            showIncoming(currentCall);
             return;
         }
 
@@ -1458,14 +1525,64 @@ import {
                     ? (row.status === 'cancelled' ? 'caller' : null)
                     : (row.status === 'cancelled' ? 'caller' : (row.status === 'rejected' ? 'callee' : null));
                 currentCall = null;
+                lastIncomingCallId = null;
                 cleanupMediaOnly().then(function () {
                     showCallEnded(row.status, peerName, rowId, endedBy);
                     refreshCallChat(rowConv);
                 });
+            } else if (isReceiver && els.incoming && !els.incoming.hidden
+                && Number(lastIncomingCallId) === Number(row.id)) {
+                hideIncoming();
+                stopRingtone();
+                lastIncomingCallId = null;
+                refreshCallChat(row.conversation_id);
             } else {
                 refreshCallChat(row.conversation_id);
             }
         }
+    }
+
+    function syncIncomingFromServer(conversationId) {
+        if (role === 'caller') return;
+        if (els.incoming && !els.incoming.hidden) return;
+        if (callConnected && currentCall) return;
+        var r = routes();
+        if (!r.calls || !window.Comms || typeof window.Comms.api !== 'function') return;
+
+        window.clearTimeout(incomingSyncTimer);
+        incomingSyncTimer = window.setTimeout(function () {
+            window.Comms.api(r.calls, { method: 'GET', dedupe: false }).then(function (data) {
+                if (role === 'caller') return;
+                if (els.incoming && !els.incoming.hidden) return;
+                var me = myIdentity();
+                var list = (data && data.calls) || [];
+                var ringing = null;
+                for (var i = 0; i < list.length; i += 1) {
+                    var c = list[i];
+                    if (!c || String(c.status) !== 'ringing') continue;
+                    if (Number(c.receiver_id) !== me.id) continue;
+                    if (c.receiver_type && me.type && !portalTypesMatch(c.receiver_type, me.type)) continue;
+                    if (conversationId && Number(c.conversation_id) !== Number(conversationId)) continue;
+                    ringing = c;
+                    break;
+                }
+                if (!ringing) {
+                    for (var j = 0; j < list.length; j += 1) {
+                        var row = list[j];
+                        if (!row || String(row.status) !== 'ringing') continue;
+                        if (Number(row.receiver_id) !== me.id) continue;
+                        if (conversationId && Number(row.conversation_id) !== Number(conversationId)) continue;
+                        ringing = row;
+                        break;
+                    }
+                }
+                if (ringing) {
+                    role = 'callee';
+                    showIncoming(ringing);
+                    subscribeCallChannel(ringing.conversation_id);
+                }
+            }).catch(function () { /* ignore */ });
+        }, 150);
     }
 
     function showSecureContextBanner() {
@@ -1590,6 +1707,7 @@ import {
         startCall: startCall,
         handleSignal: handleSignal,
         handleCallRow: handleCallRow,
+        syncIncomingFromServer: syncIncomingFromServer,
         endCall: endCall,
         canUseMedia: function () {
             try {

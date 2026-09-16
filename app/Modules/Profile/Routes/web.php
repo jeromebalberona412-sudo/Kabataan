@@ -22,6 +22,12 @@ Route::middleware('web')->group(function () {
         ->middleware('throttle:6,1')
         ->name('change-password.confirm');
 
+    Route::get('/change-email/success', [ProfileController::class, 'showChangeEmailSuccess'])
+        ->name('change-email.success');
+
+    Route::get('/change-password/success', [ProfileController::class, 'showChangePasswordSuccess'])
+        ->name('change-password.success');
+
     Route::middleware('auth')->group(function () {
         Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
         Route::post('/upload-profile-picture', [ProfileController::class, 'uploadProfilePicture'])->name('profile.upload-picture');

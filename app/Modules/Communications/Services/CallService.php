@@ -58,9 +58,14 @@ class CallService
 
         $receiverId = (int) $other->user_id;
         $peerUser = User::query()->find($receiverId);
-        $receiverType = $peerUser
-            ? $this->types->fromUser($peerUser)
-            : ($this->types->canonicalType($other->user_type) ?: $other->user_type);
+        try {
+            $receiverType = $peerUser
+                ? $this->types->fromUser($peerUser)
+                : ($this->types->canonicalType($other->user_type) ?: $other->user_type);
+        } catch (\InvalidArgumentException) {
+            $receiverType = $this->types->canonicalType($other->user_type) ?: $other->user_type;
+        }
+        $receiverType = $this->types->canonicalType($receiverType) ?: (string) $receiverType;
 
         return DB::transaction(function () use (
             $conversation,
@@ -83,6 +88,17 @@ class CallService
                 'receiver_type' => $receiverType,
                 'call_type' => $callType,
                 'status' => Call::STATUS_RINGING,
+            ]);
+
+            Log::info('CALL_CREATED', [
+                'call_id' => $call->id,
+                'caller_id' => $callerId,
+                'caller_type' => $callerType,
+                'receiver_id' => $receiverId,
+                'receiver_type' => $receiverType,
+                'call_type' => $callType,
+                'conversation_id' => $conversation->id,
+                'status' => $call->status,
             ]);
 
             $label = $callType === Call::TYPE_VIDEO ? 'Video call' : 'Voice call';
@@ -278,13 +294,17 @@ class CallService
     {
         $userId = (int) $user->id;
         $userType = $this->types->portalType();
+        $types = $this->types->equivalentTypes($userType);
+        if ($types === []) {
+            $types = [$userType];
+        }
 
         return Call::query()
-            ->where(function ($q) use ($userId, $userType) {
-                $q->where(function ($inner) use ($userId, $userType) {
-                    $inner->where('caller_id', $userId)->where('caller_type', $userType);
-                })->orWhere(function ($inner) use ($userId, $userType) {
-                    $inner->where('receiver_id', $userId)->where('receiver_type', $userType);
+            ->where(function ($q) use ($userId, $types) {
+                $q->where(function ($inner) use ($userId, $types) {
+                    $inner->where('caller_id', $userId)->whereIn('caller_type', $types);
+                })->orWhere(function ($inner) use ($userId, $types) {
+                    $inner->where('receiver_id', $userId)->whereIn('receiver_type', $types);
                 });
             })
             ->with(['caller', 'receiver'])

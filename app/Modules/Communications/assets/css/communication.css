@@ -1971,6 +1971,13 @@ body.comms-messages-page .comms-page-main.container-fluid {
     object-fit: contain;
     object-position: center center;
 }
+@media (max-width: 768px) {
+    .comms-call-overlay:not(.is-group-call) .comms-remote-video,
+    .comms-remote-video {
+        object-fit: contain !important;
+        object-position: center center !important;
+    }
+}
 
 .comms-local-video {
     position: absolute;
