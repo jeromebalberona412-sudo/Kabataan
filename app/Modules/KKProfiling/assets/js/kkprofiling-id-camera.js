@@ -1,7 +1,7 @@
 /**
- * KK Profiling — smart live camera ID capture.
- * Lightweight document detection + stability auto-capture.
- * AI ID verification runs only AFTER capture (existing wizard detect-id path).
+ * KK Profiling — device-style live camera ID capture.
+ * Full viewfinder (no ID card edge frame). Manual shutter only.
+ * On phones, prefer the native device camera app when available.
  */
 (function () {
     const modal = document.getElementById('kkpIdCameraModal');
@@ -34,28 +34,10 @@
     let capturing = false;
     let detectionTimer = null;
     let helpTimer = null;
-    let stableSince = null;
-    let previousGray = null;
-    let detectSampleCanvas = null;
-    let detectedStreak = 0;
-    let captureLockUntil = 0;
 
     const MAX_BYTES = 10 * 1024 * 1024;
     const MIN_WIDTH = 480;
     const MIN_HEIGHT = 300;
-
-    const cfg = {
-        // Manual capture only — never auto-detect / auto-snap.
-        autoCapture: false,
-        stabilityMs: Math.max(350, Number(modal.dataset.stabilityMs) || 700),
-        sampleIntervalMs: Math.max(100, Number(modal.dataset.sampleIntervalMs) || 180),
-        helpAfterMs: Math.max(4000, Number(modal.dataset.helpAfterMs) || 10000),
-        minEdge: Number(modal.dataset.minEdge) || 7,
-        minContrast: Number(modal.dataset.minContrast) || 10,
-        minBrightness: Number(modal.dataset.minBrightness) || 28,
-        maxBrightness: Number(modal.dataset.maxBrightness) || 235,
-        maxMotion: Number(modal.dataset.maxMotion) || 22,
-    };
 
     function setStatus(message, tone = 'info') {
         if (!statusEl) {
@@ -79,13 +61,13 @@
         guideEl.dataset.state = state || 'idle';
         if (guideLabelEl) {
             const labels = {
-                idle: 'PLACE ID HERE',
-                searching: 'PLACE ID HERE',
-                detected: 'ID DETECTED',
-                steady: 'HOLD STEADY',
-                capturing: 'CAPTURING…',
+                idle: 'Camera ready',
+                searching: 'Camera ready',
+                detected: 'Camera ready',
+                steady: 'Hold steady',
+                capturing: 'Capturing…',
             };
-            guideLabelEl.textContent = labels[state] || 'PLACE ID HERE';
+            guideLabelEl.textContent = labels[state] || 'Camera ready';
         }
     }
 
@@ -143,9 +125,6 @@
             window.clearTimeout(helpTimer);
             helpTimer = null;
         }
-        stableSince = null;
-        previousGray = null;
-        detectedStreak = 0;
     }
 
     function stopCamera() {
@@ -181,7 +160,6 @@
     }
 
     function openModalShell() {
-        // Inline live camera panel (not a dialog/modal overlay).
         modal.hidden = false;
         modal.setAttribute('open', 'open');
         try {
@@ -201,171 +179,25 @@
             titleEl.textContent = `Capture the ${label} of your ID`;
         }
         if (hintEl) {
-            hintEl.textContent = 'Position your ID inside the frame, then tap Capture to take the photo yourself.';
+            hintEl.textContent = 'Use your device camera. Point at your ID, then tap the shutter to take the photo.';
         }
         if (captureBtn) {
             captureBtn.setAttribute('aria-label', `Capture ${label} ID`);
-            captureBtn.textContent = 'Capture';
         }
     }
 
-    function getGuideSampleRect(videoWidth, videoHeight) {
-        // Approximate the CSS guide frame (centered ~86% width, card aspect ~1.586).
-        const frameW = videoWidth * 0.72;
-        const frameH = frameW / 1.586;
-        const x = (videoWidth - frameW) / 2;
-        const y = (videoHeight - frameH) / 2;
-        return {
-            x: Math.max(0, Math.floor(x)),
-            y: Math.max(0, Math.floor(y)),
-            w: Math.max(1, Math.floor(Math.min(frameW, videoWidth))),
-            h: Math.max(1, Math.floor(Math.min(frameH, videoHeight))),
-        };
-    }
-
-    /**
-     * Lightweight document heuristics inside the guide (not full AI analysis).
-     */
-    function analyzeGuideRegion() {
-        if (!video || video.readyState < 2) {
-            return null;
-        }
-
-        const vw = video.videoWidth || 0;
-        const vh = video.videoHeight || 0;
-        if (vw < 80 || vh < 80) {
-            return null;
-        }
-
-        const rect = getGuideSampleRect(vw, vh);
-        const sampleW = 96;
-        const sampleH = Math.max(40, Math.round(sampleW / 1.586));
-
-        if (!detectSampleCanvas) {
-            detectSampleCanvas = document.createElement('canvas');
-        }
-        detectSampleCanvas.width = sampleW;
-        detectSampleCanvas.height = sampleH;
-        const ctx = detectSampleCanvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) {
-            return null;
-        }
-
-        ctx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, sampleW, sampleH);
-        const { data } = ctx.getImageData(0, 0, sampleW, sampleH);
-
-        const gray = new Float32Array(sampleW * sampleH);
-        let sum = 0;
-        let sumSq = 0;
-        let bright = 0;
-        let dark = 0;
-
-        for (let i = 0, p = 0; i < data.length; i += 4, p += 1) {
-            const y = (0.299 * data[i]) + (0.587 * data[i + 1]) + (0.114 * data[i + 2]);
-            gray[p] = y;
-            sum += y;
-            sumSq += y * y;
-            if (y >= 245) {
-                bright += 1;
-            }
-            if (y <= 20) {
-                dark += 1;
-            }
-        }
-
-        const count = gray.length;
-        const mean = sum / count;
-        const variance = Math.max(0, (sumSq / count) - (mean * mean));
-        const contrast = Math.sqrt(variance);
-        const glare = bright / count;
-        const crush = dark / count;
-
-        // Edge / sharpness score (Laplacian-ish).
-        let edgeSum = 0;
-        let edgeCount = 0;
-        for (let y = 1; y < sampleH - 1; y += 1) {
-            for (let x = 1; x < sampleW - 1; x += 1) {
-                const i = (y * sampleW) + x;
-                const lap = Math.abs(
-                    (4 * gray[i])
-                    - gray[i - sampleW]
-                    - gray[i + sampleW]
-                    - gray[i - 1]
-                    - gray[i + 1]
-                );
-                edgeSum += lap;
-                edgeCount += 1;
-            }
-        }
-        const edgeScore = edgeCount > 0 ? edgeSum / edgeCount : 0;
-
-        // Border vs center contrast: card-like docs often differ from outer band.
-        const insetX = Math.floor(sampleW * 0.18);
-        const insetY = Math.floor(sampleH * 0.18);
-        let borderSum = 0;
-        let borderN = 0;
-        let centerSum = 0;
-        let centerN = 0;
-        for (let y = 0; y < sampleH; y += 1) {
-            for (let x = 0; x < sampleW; x += 1) {
-                const v = gray[(y * sampleW) + x];
-                const inCenter = x >= insetX && x < sampleW - insetX && y >= insetY && y < sampleH - insetY;
-                if (inCenter) {
-                    centerSum += v;
-                    centerN += 1;
-                } else {
-                    borderSum += v;
-                    borderN += 1;
-                }
-            }
-        }
-        const borderMean = borderN ? borderSum / borderN : mean;
-        const centerMean = centerN ? centerSum / centerN : mean;
-        const structureGap = Math.abs(centerMean - borderMean);
-
-        // Motion vs previous sample (first sample is never treated as stable).
-        let motion = 999;
-        let hasPrevious = Boolean(previousGray && previousGray.length === gray.length);
-        if (hasPrevious) {
-            let diff = 0;
-            for (let i = 0; i < gray.length; i += 1) {
-                diff += Math.abs(gray[i] - previousGray[i]);
-            }
-            motion = diff / gray.length;
-        }
-        previousGray = gray;
-
-        const lightingOk = mean >= cfg.minBrightness
-            && mean <= cfg.maxBrightness
-            && glare < 0.42
-            && crush < 0.55;
-        const contrastOk = contrast >= cfg.minContrast;
-        const edgeOk = edgeScore >= cfg.minEdge;
-        // Blank paper / empty scene: low edges + low structure.
-        const structureOk = edgeScore >= (cfg.minEdge * 0.75)
-            && (structureGap >= 3.5 || contrast >= Math.max(8, cfg.minContrast * 0.85));
-        const detected = lightingOk && contrastOk && edgeOk && structureOk;
-        const stable = detected && hasPrevious && motion <= cfg.maxMotion;
-
-        return {
-            mean,
-            contrast,
-            edgeScore,
-            motion,
-            glare,
-            structureGap,
-            detected,
-            stable,
-            lightingOk,
-            contrastOk,
-            edgeOk,
-        };
+    function prefersNativeDeviceCamera() {
+        const ua = String(navigator.userAgent || '');
+        const isPhone = /Android|iPhone|iPod/i.test(ua);
+        const isTablet = /iPad/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua));
+        const narrow = window.matchMedia('(max-width: 900px)').matches;
+        return isPhone || (isTablet && narrow) || (navigator.maxTouchPoints > 1 && narrow);
     }
 
     function startDetectionLoop() {
         stopDetectionLoop();
         setGuideState('idle');
-        setDetectMessage('Position your ID, then tap Capture.');
+        setDetectMessage('Camera ready — tap the shutter when your ID looks clear.');
         showHelpPanel(false);
     }
 
@@ -380,8 +212,7 @@
     }
 
     /**
-     * On HTTP LAN / insecure origins, getUserMedia is blocked.
-     * Open the device camera via capture=environment instead of showing an insecure warning.
+     * Open the device camera via capture=environment (native camera app on phones).
      */
     function openNativeDeviceCamera(inputId) {
         const input = document.getElementById(inputId);
@@ -462,7 +293,6 @@
     }
 
     async function startCamera() {
-        // Prefer device camera capture on insecure HTTP (e.g. LAN IP serve) — do not show insecure warning.
         if (!canUseLiveMediaStream()) {
             const inputId = targetInputId;
             closeModal();
@@ -491,7 +321,6 @@
                 if (video) {
                     video.srcObject = mediaStream;
                     await video.play().catch(() => {});
-                    // Wait until frames are available so auto-detect can start immediately.
                     if (video.readyState < 2) {
                         await new Promise((resolve) => {
                             const onReady = () => {
@@ -506,8 +335,8 @@
                     }
                 }
                 startDetectionLoop();
-                setDetectMessage('Looking for an ID inside the frame…');
-                setGuideState('searching');
+                setDetectMessage('Camera ready — tap the shutter when your ID looks clear.');
+                setGuideState('idle');
                 return;
             } catch (error) {
                 lastError = error;
@@ -516,7 +345,6 @@
 
         const name = String(lastError?.name || '');
         if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-            // Still try native capture (mobile) before falling back to gallery upload.
             const inputId = targetInputId;
             closeModal();
             if (inputId && openNativeDeviceCamera(inputId)) {
@@ -547,56 +375,32 @@
         tctx.drawImage(ctx.canvas, 0, 0, width, height, 0, 0, sampleW, sampleH);
         const data = tctx.getImageData(0, 0, sampleW, sampleH).data;
         let sum = 0;
-        let bright = 0;
         let sumSq = 0;
-        const pixels = data.length / 4;
-        const gray = [];
-
+        const n = sampleW * sampleH;
         for (let i = 0; i < data.length; i += 4) {
-            const y = (0.299 * data[i]) + (0.587 * data[i + 1]) + (0.114 * data[i + 2]);
-            gray.push(y);
+            const y = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
             sum += y;
             sumSq += y * y;
-            if (y >= 245) {
-                bright += 1;
-            }
         }
+        const mean = sum / n;
+        const variance = Math.max(0, (sumSq / n) - (mean * mean));
+        const contrast = Math.sqrt(variance);
 
-        const mean = pixels > 0 ? sum / pixels : 0;
-        const glare = pixels > 0 ? bright / pixels : 0;
-        const contrast = Math.sqrt(Math.max(0, (sumSq / pixels) - (mean * mean)));
-
-        let lapSum = 0;
-        let lapN = 0;
-        for (let y = 1; y < sampleH - 1; y += 1) {
-            for (let x = 1; x < sampleW - 1; x += 1) {
-                const i = (y * sampleW) + x;
-                const lap = Math.abs((4 * gray[i]) - gray[i - sampleW] - gray[i + sampleW] - gray[i - 1] - gray[i + 1]);
-                lapSum += lap;
-                lapN += 1;
-            }
+        if (mean < 22) {
+            return 'Too dark. Move to better lighting and try again.';
         }
-        const sharpness = lapN ? lapSum / lapN : 0;
-
-        if (mean < 35) {
-            return 'Image is too dark. Please improve the lighting.';
+        if (mean > 245) {
+            return 'Too bright / glare. Tilt the ID slightly and try again.';
         }
-        if (mean > 230 || (glare > 0.28 && mean > 190)) {
-            return 'Image is too bright. Please avoid glare.';
+        if (contrast < 8) {
+            return 'Image looks blurry. Hold steady and tap the shutter again.';
         }
-        if (contrast < 14) {
-            return 'Image contrast is too low. Please retake with clearer lighting.';
-        }
-        if (sharpness < 6) {
-            return 'Image is too blurry. Please hold your camera steady and try again.';
-        }
-
         return null;
     }
 
     function assignFileToInput(inputId, file) {
         const input = document.getElementById(inputId);
-        if (!input || typeof DataTransfer === 'undefined') {
+        if (!input || !file) {
             return false;
         }
 
@@ -607,7 +411,7 @@
         return true;
     }
 
-    async function captureFrame(options = {}) {
+    async function captureFrame() {
         if (!video || !canvas || !mediaStream || !targetInputId || capturing) {
             return;
         }
@@ -633,17 +437,8 @@
         }
 
         setGuideState('capturing');
-        setDetectMessage(options.auto ? 'Capturing…' : 'Capturing…');
+        setDetectMessage('Capturing…');
         setStatus('Checking image quality…', 'info');
-
-        // Pause tracks briefly for a sharp still.
-        mediaStream.getVideoTracks().forEach((track) => {
-            try {
-                track.enabled = true;
-            } catch (_error) {
-                // ignore
-            }
-        });
 
         canvas.width = width;
         canvas.height = height;
@@ -664,7 +459,7 @@
         if (qualityError) {
             setStatus(qualityError, 'error');
             setDetectMessage(qualityError);
-            setGuideState('searching');
+            setGuideState('idle');
             capturing = false;
             if (captureBtn) {
                 captureBtn.disabled = false;
@@ -714,8 +509,6 @@
         }
 
         markWizardCaptured(capturedInputId);
-
-        // Wizard change handler will run quality → AI verification on the server.
         closeModal();
     }
 
@@ -728,6 +521,14 @@
         targetSide = side === 'back' ? 'back' : 'front';
         capturing = false;
         updateCopy(targetSide);
+
+        // Phones: open the real device camera app (no in-page ID edge frame).
+        if (prefersNativeDeviceCamera() && openNativeDeviceCamera(inputId)) {
+            targetInputId = null;
+            opening = false;
+            return;
+        }
+
         openModalShell();
         stopCamera();
         try {
@@ -802,39 +603,33 @@
         }
     });
 
-    captureBtn?.addEventListener('click', (event) => {
-        event.preventDefault();
-        captureFrame({ auto: false });
+    captureBtn?.addEventListener('click', () => {
+        captureFrame();
     });
 
-    helpManualBtn?.addEventListener('click', (event) => {
-        event.preventDefault();
-        captureFrame({ auto: false });
-    });
-
-    closeBtn?.addEventListener('click', (event) => {
-        event.preventDefault();
+    closeBtn?.addEventListener('click', () => {
         closeModal();
     });
 
-    switchUploadBtn?.addEventListener('click', (event) => {
-        event.preventDefault();
+    switchUploadBtn?.addEventListener('click', () => {
         useUploadFallback();
     });
 
-    footerUploadBtn?.addEventListener('click', (event) => {
-        event.preventDefault();
+    footerUploadBtn?.addEventListener('click', () => {
         useUploadFallback();
     });
 
-    helpUploadBtn?.addEventListener('click', (event) => {
-        event.preventDefault();
+    helpUploadBtn?.addEventListener('click', () => {
         useUploadFallback();
     });
 
-    modal.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && !modal.hidden) {
-            event.preventDefault();
+    helpManualBtn?.addEventListener('click', () => {
+        showHelpPanel(false);
+        captureFrame();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal && !modal.hidden) {
             closeModal();
         }
     });

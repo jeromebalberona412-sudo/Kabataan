@@ -797,8 +797,9 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    min-width: 128px;
-    width: 128px;
+    min-width: 108px;
+    width: 108px;
+    max-width: 108px;
     flex: 0 0 auto;
 }
 
@@ -836,29 +837,37 @@
 }
 
 .prof-kk-age-select-box {
-    display: inline-block;
+    display: inline-flex;
     vertical-align: bottom;
-    min-width: 78px;
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
     position: relative;
     flex: 0 0 auto;
 }
 
 .prof-kk-uline-age {
-    width: 78px;
-    min-width: 78px;
-    min-height: 28px;
-    height: 28px;
-    font-size: 12px;
+    width: 52px !important;
+    min-width: 52px !important;
+    max-width: 52px !important;
+    min-height: 22px;
+    height: 22px;
+    font-size: 11px !important;
     font-weight: 600;
     color: #111;
-    padding-top: 2px;
-    padding-bottom: 2px;
+    padding: 0 14px 0 2px !important;
+    line-height: 1.2;
     box-sizing: border-box;
 }
 
 .prof-kk-birthday-field .prof-kk-uline-med {
     width: 100%;
+    max-width: 108px;
     flex: none;
+    min-height: 22px;
+    height: 22px;
+    font-size: 11px !important;
+    padding: 0 2px !important;
 }
 
 .prof-kk-birthday-hint {
@@ -867,7 +876,7 @@
     text-align: center;
     margin-top: 0;
     line-height: 1.15;
-    font-size: 8.5px;
+    font-size: 8px;
 }
 
 .prof-kk-age-dob-row .prof-kk-uline-med {

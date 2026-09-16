@@ -248,48 +248,45 @@
             data-max-brightness="{{ (float) config('documents.camera.max_brightness', 235) }}"
             data-max-motion="{{ (float) config('documents.camera.max_motion', 22) }}"
         >
-            <div class="kkp-id-camera-dialog">
+            <div class="kkp-id-camera-dialog kkp-id-camera-dialog--device">
                 <div class="kkp-id-camera-header">
-                    <p class="kkp-id-camera-eyebrow">Live camera</p>
                     <div class="kkp-id-camera-header-row">
                         <h3 id="kkpIdCameraTitle">Capture the Front of your ID</h3>
                         <button type="button" class="kkp-id-camera-close" id="kkpIdCameraClose" aria-label="Close camera">×</button>
                     </div>
+                    <p class="kkp-id-camera-instructions" id="kkpIdCameraHint">
+                        Use your device camera. Point at your ID, then tap the shutter to take the photo.
+                    </p>
                 </div>
-                <p class="kkp-id-camera-instructions" id="kkpIdCameraHint">
-                    Position your ID inside the frame, then tap Capture to take the photo yourself.
-                </p>
-                <ul class="kkp-id-camera-tips">
-                    <li>Place the entire ID inside the guide</li>
-                    <li>Keep the ID flat and avoid glare</li>
-                    <li>Tap Capture when the ID looks clear — nothing is captured automatically</li>
-                </ul>
-                <div class="kkp-id-camera-stage" id="kkpIdCameraStage">
+                <div class="kkp-id-camera-stage kkp-id-camera-stage--device" id="kkpIdCameraStage">
                     <video id="kkpIdCameraVideo" playsinline muted autoplay aria-label="Live camera preview"></video>
-                    <div class="kkp-id-camera-guide" id="kkpIdCameraGuide" aria-hidden="true" data-state="idle">
-                        <div class="kkp-id-camera-guide-frame">
-                            <span id="kkpIdCameraGuideLabel">PLACE ID HERE</span>
-                        </div>
+                    <div class="kkp-id-camera-viewfinder" id="kkpIdCameraGuide" aria-hidden="true" data-state="idle">
+                        <span class="kkp-id-camera-grid" aria-hidden="true"></span>
+                        <span class="kkp-id-camera-focus" aria-hidden="true"></span>
+                    </div>
+                    <span id="kkpIdCameraGuideLabel" class="visually-hidden">Camera ready</span>
+                    <div class="kkp-id-camera-shutter-bar">
+                        <button type="button" class="kkp-id-camera-shutter" id="kkpIdCameraCapture" aria-label="Capture photo">
+                            <span class="kkp-id-camera-shutter-ring" aria-hidden="true"></span>
+                            <span class="kkp-id-camera-shutter-core" aria-hidden="true"></span>
+                        </button>
                     </div>
                 </div>
                 <canvas id="kkpIdCameraCanvas" hidden></canvas>
-                <p class="kkp-id-camera-detect" id="kkpIdCameraDetect" role="status" aria-live="polite">Position your ID, then tap Capture.</p>
+                <p class="kkp-id-camera-detect" id="kkpIdCameraDetect" role="status" aria-live="polite">Camera ready — tap the shutter when your ID looks clear.</p>
                 <p class="kkp-id-camera-status" id="kkpIdCameraStatus" role="status" hidden></p>
                 <div class="kkp-id-camera-fallback" id="kkpIdCameraFallback" hidden>
                     <p data-fallback-message>Unable to open the camera. Please allow camera access, or upload an ID photo instead.</p>
                     <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpIdCameraUseUpload">Upload ID Photo</button>
                 </div>
                 <div class="kkp-id-camera-help" id="kkpIdCameraHelp" hidden>
-                    <p>Having trouble detecting the ID?</p>
+                    <p>Having trouble with the camera?</p>
                     <div class="kkp-id-camera-help-actions">
-                        <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera" id="kkpIdCameraManualHint" aria-label="Capture manually">Capture Manually</button>
+                        <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera" id="kkpIdCameraManualHint" aria-label="Capture manually">Capture again</button>
                         <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpIdCameraHelpUpload">Upload Photo</button>
                     </div>
                 </div>
                 <div class="kkp-id-camera-footer">
-                    <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera kkp-id-capture-btn--primary" id="kkpIdCameraCapture">
-                        Capture
-                    </button>
                     <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--upload" id="kkpIdCameraFooterUpload">
                         Upload ID Photo
                     </button>

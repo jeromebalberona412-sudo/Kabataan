@@ -746,8 +746,9 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    min-width: 128px;
-    width: 128px;
+    min-width: 108px;
+    width: 108px;
+    max-width: 108px;
     flex: 0 0 auto;
 }
 
@@ -785,29 +786,75 @@
 }
 
 .kkp-age-select-box {
-    display: inline-block;
+    display: inline-flex;
     vertical-align: bottom;
-    min-width: 78px;
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
     position: relative;
     flex: 0 0 auto;
 }
 
 .kkp-uline-age {
-    width: 78px;
-    min-width: 78px;
-    min-height: 28px;
-    height: 28px;
-    font-size: 12px;
+    width: 52px !important;
+    min-width: 52px !important;
+    max-width: 52px !important;
+    min-height: 22px;
+    height: 22px;
+    font-size: 11px !important;
     font-weight: 600;
     color: #111;
-    padding-top: 2px;
-    padding-bottom: 2px;
+    padding: 0 14px 0 2px !important;
+    line-height: 1.2;
     box-sizing: border-box;
 }
 
-.kkp-birthday-field .kkp-uline-med {
-    width: 100%;
+.kkp-uline-age.kkp-uline-select {
+    background-size: 10px;
+    background-position: right 1px center;
+    padding-right: 14px !important;
+}
+
+.kkp-uline-age option {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 4px;
+}
+
+.kkp-birthday-field .kkp-uline-med,
+.kkp-birthday-field input[type="date"].kkp-uline {
+    width: 100% !important;
+    max-width: 108px;
+    min-width: 0;
     flex: none;
+    min-height: 22px;
+    height: 22px;
+    font-size: 11px !important;
+    font-weight: 600;
+    padding: 0 2px !important;
+    line-height: 1.2;
+    box-sizing: border-box;
+}
+
+.kkp-birthday-field input[type="date"].kkp-uline::-webkit-datetime-edit,
+.kkp-birthday-field input[type="date"].kkp-uline::-webkit-datetime-edit-fields-wrapper,
+.kkp-birthday-field input[type="date"].kkp-uline::-webkit-datetime-edit-text,
+.kkp-birthday-field input[type="date"].kkp-uline::-webkit-datetime-edit-month-field,
+.kkp-birthday-field input[type="date"].kkp-uline::-webkit-datetime-edit-day-field,
+.kkp-birthday-field input[type="date"].kkp-uline::-webkit-datetime-edit-year-field {
+    padding: 0;
+    font-size: 11px;
+}
+
+.kkp-birthday-field input[type="date"].kkp-uline::-webkit-calendar-picker-indicator {
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    margin: 0 0 0 2px;
+    cursor: pointer;
+    opacity: 0.75;
+    transform: scale(0.85);
+    transform-origin: center;
 }
 
 .kkp-birthday-hint {
@@ -816,7 +863,7 @@
     text-align: center;
     margin-top: 0;
     line-height: 1.15;
-    font-size: 8.5px;
+    font-size: 8px;
 }
 
 .kkp-age-dob-row .kkp-uline-med {

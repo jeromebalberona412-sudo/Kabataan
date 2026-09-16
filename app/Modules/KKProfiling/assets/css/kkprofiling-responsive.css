@@ -201,15 +201,33 @@ body.kkpu-page-body {
     }
 
     .kkp-fs-scale-inner .kkp-age-select-box {
-        min-width: 78px;
+        width: 52px;
+        min-width: 52px;
+        max-width: 52px;
     }
 
     .kkp-fs-scale-inner .kkp-uline-age {
-        width: 78px;
-        min-width: 78px;
-        min-height: 28px;
-        height: 28px;
-        font-size: 12px;
+        width: 52px !important;
+        min-width: 52px !important;
+        max-width: 52px !important;
+        min-height: 22px;
+        height: 22px;
+        font-size: 11px !important;
+        padding: 0 14px 0 2px !important;
+    }
+
+    .kkp-fs-scale-inner .kkp-birthday-field {
+        width: 108px;
+        min-width: 108px;
+        max-width: 108px;
+    }
+
+    .kkp-fs-scale-inner .kkp-birthday-field .kkp-uline-med,
+    .kkp-fs-scale-inner .kkp-birthday-field input[type="date"].kkp-uline {
+        max-width: 108px;
+        min-height: 22px;
+        height: 22px;
+        font-size: 11px !important;
     }
 
     .kkp-fs-scale-inner .kkp-inline-pair--email {
