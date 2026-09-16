@@ -217,6 +217,8 @@ function initProfileAvatarChange() {
 
     function updateAvatarImages(url) {
         const resolved = normalizeAvatarUrl(url);
+        if (!resolved) return;
+
         if (profileAvatar) {
             profileAvatar.onerror = () => {
                 profileAvatar.onerror = null;
@@ -225,7 +227,14 @@ function initProfileAvatarChange() {
             profileAvatar.src = resolved;
         }
 
-        document.querySelectorAll('.kabataan-header__avatar-btn img, .kabataan-header__dropdown-head img').forEach((img) => {
+        document.querySelectorAll(
+            '.kabataan-header__avatar-btn img, .kabataan-header__dropdown-avatar, .kabataan-header__dropdown-head img, img.kabataan-header__dropdown-avatar'
+        ).forEach((img) => {
+            img.onerror = () => {
+                img.onerror = null;
+                const fallback = profileAvatar?.dataset.fallback || wrapper.dataset.fallbackAvatar || '';
+                if (fallback) img.src = fallback;
+            };
             img.src = resolved;
         });
     }

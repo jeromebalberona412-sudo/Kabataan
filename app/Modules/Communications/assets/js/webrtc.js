@@ -19,10 +19,11 @@ import {
     var AUDIO_RING_TIMEOUT_MS = 30000;
     var VIDEO_RING_TIMEOUT_MS = 45000;
     var CONNECTION_TIMEOUT_MS = 30000;
-    var CALL_START_DELAY_MS = 3000;
+    var CALL_START_DELAY_MS = 0;
 
     var pc = null;
     var localStream = null;
+    var remoteStream = null;
     var currentCall = null;
     var lastCallContext = null;
     var callTimer = null;
@@ -33,6 +34,7 @@ import {
     var wantsVideo = false;
     var callConnected = false;
     var mediaConnected = false;
+    var negotiating = false;
     var ringTimeout = null;
     var connectionTimeout = null;
     var endedAutoClose = null;
@@ -346,11 +348,11 @@ import {
         }
     }
 
-    function playToneBurst(ctx, freqs, when, duration, volume) {
+    function playToneBurst(ctx, freqs, when, duration, volume, type) {
         freqs.forEach(function (freq) {
             var osc = ctx.createOscillator();
             var gain = ctx.createGain();
-            osc.type = 'sine';
+            osc.type = type || 'sine';
             osc.frequency.value = freq;
             gain.gain.setValueAtTime(0.0001, when);
             gain.gain.exponentialRampToValueAtTime(volume, when + 0.02);
@@ -385,15 +387,23 @@ import {
             if (!ringCtx) return;
             var now = ringCtx.currentTime;
             if (incoming) {
-                playToneBurst(ringCtx, [440, 480], now, 0.4, 0.14);
-                playToneBurst(ringCtx, [440, 480], now + 0.55, 0.4, 0.14);
+                // Loud dual-tone ring for incoming
+                playToneBurst(ringCtx, [440, 480], now, 0.5, 0.58, 'sine');
+                playToneBurst(ringCtx, [440, 480], now, 0.5, 0.28, 'triangle');
+                playToneBurst(ringCtx, [520, 560], now + 0.08, 0.4, 0.2, 'square');
+                playToneBurst(ringCtx, [440, 480], now + 0.55, 0.5, 0.58, 'sine');
+                playToneBurst(ringCtx, [440, 480], now + 0.55, 0.5, 0.28, 'triangle');
+                playToneBurst(ringCtx, [520, 560], now + 0.63, 0.4, 0.2, 'square');
             } else {
-                playToneBurst(ringCtx, [440, 480], now, 1.4, 0.09);
+                // Strong outbound ring while waiting for answer
+                playToneBurst(ringCtx, [440, 480], now, 1.55, 0.62, 'sine');
+                playToneBurst(ringCtx, [440, 480], now, 1.55, 0.3, 'triangle');
+                playToneBurst(ringCtx, [350, 440], now + 0.12, 1.25, 0.24, 'square');
             }
         }
 
         scheduleCycle();
-        ringTimer = setInterval(scheduleCycle, incoming ? 2200 : 4000);
+        ringTimer = setInterval(scheduleCycle, incoming ? 2000 : 3200);
     }
 
     function ringTimeoutForCall(callType) {
@@ -437,6 +447,7 @@ import {
         mediaConnected = true;
         clearRingTimeout();
         clearConnectionTimeout();
+        unlockRemotePlayback();
         updateCameraUi();
     }
 
@@ -677,12 +688,53 @@ import {
         if (!els.remoteAudio) return;
         try {
             els.remoteAudio.muted = false;
+            els.remoteAudio.removeAttribute('muted');
             els.remoteAudio.volume = 1;
+            els.remoteAudio.autoplay = true;
             var playPromise = els.remoteAudio.play();
             if (playPromise && typeof playPromise.catch === 'function') {
                 playPromise.catch(function () { /* autoplay may need gesture; accept/start already counted */ });
             }
         } catch (e) { /* ignore */ }
+    }
+
+    function unlockRemotePlayback() {
+        ensureRemoteAudioPlaying();
+        if (els.remoteVideo) {
+            try {
+                els.remoteVideo.muted = true;
+                els.remoteVideo.setAttribute('muted', '');
+                els.remoteVideo.playsInline = true;
+                els.remoteVideo.autoplay = true;
+                var vp = els.remoteVideo.play();
+                if (vp && typeof vp.catch === 'function') vp.catch(function () {});
+            } catch (e2) { /* ignore */ }
+        }
+    }
+
+    function mergeRemoteTrack(track, inboundStream) {
+        if (!remoteStream) remoteStream = new MediaStream();
+        if (track && !remoteStream.getTracks().some(function (t) { return t.id === track.id; })) {
+            remoteStream.addTrack(track);
+            track.addEventListener('unmute', function () {
+                bindRemoteMedia(remoteStream);
+            });
+            track.addEventListener('mute', function () {
+                updateCameraUi();
+            });
+            track.addEventListener('ended', function () {
+                try { remoteStream.removeTrack(track); } catch (err) { /* ignore */ }
+                bindRemoteMedia(remoteStream);
+            });
+        }
+        if (inboundStream && typeof inboundStream.getTracks === 'function') {
+            inboundStream.getTracks().forEach(function (t) {
+                if (!remoteStream.getTracks().some(function (x) { return x.id === t.id; })) {
+                    remoteStream.addTrack(t);
+                }
+            });
+        }
+        return remoteStream;
     }
 
     function applyRemoteVideoMetrics() {
@@ -700,8 +752,14 @@ import {
     function bindRemoteMedia(stream) {
         if (!stream) return;
         if (els.remoteVideo) {
-            els.remoteVideo.srcObject = stream;
+            // Mute remote <video>; play audio on #commsRemoteAudio so autoplay is not blocked.
+            els.remoteVideo.muted = true;
+            els.remoteVideo.setAttribute('muted', '');
             els.remoteVideo.playsInline = true;
+            els.remoteVideo.autoplay = true;
+            if (els.remoteVideo.srcObject !== stream) {
+                els.remoteVideo.srcObject = stream;
+            }
             try {
                 var vp = els.remoteVideo.play();
                 if (vp && typeof vp.catch === 'function') vp.catch(function () {});
@@ -714,7 +772,12 @@ import {
             applyRemoteVideoMetrics();
         }
         if (els.remoteAudio) {
-            els.remoteAudio.srcObject = stream;
+            var audioTracks = typeof stream.getAudioTracks === 'function' ? stream.getAudioTracks() : [];
+            els.remoteAudio.muted = false;
+            els.remoteAudio.removeAttribute('muted');
+            els.remoteAudio.volume = 1;
+            els.remoteAudio.autoplay = true;
+            els.remoteAudio.srcObject = new MediaStream(audioTracks);
             ensureRemoteAudioPlaying();
         }
         updateCameraUi();
@@ -827,20 +890,23 @@ import {
             });
         };
         pc.ontrack = function (ev) {
-            var stream = ev.streams && ev.streams[0]
-                ? ev.streams[0]
-                : (ev.track ? new MediaStream([ev.track]) : null);
-            if (!stream) return;
-            bindRemoteMedia(stream);
+            var merged = mergeRemoteTrack(
+                ev.track,
+                ev.streams && ev.streams[0] ? ev.streams[0] : null
+            );
+            bindRemoteMedia(merged);
             if (ev.track && ev.track.kind === 'audio') {
                 ensureRemoteAudioPlaying();
             }
+            unlockRemotePlayback();
         };
         pc.oniceconnectionstatechange = function () {
             var st = pc && pc.iceConnectionState;
             if (st === 'connected' || st === 'completed') {
                 markCallConnected();
                 setCallStatus('Connected');
+                unlockRemotePlayback();
+                updateCameraUi();
             }
             if (st === 'failed') {
                 if (!currentCall) return;
@@ -851,6 +917,8 @@ import {
         pc.onconnectionstatechange = function () {
             if (pc && pc.connectionState === 'connected') {
                 markCallConnected();
+                unlockRemotePlayback();
+                updateCameraUi();
             }
             if (pc && pc.connectionState === 'failed') {
                 if (!currentCall) return;
@@ -862,12 +930,70 @@ import {
         localStream.getTracks().forEach(function (track) {
             pc.addTrack(track, localStream);
         });
+        var kinds = {};
+        pc.getTransceivers().forEach(function (t) {
+            var kind = t.receiver && t.receiver.track && t.receiver.track.kind;
+            if (kind) kinds[kind] = true;
+        });
+        if (!kinds.video) {
+            try { pc.addTransceiver('video', { direction: 'recvonly' }); } catch (e) { /* ignore */ }
+        }
+        if (!kinds.audio) {
+            try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch (e2) { /* ignore */ }
+        }
         if (els.localVideo) {
             els.localVideo.srcObject = localStream;
+            syncLocalPipLayout();
         }
         if (els.muteBtn) setMuteUi(false);
         updateCameraUi();
         return pc;
+    }
+
+    async function renegotiateForCamera() {
+        if (!pc || !currentCall || negotiating) return;
+        if (pc.signalingState !== 'stable') return;
+        negotiating = true;
+        try {
+            var offer = await pc.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true
+            });
+            await pc.setLocalDescription(offer);
+            await signalPeer({
+                type: 'offer',
+                call_id: currentCall.id,
+                conversation_id: currentCall.conversation_id,
+                sdp: offer,
+                call_type: (currentCall && currentCall.call_type) || 'voice',
+                renegotiate: true
+            });
+        } catch (e) {
+            /* ignore renegotiation errors */
+        } finally {
+            negotiating = false;
+        }
+    }
+
+    async function attachLocalVideoTrack(newTrack) {
+        localStream.addTrack(newTrack);
+        var sender = pc.getSenders().find(function (s) {
+            return s.track && s.track.kind === 'video';
+        });
+        if (sender) {
+            await sender.replaceTrack(newTrack);
+            return false;
+        }
+        var videoTx = pc.getTransceivers().find(function (t) {
+            return t.receiver && t.receiver.track && t.receiver.track.kind === 'video';
+        });
+        if (videoTx && videoTx.sender) {
+            await videoTx.sender.replaceTrack(newTrack);
+            try { videoTx.direction = 'sendrecv'; } catch (e) { /* ignore */ }
+            return false;
+        }
+        pc.addTrack(newTrack, localStream);
+        return true;
     }
 
     async function setCameraEnabled(enabled) {
@@ -876,6 +1002,7 @@ import {
 
         var videoTracks = localStream.getVideoTracks();
         if (enabled) {
+            var needsRenegotiate = false;
             if (!videoTracks.length || videoTracks.every(function (t) { return t.readyState === 'ended'; })) {
                 var devices = assertMediaReady();
                 var camStream = await devices.getUserMedia(videoOnlyConstraints());
@@ -884,20 +1011,30 @@ import {
                 if (!newTrack) {
                     throw new Error('No camera was found on this device.');
                 }
-                localStream.addTrack(newTrack);
-                var sender = pc.getSenders().find(function (s) {
-                    return s.track && s.track.kind === 'video';
-                });
-                if (sender) {
-                    await sender.replaceTrack(newTrack);
-                } else {
-                    pc.addTrack(newTrack, localStream);
+                needsRenegotiate = await attachLocalVideoTrack(newTrack);
+                if (els.localVideo) {
+                    els.localVideo.srcObject = localStream;
+                    els.localVideo.hidden = false;
+                    try {
+                        var lp = els.localVideo.play();
+                        if (lp && typeof lp.catch === 'function') lp.catch(function () {});
+                    } catch (ePlay) { /* ignore */ }
                 }
-                if (els.localVideo) els.localVideo.srcObject = localStream;
             } else {
                 videoTracks.forEach(function (t) { t.enabled = true; });
+                if (els.localVideo) {
+                    els.localVideo.srcObject = localStream;
+                    els.localVideo.hidden = false;
+                    try {
+                        var lp2 = els.localVideo.play();
+                        if (lp2 && typeof lp2.catch === 'function') lp2.catch(function () {});
+                    } catch (ePlay2) { /* ignore */ }
+                }
             }
             cameraEnabled = true;
+            if (needsRenegotiate) {
+                await renegotiateForCamera();
+            }
         } else {
             videoTracks.forEach(function (t) { t.enabled = false; });
             cameraEnabled = false;
@@ -932,7 +1069,7 @@ import {
         setMuteUi(false);
         updateCameraUi();
         syncLocalPipLayout();
-        ensureRemoteAudioPlaying();
+        unlockRemotePlayback();
     }
 
     async function cleanupMediaOnly() {
@@ -947,6 +1084,7 @@ import {
         wantsVideo = false;
         callConnected = false;
         mediaConnected = false;
+        negotiating = false;
         if (els.endBtn) setCtrlLabel(els.endBtn, 'End');
         if (els.muteBtn) {
             els.muteBtn.hidden = false;
@@ -962,6 +1100,7 @@ import {
             pc = null;
         }
         iceQueue = [];
+        remoteStream = null;
         if (els.remoteVideo) els.remoteVideo.srcObject = null;
         if (els.localVideo) els.localVideo.srcObject = null;
         if (els.remoteAudio) els.remoteAudio.srcObject = null;
@@ -1082,6 +1221,17 @@ import {
         };
 
         var peer = (conversation && conversation.other_user) || { name: 'Contact' };
+
+        if (CALL_START_DELAY_MS <= 0) {
+            showInCall({ peer: peer }, 'Starting…');
+            if (els.muteBtn) els.muteBtn.hidden = false;
+            if (els.cameraBtn) els.cameraBtn.hidden = false;
+            setCtrlLabel(els.endBtn, 'End');
+            clearPendingStart();
+            placeCall(conversationId, callType, conversation);
+            return;
+        }
+
         var remaining = Math.max(1, Math.ceil(CALL_START_DELAY_MS / 1000));
         showInCall({ peer: peer }, 'Starting in ' + remaining + 's — tap Cancel to stop');
         if (els.muteBtn) els.muteBtn.hidden = true;
@@ -1106,7 +1256,7 @@ import {
         pendingStartTimer = setTimeout(function () {
             var ctx = pendingStart;
             clearPendingStart();
-            // Cancelled during the 1s wait — do not place the call.
+            // Cancelled during the wait — do not place the call.
             if (!ctx || ctx.token !== token || token !== pendingStartToken) {
                 return;
             }
@@ -1399,6 +1549,33 @@ import {
             var iAmOfferCaller = Number(payload.caller_id) === meOffer.id
                 && (!meOffer.type || portalTypesMatch(payload.caller_type, meOffer.type));
             if (iAmOfferCaller) return;
+
+            // Mid-call renegotiation (e.g. peer turned camera on during voice call).
+            if (payload.type === 'offer' && payload.sdp && currentCall && pc && callConnected
+                && Number(currentCall.id) === Number(payload.call_id)) {
+                try {
+                    if (pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer') {
+                        await pc.setRemoteDescription(payload.sdp);
+                        var answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+                        await signalPeer({
+                            type: 'answer',
+                            call_id: currentCall.id,
+                            conversation_id: currentCall.conversation_id,
+                            sdp: answer,
+                            renegotiate: true
+                        });
+                        unlockRemotePlayback();
+                        updateCameraUi();
+                    } else {
+                        currentCall._remoteOffer = payload.sdp;
+                    }
+                } catch (renegoErr) {
+                    currentCall._remoteOffer = payload.sdp;
+                }
+                return;
+            }
+
             if (role === 'caller' && sameCall(payload)) return;
             if (payload.type === 'offer' && currentCall && currentCall._remoteOffer
                 && Number(currentCall.id) === Number(payload.call_id)) {
@@ -1454,12 +1631,20 @@ import {
         }
 
         if (payload.type === 'camera') {
+            if (remoteStream) {
+                bindRemoteMedia(remoteStream);
+            } else {
+                updateCameraUi();
+            }
+            unlockRemotePlayback();
             return;
         }
 
         if (payload.type === 'answer') {
             if (!sameCall(payload)) return;
             await applyPeerAnswerSdp(payload);
+            unlockRemotePlayback();
+            updateCameraUi();
             return;
         }
 

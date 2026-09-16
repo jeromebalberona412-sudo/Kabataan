@@ -1,6 +1,6 @@
 /* Kabataan — Messenger-style floating chat dock */
 
-/* Header chat modal â€” Messenger-style dock, right side */
+/* Header chat modal — Messenger-style dock, right side */
 .comms-chat-modal[hidden] {
     display: none !important;
     pointer-events: none !important;
@@ -8,10 +8,17 @@
 }
 
 .comms-chat-modal {
-    position: fixed;
-    inset: 0;
-    z-index: 3200;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 3200 !important;
     pointer-events: none;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    filter: none !important;
 }
 
 .comms-chat-modal-backdrop {
@@ -28,7 +35,7 @@
     height: min(82vh, calc(100dvh - var(--kab-nav-h, 68px) - 16px));
     max-height: calc(100dvh - var(--kab-nav-h, 68px) - 12px);
     min-height: min(640px, calc(100dvh - var(--kab-nav-h, 68px) - 16px));
-    display: flex;
+    display: flex !important;
     flex-direction: row;
     background: #fff;
     border-radius: 14px;
@@ -36,6 +43,37 @@
     overflow: hidden;
     max-width: calc(100vw - 24px);
     border: 1px solid rgba(0, 0, 0, 0.06);
+    box-sizing: border-box;
+}
+
+/* Dock mode: keep peer + call/close on one row */
+.comms-chat-modal:not(.is-fullscreen) .comms-chat-modal-header {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden !important;
+    flex-shrink: 0 !important;
+    position: relative;
+    z-index: 8;
+}
+
+.comms-chat-modal:not(.is-fullscreen) .comms-chat-modal-peer {
+    max-width: none !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}
+
+.comms-chat-modal:not(.is-fullscreen) .comms-chat-modal-actions {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 96px !important;
+    margin-left: 0 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative;
+    z-index: 6;
 }
 
 .comms-chat-fs-sidebar {
@@ -314,6 +352,10 @@
     border-bottom: 1px solid rgba(15, 23, 42, 0.06);
     background: linear-gradient(180deg, #f4f4f6 0%, #ececef 100%);
     min-width: 0;
+    overflow: hidden;
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 8;
 }
 
 .comms-chat-modal-peer {
@@ -321,7 +363,8 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
-    flex: 1;
+    flex: 1 1 auto;
+    max-width: calc(100% - 140px);
 }
 
 .comms-chat-fs-back[hidden] {
@@ -367,7 +410,7 @@
 .comms-chat-modal-sub {
     margin: 0;
     font-size: 12px;
-    color: #94a3b8;
+    color: rgba(255, 255, 255, 0.88);
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -382,24 +425,24 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #94a3b8;
+    background: rgba(255, 255, 255, 0.55);
     flex-shrink: 0;
 }
 
 .comms-chat-modal-sub.is-online {
-    color: #31a24c;
+    color: #bbf7d0;
 }
 
 .comms-chat-modal-sub.is-online::before {
-    background: #31a24c;
+    background: #4ade80;
 }
 
 .comms-chat-modal-sub.is-offline {
-    color: #94a3b8;
+    color: rgba(255, 255, 255, 0.78);
 }
 
 .comms-chat-modal-sub.is-offline::before {
-    background: #94a3b8;
+    background: rgba(255, 255, 255, 0.45);
 }
 
 .comms-chat-modal-actions {
@@ -1041,13 +1084,16 @@
 }
 
 .comms-chat-modal-composer {
-    display: flex;
-    align-items: flex-end;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-end !important;
     gap: 8px;
     padding: 10px 12px;
     border-top: 1px solid #e8eef5;
     background: #fff;
     min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
     overflow: visible;
     position: relative;
     z-index: 40;
@@ -2053,7 +2099,9 @@ body.comms-messages-page #commsChatModal {
 @media (max-width: 768px) {
     .comms-chat-modal {
         pointer-events: none;
-        z-index: 3200;
+        z-index: 3200 !important;
+        position: fixed !important;
+        inset: 0 !important;
     }
 
     .comms-chat-modal:not([hidden]) {
@@ -2061,7 +2109,7 @@ body.comms-messages-page #commsChatModal {
     }
 
     body.comms-chat-modal-open {
-        overflow: hidden;
+        overflow: hidden !important;
     }
 
     .comms-chat-modal-backdrop {
@@ -2072,17 +2120,19 @@ body.comms-messages-page #commsChatModal {
     }
 
     .comms-chat-modal-panel {
-        top: var(--kab-nav-h, var(--navbar-height, 68px));
-        right: 0;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        max-width: none;
-        height: calc(100dvh - var(--kab-nav-h, var(--navbar-height, 68px)));
-        max-height: none;
-        border-radius: 0;
+        top: var(--kab-nav-h, var(--navbar-height, 68px)) !important;
+        right: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        height: calc(100dvh - var(--kab-nav-h, var(--navbar-height, 68px))) !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        border-radius: 0 !important;
         box-shadow: none;
-        flex-direction: column;
+        flex-direction: column !important;
+        display: flex !important;
     }
 
     .comms-chat-modal.is-fullscreen .comms-chat-modal-panel {

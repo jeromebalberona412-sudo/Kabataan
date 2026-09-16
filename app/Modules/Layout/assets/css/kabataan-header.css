@@ -129,8 +129,11 @@ body.kabataan-has-view-only-banner {
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-shrink: 0;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
     text-decoration: none;
+    color: inherit;
 }
 
 .kabataan-header__logo {
@@ -141,14 +144,22 @@ body.kabataan-has-view-only-banner {
     background: white;
     padding: 3px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    flex-shrink: 0;
+    display: block;
+    visibility: visible;
+    opacity: 1;
 }
 
 .kabataan-header__title {
+    display: block;
     font-size: 17px;
     font-weight: 700;
     color: white;
     letter-spacing: -0.01em;
     line-height: 1.2;
+    min-width: 0;
+    visibility: visible;
+    opacity: 1;
 }
 
 .kabataan-header__title small {
@@ -866,7 +877,24 @@ body.kkpu-mandatory-open {
 
 @media (max-width: 320px) {
     .kabataan-header__title {
-        display: none;
+        display: inline-block !important;
+        font-size: 12px;
+        max-width: 7.5rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .kabataan-header__brand {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: calc(100% - 168px);
+    }
+
+    .kabataan-header__logo {
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
     }
 
     .kabataan-header__container {

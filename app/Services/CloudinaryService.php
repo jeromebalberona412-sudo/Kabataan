@@ -144,9 +144,14 @@ class CloudinaryService
             return $url;
         }
 
-        // If URL already has transformations (f_auto, q_auto), return as-is
-        // This prevents duplicate transformation parameters
-        if (str_contains($url, '/f_auto/') || str_contains($url, '/q_auto/')) {
+        // Already has delivery transforms (slash or comma form from the SDK).
+        if (
+            str_contains($url, '/f_auto/')
+            || str_contains($url, '/q_auto/')
+            || str_contains($url, 'f_auto,q_auto')
+            || str_contains($url, 'q_auto,f_auto')
+            || preg_match('#/upload/[^/]*f_auto[^/]*/#', $url)
+        ) {
             return $url;
         }
 
@@ -164,8 +169,29 @@ class CloudinaryService
             return null;
         }
 
-        if (preg_match('#/image/upload/(?:v\d+/)?(.+)$#', $path, $matches)) {
-            return preg_replace('/\.[a-zA-Z0-9]+$/', '', $matches[1]) ?: null;
+        if (preg_match('#/image/upload/(.+)$#', $path, $matches)) {
+            $segments = explode('/', $matches[1]);
+
+            // Prefer everything after the version segment when present.
+            foreach ($segments as $index => $segment) {
+                if (preg_match('/^v\d+$/', $segment)) {
+                    $segments = array_slice($segments, $index + 1);
+                    break;
+                }
+            }
+
+            // No version: skip leading transformation segments only.
+            while ($segments !== [] && $this->isCloudinaryTransformationSegment($segments[0])) {
+                array_shift($segments);
+            }
+
+            if ($segments === []) {
+                return null;
+            }
+
+            $publicId = implode('/', $segments);
+
+            return preg_replace('/\.[a-zA-Z0-9]+$/', '', $publicId) ?: null;
         }
 
         if (! str_contains($path, '/sk_oneportal/')) {
@@ -177,6 +203,25 @@ class CloudinaryService
         }
 
         return preg_replace('/\.[a-zA-Z0-9]+$/', '', ltrim($matches[1], '/')) ?: null;
+    }
+
+    /**
+     * Detect Cloudinary transformation path segments (not public_id folders).
+     */
+    private function isCloudinaryTransformationSegment(string $segment): bool
+    {
+        if ($segment === '' || preg_match('/^v\d+$/', $segment)) {
+            return true;
+        }
+
+        // e.g. c_fill,w_200,h_200
+        if (str_contains($segment, ',')) {
+            return true;
+        }
+
+        // Short flags: f_auto, q_auto, w_150, c_scale, fl_lossy, dpr_2.0
+        // Avoid matching folder names like kabataan_profile_images (long prefix before _).
+        return (bool) preg_match('/^(?:[a-z]{1,3}|fl|pg|dpr|dn|dl|e|t)_[a-zA-Z0-9.]+$/i', $segment);
     }
 
     public function extractVersionFromUrl(string $url): ?int
@@ -258,6 +303,10 @@ class CloudinaryService
     }
 
     /**
+     * Upload Kabataan profile images into CLOUDINARY_PROFILE_FOLDER.
+     * Uses signed API upload with overwrite so the unsigned preset's
+     * overwrite:false / unique_filename:false settings cannot block saves.
+     *
      * @return array{public_id: string, url: string, version: int|null}
      */
     public function uploadProfileImage(UploadedFile $file, string $publicId): array
@@ -265,35 +314,49 @@ class CloudinaryService
         $this->ensureConfigured();
 
         $folder = trim((string) config('services.cloudinary.profile_folder', 'kabataan_profile_images'), '/');
-        $preset = trim((string) config('services.cloudinary.profile_upload_preset', 'kabataan_profile_images'));
+        $baseId = trim(ltrim($publicId, '/'));
+        // Keep folder in public_id so delete/display stay consistent.
+        $fullPublicId = $folder !== ''
+            ? (str_starts_with($baseId, $folder.'/') ? $baseId : $folder.'/'.$baseId)
+            : $baseId;
+
         $path = $file->getRealPath() ?: $file->getPathname();
-        $displayName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        if (! is_string($path) || $path === '' || ! is_file($path)) {
+            throw new RuntimeException('Profile image file path is not readable.');
+        }
 
         $options = [
-            'folder' => $folder,
-            'public_id' => ltrim($publicId, '/'),
+            'public_id' => $fullPublicId,
             'resource_type' => 'image',
-            'overwrite' => false,
-            'use_filename' => false,
+            'overwrite' => true,
+            'invalidate' => true,
             'unique_filename' => false,
-            'display_name' => $displayName !== '' ? $displayName : $publicId,
+            'use_filename' => false,
+            'type' => 'upload',
         ];
-
-        if ($preset !== '') {
-            $options['upload_preset'] = $preset;
-        }
 
         $result = $this->cloudinary->uploadApi()->upload($path, $options);
 
+        $storedPublicId = (string) ($result['public_id'] ?? $fullPublicId);
         $version = isset($result['version']) ? (int) $result['version'] : null;
         $deliveryUrl = (string) ($result['secure_url'] ?? $result['url'] ?? '');
 
         if ($deliveryUrl === '') {
-            $deliveryUrl = $this->deliverUrl($result['public_id'], $version);
+            $deliveryUrl = $this->deliverUrl($storedPublicId, $version);
+        }
+
+        // Prefer our delivery URL (f_auto/q_auto) so display is reliable in the app.
+        try {
+            $optimized = $this->deliverUrl($storedPublicId, $version);
+            if ($optimized !== '') {
+                $deliveryUrl = $optimized;
+            }
+        } catch (\Throwable) {
+            // Keep Cloudinary secure_url if SDK delivery fails.
         }
 
         return [
-            'public_id' => $result['public_id'],
+            'public_id' => $storedPublicId,
             'url' => $deliveryUrl,
             'version' => $version,
         ];

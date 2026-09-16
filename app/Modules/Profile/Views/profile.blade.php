@@ -218,6 +218,9 @@
                             class="profile-avatar"
                             id="profileAvatar"
                             data-fallback="{{ $profileImageFallbackUrl }}"
+                            onerror="this.onerror=null;this.src=this.dataset.fallback||'';"
+                            decoding="async"
+                            referrerpolicy="no-referrer"
                         >
                         <span class="profile-avatar-overlay" aria-hidden="true">
                             <svg viewBox="0 0 20 20" fill="currentColor">

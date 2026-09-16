@@ -17,6 +17,7 @@
         'app/Modules/Layout/assets/css/kabataan-header.css',
         'app/Modules/Layout/assets/css/kabataan-header-messages.css',
         'app/Modules/Communications/assets/css/chat-modal.css',
+        'app/Modules/Layout/assets/css/kabataan-messages.css',
         'app/Modules/Layout/assets/css/kabataan-call.css',
         'app/Modules/Layout/assets/css/programs-drawer.css',
         'app/Modules/Layout/assets/css/kabataan-logout.css',

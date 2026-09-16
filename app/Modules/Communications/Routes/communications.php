@@ -56,7 +56,6 @@ Route::middleware(['auth'])->group(function (): void {
     Route::get('/api/communications/calls', [CallController::class, 'index'])
         ->name('api.communications.calls.index');
     Route::post('/api/communications/conversations/{conversation}/calls', [CallController::class, 'store'])
-        ->middleware('throttle:10,1')
         ->name('api.communications.calls.store');
     Route::post('/api/communications/calls/{call}/status', [CallController::class, 'updateStatus'])
         ->middleware('throttle:30,1')

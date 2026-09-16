@@ -44,7 +44,7 @@ return [
 
     'rate_limit' => [
         'send_per_minute' => 60,
-        'call_start_per_minute' => 10,
+        'call_start_per_minute' => 120,
         'search_per_minute' => 30,
         'react_per_minute' => 60,
         'upload_per_minute' => 20,

@@ -232,6 +232,10 @@
     object-fit: contain;
     object-position: center center;
     background: #0b0b0b;
+    display: block;
+    visibility: visible;
+    opacity: 1;
+    z-index: 1;
 }
 
 .comms-local-video {
@@ -251,6 +255,12 @@
     transform: scaleX(-1);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     transition: width 0.18s ease, bottom 0.18s ease, right 0.18s ease, aspect-ratio 0.18s ease;
+    display: block;
+    visibility: visible;
+}
+
+.comms-local-video[hidden] {
+    display: none !important;
 }
 .comms-local-video.is-cam-landscape {
     aspect-ratio: 16 / 9;

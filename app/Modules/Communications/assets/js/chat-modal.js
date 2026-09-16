@@ -580,6 +580,10 @@ function closeHeaderChatModal() {
     stopHeaderPeerRefresh();
     modal.hidden = true;
     modal.setAttribute('hidden', '');
+    modal.style.display = '';
+    modal.style.position = '';
+    modal.style.inset = '';
+    modal.style.zIndex = '';
     modal.classList.remove('is-fullscreen', 'is-empty-thread', 'is-thread-open');
     document.body.classList.remove('comms-chat-modal-open');
     headerChatState.conversationId = null;
@@ -979,9 +983,17 @@ function openHeaderChatModal(conversationId, name, avatarUrl) {
     }
 
     // Show the floating dock (Messenger-style small modal).
+    // Keep the modal as a direct body child so dashboard overflow/containment
+    // cannot trap position:fixed and break the dock layout.
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
     modal.hidden = false;
     modal.removeAttribute('hidden');
     modal.style.display = '';
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.zIndex = '3200';
     document.body.classList.add('comms-chat-modal-open');
     clearHeaderChatFullscreenUi();
     setHeaderChatEmptyThread(false);

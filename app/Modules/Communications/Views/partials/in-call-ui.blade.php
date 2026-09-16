@@ -235,7 +235,7 @@
 </style>
 <div class="comms-call-overlay" id="commsInCall" hidden>
     <div class="comms-call-stage">
-        <video id="commsRemoteVideo" class="comms-remote-video" autoplay playsinline></video>
+        <video id="commsRemoteVideo" class="comms-remote-video" autoplay playsinline muted></video>
         <video id="commsLocalVideo" class="comms-local-video" autoplay playsinline muted></video>
         <audio id="commsRemoteAudio" autoplay playsinline></audio>
 
