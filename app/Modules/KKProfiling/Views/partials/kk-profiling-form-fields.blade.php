@@ -283,9 +283,9 @@
 
                             <div class="kkp-inline-pair kkp-inline-pair--email">
 
-                                <label class="kkp-inline-label" for="kkpEmail">Email Address: <span class="kkp-required">*</span></label>
+                                <label class="kkp-inline-label" for="kkpEmail">Email Address:@if(!empty($emailReadonly)) <span class="kkp-required">*</span>@else <span class="kkp-optional-label">(Optional)</span>@endif</label>
 
-                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " minlength="6" maxlength="64" autocomplete="email" autocapitalize="none" spellcheck="false" required @if(!empty($emailReadonly)) readonly tabindex="-1" @endif>
+                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " maxlength="64" autocomplete="email" autocapitalize="none" spellcheck="false" @if(!empty($emailReadonly)) required readonly tabindex="-1" @endif>
 
                             </div>
 
@@ -431,18 +431,18 @@
                                 <div class="kkp-demo-block-options kkp-youth-class-layout">
 
                                     <div class="kkp-youth-class-main">
-                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="In School Youth" onchange="kkpSingleCheck(this,'kkpYouthClass')"> In school Youth</label>
-                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Out of School Youth" onchange="kkpSingleCheck(this,'kkpYouthClass')"> Out of School Youth</label>
-                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Working Youth" onchange="kkpSingleCheck(this,'kkpYouthClass')"> Working Youth</label>
-                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Youth w/ Specific Needs" onchange="kkpSingleCheck(this,'kkpYouthClass')"> Youth w/ Specific Needs:</label>
+                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="In School Youth" onchange="kkpYouthClassCheck(this)"> In school Youth</label>
+                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Out of School Youth" onchange="kkpYouthClassCheck(this)"> Out of School Youth</label>
+                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Working Youth" onchange="kkpYouthClassCheck(this)"> Working Youth</label>
+                                        <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Youth w/ Specific Needs" onchange="kkpYouthClassCheck(this)"> Youth w/ Specific Needs:</label>
                                     </div>
 
                                     <div class="kkp-youth-class-side" aria-label="Youth with specific needs options">
                                         <span class="kkp-youth-specific-brace" aria-hidden="true">{</span>
-                                        <div class="kkp-youth-specific-options">
-                                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Person w/ Disability" onchange="kkpSingleCheck(this,'kkpYouthClass')"> Person w/ Disability</label>
-                                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Children in Conflict w/ Law" onchange="kkpSingleCheck(this,'kkpYouthClass')"> Children In Conflict w/ Law</label>
-                                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_classificationChk" value="Indigenous People" onchange="kkpSingleCheck(this,'kkpYouthClass')"> Indigenous People</label>
+                                        <div class="kkp-youth-specific-options is-locked">
+                                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_specific_needChk" value="Person w/ Disability" onchange="kkpYouthSpecificCheck(this)" disabled> Person w/ Disability</label>
+                                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_specific_needChk" value="Children in Conflict w/ Law" onchange="kkpYouthSpecificCheck(this)" disabled> Children In Conflict w/ Law</label>
+                                            <label class="kkp-chk-lbl"><input type="checkbox" class="kkp-sq-chk" name="youth_specific_needChk" value="Indigenous People" onchange="kkpYouthSpecificCheck(this)" disabled> Indigenous People</label>
                                         </div>
                                     </div>
 

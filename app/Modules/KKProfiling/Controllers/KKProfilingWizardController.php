@@ -27,6 +27,7 @@ use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
+use App\Support\YouthClassificationInput;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -120,6 +121,33 @@ class KKProfilingWizardController extends Controller
             'step' => 2,
             'message' => 'Step 1 saved. Continue to supporting documents.',
             'email_verification_recommended' => true,
+        ]);
+    }
+
+    public function submitWithoutEmail(Request $request, string $barangay): JsonResponse
+    {
+        $this->assertTurnstilePassed($request);
+
+        $barangayRecord = $this->resolveBarangay($barangay);
+        $validated = $this->validateStep1($request, (int) $barangayRecord->id);
+
+        if (trim((string) ($validated['email'] ?? '')) !== '') {
+            throw ValidationException::withMessages([
+                'email' => ['An email address was entered. Use Save & Continue instead.'],
+            ]);
+        }
+
+        $payload = $this->normalizeStep1Payload($request, $validated);
+        $registration = $this->draftService->commitProfilingWithoutEmail(
+            $barangayRecord,
+            $payload,
+            $request->input('respondent_number')
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'KK Profiling submitted successfully.',
+            'registration_id' => $registration->id,
         ]);
     }
 
@@ -1984,7 +2012,7 @@ class KKProfilingWizardController extends Controller
             'sex' => 'required|in:Male,Female',
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
-            'email' => ValidEmailAddress::profilingRules(),
+            'email' => ValidEmailAddress::optionalRules(),
             'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
@@ -2067,6 +2095,8 @@ class KKProfilingWizardController extends Controller
             ]);
         }
         $validated['contact_number'] = $localContact;
+
+        YouthClassificationInput::assertValid((string) ($validated['youth_classification'] ?? ''));
 
         return $validated;
     }

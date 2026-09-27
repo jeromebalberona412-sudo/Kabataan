@@ -88,6 +88,14 @@
     min-width: 0;
 }
 
+.kkp-youth-specific-options.is-locked {
+    opacity: 0.55;
+}
+
+.kkp-youth-specific-options.is-locked .kkp-chk-lbl {
+    cursor: not-allowed;
+}
+
 .kkp-youth-specific-options .kkp-chk-lbl {
     white-space: nowrap;
 }

@@ -9,6 +9,10 @@ export default defineConfig({
                 'resources/css/app.css',
                 'resources/js/app.js',
 
+                // Guest Kabataan
+                'app/Modules/Guest_Kabataan/assets/css/guest_kabataan.css',
+                'app/Modules/Guest_Kabataan/assets/js/guest_kabataan.js',
+
                 // Authentication
                 'app/Modules/Authentication/assets/css/sign-in.css',
                 'app/Modules/Authentication/assets/css/turnstile-gate.css',

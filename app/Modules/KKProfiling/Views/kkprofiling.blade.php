@@ -133,6 +133,7 @@
         </div>
     </main>
 
+    @include('kkprofiling::partials.kk-profiling-no-email-modal')
     @include('kkprofiling::partials.kk-profiling-signature-modals')
     @include('kkprofiling::partials.kk-profiling-clear-draft-modal')
     @include('kkprofiling::partials.kk-profiling-long-name-modal')

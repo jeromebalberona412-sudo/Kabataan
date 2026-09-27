@@ -672,6 +672,105 @@ class KkRegistrationDraftService
         return $registration;
     }
 
+    /**
+     * Store a completed KK Profiling form when the youth has no email and no login account.
+     *
+     * @param  array<string, mixed>  $step1
+     */
+    public function commitProfilingWithoutEmail(Barangay $barangay, array $step1, ?string $respondentNumber = null): KabataanRegistration
+    {
+        if (empty($barangay->tenant_id)) {
+            throw ValidationException::withMessages([
+                'barangay' => ['This barangay is not configured for registration. Please contact SK Officials.'],
+            ]);
+        }
+
+        if (trim((string) ($step1['email'] ?? '')) !== '') {
+            throw ValidationException::withMessages([
+                'email' => ['An email address was entered. Use Save & Continue instead.'],
+            ]);
+        }
+
+        $step1['email'] = null;
+
+        if (app(DuplicateKabataanRegistrationService::class)->findExistingIdentity((int) $barangay->id, $step1)) {
+            throw ValidationException::withMessages([
+                'registration' => [KkProfilingValidationMessages::DUPLICATE_IDENTITY],
+            ]);
+        }
+
+        $wizard = [
+            'token' => (string) Str::uuid(),
+            'respondent_number' => $respondentNumber,
+            'step2_data' => [],
+        ];
+
+        $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
+        $contactNumber = app(PhoneNumberService::class)->toLocalMobile((string) ($step1['contact_number'] ?? ''))
+            ?: mb_substr(preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? '')) ?: '', 0, 15);
+
+        $registrationPayload = [
+            'tenant_id' => $barangay->tenant_id,
+            'barangay_id' => $barangay->id,
+            'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
+            'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
+            'middle_name' => ($step1['middle_name'] ?? null)
+                ? mb_substr((string) $step1['middle_name'], 0, 100)
+                : null,
+            'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
+            'email' => null,
+            'contact_number' => $contactNumber !== '' ? $contactNumber : null,
+            'profile_photo_path' => null,
+            'form_data' => $formData,
+            'status' => 'pending_verification',
+            'profiling_year' => now()->year,
+            'email_verified_at' => null,
+            'submitted_at' => now(),
+            'user_id' => null,
+            'password_set_at' => null,
+        ];
+
+        if ($respondentNumber) {
+            $registrationPayload['respondent_number'] = mb_substr((string) $respondentNumber, 0, 32);
+        }
+
+        $registrationPayload = array_filter(
+            $registrationPayload,
+            static fn (string $column): bool => Schema::hasColumn('kabataan_registrations', $column),
+            ARRAY_FILTER_USE_KEY
+        );
+
+        $registration = KabataanRegistration::create($registrationPayload);
+
+        try {
+            (new RegistrationEvaluationService)->evaluate($registration->fresh() ?? $registration);
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        try {
+            (new SkOfficialsNotificationDispatcher)->notifyKkProfilingSubmission(
+                (int) $barangay->id,
+                $registration->full_name,
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        try {
+            (new KkSurveyResponseService)->syncFromRegistration(
+                $registration->fresh() ?? $registration,
+                'pending'
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        $this->clearSessionDraft();
+
+        return $registration->fresh() ?? $registration;
+    }
+
     public function markRegistrationComplete(string $email, int $barangayId, ?KabataanRegistration $registration = null): void
     {
         $email = strtolower(trim($email));

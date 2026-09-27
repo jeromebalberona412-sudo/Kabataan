@@ -220,6 +220,13 @@
                         <span>Sign In</span>
                     </button>
 
+                    <div class="youth-guest-divider" role="separator">
+                        <span>or</span>
+                    </div>
+                    <a href="{{ route('guest_kabataan.barangays') }}" class="youth-guest-btn" id="guestKabataanBtn">
+                        Continue as Guest
+                    </a>
+
                 </form>
 
                 <!-- Registration Link -->

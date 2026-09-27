@@ -76,7 +76,7 @@ class KkSurveyResponseService
             'civil_status' => $value('civil_status'),
             'youth_age_group' => $value('youth_age_group'),
             'educational_background' => $value('education'),
-            'youth_classification' => $value('youth_classification'),
+            'youth_classification' => $this->normalizeYouthClassification($formData['youth_classification'] ?? null),
             'work_status' => $value('work_status'),
             'registered_sk_voter' => $yesNo($value('sk_voter')) ?? false,
             'registered_national_voter' => $yesNo($value('national_voter')) ?? false,
@@ -123,5 +123,34 @@ class KkSurveyResponseService
         }
 
         return null;
+    }
+
+    private function normalizeYouthClassification(mixed $raw): ?string
+    {
+        if (is_array($raw)) {
+            $parts = [];
+            foreach ($raw as $item) {
+                if (is_array($item)) {
+                    continue;
+                }
+                $text = trim((string) $item);
+                if ($text !== '') {
+                    $parts[] = $text;
+                }
+            }
+            $raw = implode('|', $parts);
+        }
+
+        $value = trim((string) ($raw ?? ''));
+        if ($value === '' || $value === '—') {
+            return null;
+        }
+
+        $needs = ['Person w/ Disability', 'Children in Conflict w/ Law', 'Indigenous People'];
+        if (in_array($value, $needs, true)) {
+            return 'Youth w/ Specific Needs|'.$value;
+        }
+
+        return $value;
     }
 }

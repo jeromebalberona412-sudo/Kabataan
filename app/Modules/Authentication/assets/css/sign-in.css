@@ -651,6 +651,49 @@ a.youth-submit-btn:visited {
     color: #ffffff;
 }
 
+.youth-guest-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 14px 0 10px;
+    color: var(--youth-gray-600);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.youth-guest-divider::before,
+.youth-guest-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--youth-gray-200);
+}
+
+.youth-guest-btn {
+    width: 100%;
+    min-height: 48px;
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--youth-blue);
+    background: #fff;
+    border: 2px solid var(--youth-blue);
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+}
+
+.youth-guest-btn:hover,
+.youth-guest-btn:focus-visible {
+    background: var(--youth-blue);
+    border-color: var(--youth-blue);
+    color: #ffffff;
+}
+
 .youth-login-secondary-actions {
     margin-top: 0.5rem;
 }

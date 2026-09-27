@@ -26,6 +26,7 @@ use App\Services\RespondentNumberService;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
+use App\Support\YouthClassificationInput;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -369,6 +370,8 @@ class KKProfilingController extends Controller
         }
         $validated['contact_number'] = $localContact;
 
+        YouthClassificationInput::assertValid((string) ($validated['youth_classification'] ?? ''));
+
         $this->normalizeProfilingSuffix($validated);
 
         if (($validated['suffix'] ?? null) === 'Others') {
@@ -709,6 +712,8 @@ class KKProfilingController extends Controller
             ]);
         }
         $validated['contact_number'] = $localContact;
+
+        YouthClassificationInput::assertValid((string) ($validated['youth_classification'] ?? ''));
 
         if (($validated['suffix'] ?? null) === 'Others') {
             $customSuffix = trim((string) ($validated['custom_suffix'] ?? ''));

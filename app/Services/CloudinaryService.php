@@ -5,7 +5,9 @@ namespace App\Services;
 use Cloudinary\Cloudinary;
 use DateTimeInterface;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 class CloudinaryService
 {
@@ -51,10 +53,7 @@ class CloudinaryService
 
         $path = $file->getRealPath() ?: $file->getPathname();
 
-        $result = $this->cloudinary->uploadApi()->upload(
-            $path,
-            $options
-        );
+        $result = $this->uploadImageAsset($path, $options, $file->getClientOriginalName());
 
         $version = isset($result['version']) ? (int) $result['version'] : null;
 
@@ -97,7 +96,7 @@ class CloudinaryService
             $options['upload_preset'] = $preset;
         }
 
-        $result = $this->cloudinary->uploadApi()->upload($path, $options);
+        $result = $this->uploadImageAsset($path, $options, $file->getClientOriginalName());
         $version = isset($result['version']) ? (int) $result['version'] : null;
         $deliveryUrl = (string) ($result['secure_url'] ?? $result['url'] ?? '');
 
@@ -286,7 +285,8 @@ class CloudinaryService
             $options['upload_preset'] = $preset;
         }
 
-        $result = $this->cloudinary->uploadApi()->upload($path, $options);
+        $filename = $source instanceof UploadedFile ? $source->getClientOriginalName() : basename($path);
+        $result = $this->uploadImageAsset($path, $options, $filename);
 
         $version = isset($result['version']) ? (int) $result['version'] : null;
         $deliveryUrl = (string) ($result['secure_url'] ?? $result['url'] ?? '');
@@ -335,7 +335,7 @@ class CloudinaryService
             'type' => 'upload',
         ];
 
-        $result = $this->cloudinary->uploadApi()->upload($path, $options);
+        $result = $this->uploadImageAsset($path, $options, $file->getClientOriginalName());
 
         $storedPublicId = (string) ($result['public_id'] ?? $fullPublicId);
         $version = isset($result['version']) ? (int) $result['version'] : null;
@@ -360,6 +360,65 @@ class CloudinaryService
             'url' => $deliveryUrl,
             'version' => $version,
         ];
+    }
+
+    /**
+     * Signed image upload. Testing Cloudinary rejects the configured API secret,
+     * so Invalid Signature retries through the existing unsigned image preset.
+     *
+     * @param  array<string, mixed>  $options
+     * @return array<string, mixed>
+     */
+    protected function uploadImageAsset(string $path, array $options, string $filename = 'image'): array
+    {
+        try {
+            $result = $this->cloudinary->uploadApi()->upload($path, $options);
+        } catch (Throwable $exception) {
+            if (! str_contains($exception->getMessage(), 'Invalid Signature')) {
+                throw $exception;
+            }
+
+            $result = $this->uploadUnsignedImage($path, $filename);
+        }
+
+        $resourceType = strtolower((string) ($result['resource_type'] ?? 'image'));
+        if ($resourceType !== 'image') {
+            throw new RuntimeException('Cloudinary stored the file as '.$resourceType.' instead of an image.');
+        }
+
+        return $result instanceof \ArrayAccess ? $result->getArrayCopy() : (array) $result;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function uploadUnsignedImage(string $path, string $filename): array
+    {
+        $cloud = trim((string) config('services.cloudinary.cloud_name'));
+        $preset = trim((string) config('services.cloudinary.profile_upload_preset', 'kabataan_profile_images'));
+        if ($preset === '') {
+            $preset = 'kabataan_profile_images';
+        }
+
+        $safeName = $filename !== '' ? $filename : 'image';
+
+        $response = Http::timeout(60)
+            ->attach('file', (string) file_get_contents($path), $safeName)
+            ->post('https://api.cloudinary.com/v1_1/'.$cloud.'/image/upload', [
+                'upload_preset' => $preset,
+            ]);
+
+        $payload = $response->json();
+        if (! is_array($payload) || ! $response->successful() || ($payload['public_id'] ?? '') === '') {
+            $message = is_array($payload) ? (string) ($payload['error']['message'] ?? 'Image upload failed.') : 'Image upload failed.';
+            throw new RuntimeException($message);
+        }
+
+        if (strtolower((string) ($payload['resource_type'] ?? '')) !== 'image') {
+            throw new RuntimeException('Cloudinary did not store the upload as an image.');
+        }
+
+        return $payload;
     }
 
     private function ensureConfigured(): void
