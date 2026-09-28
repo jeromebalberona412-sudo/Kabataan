@@ -32,12 +32,12 @@
                     </tr>
                     <tr>
                         <td style="padding:12px 24px 8px 24px;">
-                            <p style="margin:0 0 14px 0;font-size:16px;line-height:1.5;color:#111827;">Hello!</p>
+                            <p style="margin:0 0 14px 0;font-size:16px;line-height:1.5;color:#111827;">Hello{{ $recipientName !== '' ? ' '.$recipientName : '' }},</p>
                             <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#334155;">
-                                Thank you for submitting your KK Profiling registration.
+                                Use the link below to choose a password for your SK OnePortal Kabataan account.
                             </p>
-                            <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#334155;">
-                                Click the button below to verify your email and set your account password.
+                            <p style="margin:0 0 8px 0;font-size:15px;line-height:1.6;color:#334155;word-break:break-all;">
+                                <a href="{{ $setPasswordUrl }}" style="color:#0450a8;">{{ $setPasswordUrl }}</a>
                             </p>
                         </td>
                     </tr>
@@ -50,7 +50,7 @@
                                 style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#0450a8;line-height:1.25;mso-padding-alt:0;"
                             >
                                 <!--[if mso]><i style="letter-spacing:28px;mso-font-width:-100%;mso-text-raise:21pt;">&nbsp;</i><![endif]-->
-                                <span style="color:#ffffff;font-weight:600;">Set Password</span>
+                                <span style="color:#ffffff;font-weight:600;">Choose password</span>
                                 <!--[if mso]><i style="letter-spacing:28px;mso-font-width:-100%;">&nbsp;</i><![endif]-->
                             </a>
                         </td>
@@ -58,10 +58,7 @@
                     <tr>
                         <td style="padding:0 24px 28px 24px;">
                             <p style="margin:0 0 10px 0;font-size:13px;line-height:1.6;color:#64748b;">
-                                This link will expire in 24 hours for your security.
-                            </p>
-                            <p style="margin:0;font-size:13px;line-height:1.6;color:#64748b;">
-                                If you did not submit this form, no further action is required.
+                                This link expires in 7 days. If you did not ask for a Kabataan account, you can ignore this email.
                             </p>
                         </td>
                     </tr>

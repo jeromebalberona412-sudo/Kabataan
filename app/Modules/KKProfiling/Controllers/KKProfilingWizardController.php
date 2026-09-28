@@ -15,6 +15,7 @@ use App\Services\DuplicateKabataanRegistrationService;
 use App\Services\IdImageQualityService;
 use App\Services\IdVerificationAiService;
 use App\Services\KkProfilingIdentityValidator;
+use App\Services\KabataanSecurityQuestionService;
 use App\Services\KkRegistrationDraftService;
 use App\Services\OCRService;
 use App\Services\PhilippineIdDetectionService;
@@ -32,6 +33,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -138,11 +140,17 @@ class KKProfilingWizardController extends Controller
         }
 
         $payload = $this->normalizeStep1Payload($request, $validated);
-        $registration = $this->draftService->commitProfilingWithoutEmail(
-            $barangayRecord,
-            $payload,
-            $request->input('respondent_number')
-        );
+        $securityAnswers = app(KabataanSecurityQuestionService::class)->prepare($request->input('security_questions'));
+        $registration = DB::transaction(function () use ($barangayRecord, $payload, $request, $securityAnswers) {
+            $created = $this->draftService->commitProfilingWithoutEmail(
+                $barangayRecord,
+                $payload,
+                $request->input('respondent_number')
+            );
+            app(KabataanSecurityQuestionService::class)->store($created, $securityAnswers);
+
+            return $created;
+        });
 
         return response()->json([
             'success' => true,
@@ -826,7 +834,10 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        return $this->finalizeRegistrationResponse($registration);
+        return $this->finalizeRegistrationResponse(
+            $registration,
+            ! empty($wizard['claim_registration_id']),
+        );
     }
 
     public function checkRegistrationComplete(Request $request, string $barangay)
@@ -1911,23 +1922,33 @@ class KKProfilingWizardController extends Controller
         return $sanitized;
     }
 
-    private function finalizeRegistrationResponse(KabataanRegistration $registration): JsonResponse
+    private function finalizeRegistrationResponse(KabataanRegistration $registration, bool $guestAccountReady = false): JsonResponse
     {
-        $registration = $registration->fresh();
+        $registration = $registration->fresh() ?? $registration;
+        $formData = $registration->form_data;
+        if (! $guestAccountReady && is_array($formData) && ! empty($formData['guest_account_claimed'])) {
+            $guestAccountReady = true;
+        }
+
         $autoApproved = RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status);
 
-        if ($autoApproved && $registration->user_id) {
+        if ($registration->user_id && ($guestAccountReady || $autoApproved)) {
             User::query()
                 ->where('id', $registration->user_id)
                 ->where('status', User::STATUS_PENDING_APPROVAL)
                 ->update(['status' => User::STATUS_ACTIVE]);
         }
 
+        $message = $guestAccountReady
+            ? 'Your KK Profiling account is ready. Sign in with the email and password you just created.'
+            : 'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.';
+
         return response()->json([
             'success' => true,
             'auto_approved' => $autoApproved,
+            'guest_account_ready' => $guestAccountReady,
             'registration_completed' => true,
-            'message' => 'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.',
+            'message' => $message,
         ]);
     }
 
@@ -1963,7 +1984,10 @@ class KKProfilingWizardController extends Controller
         $this->invalidEmails->attemptMailDelivery($email, function () use ($email, $setPasswordUrl) {
             // Explicit recipient — Mailable notifications do not auto-bind To.
             Mail::to($email)->send(
-                new KabataanSetPasswordMail($setPasswordUrl)
+                new KabataanSetPasswordMail(
+                    $setPasswordUrl,
+                    trim((string) ($wizard['step1_data']['first_name'] ?? '')),
+                )
             );
         }, 'email');
 
@@ -2335,6 +2359,7 @@ class KKProfilingWizardController extends Controller
             'email' => $email,
             'registrationAlreadyComplete' => true,
             'registrationAutoApproved' => $autoApproved,
+            'guestAccountReady' => is_array($registration?->form_data) && ! empty($registration->form_data['guest_account_claimed']),
             'barangayLogoUrl' => KKProfilingController::getBarangayLogoUrl($barangayRecord->id),
         ]);
     }

@@ -7,18 +7,24 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Choose a barangay — Guest</title>
     @vite([
+        'app/Modules/Layout/assets/css/kabataan-header.css',
         'app/Modules/Guest_Kabataan/assets/css/guest_kabataan.css',
         'app/Modules/Guest_Kabataan/assets/js/guest_kabataan.js',
     ])
 </head>
 <body class="guest-kabataan-body">
-    @include('guest_kabataan::partials.guest_kabataan_header', ['barangay' => $selected])
+    @include('layout::kabataan-header', [
+        'guestHeader' => true,
+        'barangay' => $selected,
+    ])
+    @include('guest_kabataan::partials.guest_kabataan_subnav')
+    @include('guest_kabataan::partials.guest_kabataan_header')
 
     <main class="guest-kabataan-main">
         <section class="guest-kabataan-intro">
             <p class="guest-kabataan-kicker">Guest browsing</p>
             <h1>Choose your barangay</h1>
-            <p>Select a barangay to see the youth programs that are open there. Applying still needs a Kabataan account.</p>
+            <p>Select a barangay to see the youth programs that are open there. Applying checks your KK Profiling before an account is created.</p>
         </section>
 
         <form class="guest-kabataan-search" role="search">
@@ -53,8 +59,16 @@
                             value="{{ $barangay->id }}"
                             class="guest-kabataan-barangay {{ $selected && (int) $selected->id === (int) $barangay->id ? 'is-current' : '' }}"
                         >
-                            <span class="guest-kabataan-barangay__name">{{ $barangay->name }}</span>
-                            <span class="guest-kabataan-barangay__place">{{ $barangay->municipality ?: 'Santa Cruz' }}, {{ $barangay->province ?: 'Laguna' }}</span>
+                            <span class="guest-kabataan-barangay__logo">
+                                @if (! empty($barangay->logo_url))
+                                    <img src="{{ $barangay->logo_url }}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
+                                @endif
+                                <span @if (! empty($barangay->logo_url)) hidden @endif>{{ strtoupper(mb_substr($barangay->name, 0, 1)) }}</span>
+                            </span>
+                            <span class="guest-kabataan-barangay__copy">
+                                <span class="guest-kabataan-barangay__name">{{ $barangay->name }}</span>
+                                <span class="guest-kabataan-barangay__place">{{ $barangay->municipality ?: 'Santa Cruz' }}, {{ $barangay->province ?: 'Laguna' }}</span>
+                            </span>
                         </button>
                     </li>
                 @empty

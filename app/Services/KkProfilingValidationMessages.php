@@ -4,7 +4,7 @@ namespace App\Services;
 
 final class KkProfilingValidationMessages
 {
-    public const DUPLICATE_IDENTITY = 'Duplicate registration detected. A Kabataan account with the same Full Name, Date of Birth, and Barangay already exists.';
+    public const DUPLICATE_IDENTITY = "Duplicate Registration Detected\n\nIt looks like you may already have an existing registration in the system.\n\nIf you have registered before, please use your existing account or registration instead of creating a new one.\n\nIf you believe this is your first registration, please contact your Barangay SK Officials for assistance in checking and verifying your registration.";
 
     /** @deprecated Use DUPLICATE_IDENTITY */
     public const DUPLICATE_FULL_NAME = self::DUPLICATE_IDENTITY;

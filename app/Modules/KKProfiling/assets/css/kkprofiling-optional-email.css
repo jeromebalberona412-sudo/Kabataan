@@ -119,10 +119,36 @@
 }
 
 .kkp-info-scroll-hint {
+    display: block;
     margin: 0;
     font-size: 0.75rem;
     line-height: 1.35;
     color: #b45309;
+}
+
+#kkpNoEmailModal .kkp-info-modal-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+#kkpNoEmailModal .kkp-info-btn {
+    width: auto;
+    min-width: 0;
+    white-space: nowrap;
+    line-height: 1.15;
+    font-size: clamp(0.64rem, 2.7vw, 0.8rem);
+    padding: 0.45rem 0.28rem;
+}
+
+#kkpNoEmailModal .kkp-info-btn-secondary {
+    flex: 1.75 1 0;
+}
+
+#kkpNoEmailModal .kkp-info-btn-primary {
+    flex: 0.95 1 0;
 }
 
 .kkp-info-scroll-hint[hidden] {
@@ -364,5 +390,43 @@
         min-height: 40px;
         font-size: 0.8rem;
         padding: 0.45rem 0.5rem;
+    }
+}
+
+#kkpNoEmailModal .kkp-info-modal-scroll {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+}
+
+#kkpNoEmailModal .kkp-info-title,
+#kkpNoEmailModal .kkp-info-lang p,
+#kkpNoEmailModal .kkp-no-email-heading,
+#kkpNoEmailModal .kkp-info-recommend,
+#kkpNoEmailModal .kkp-info-scroll-hint {
+    text-align: center;
+}
+
+#kkpNoEmailModal .kkp-info-title {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+}
+
+#kkpNoEmailModal .kkp-no-email-list {
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+}
+
+#kkpNoEmailModal .kkp-info-lang {
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    #kkpNoEmailModal .kkp-info-modal-scroll {
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 }

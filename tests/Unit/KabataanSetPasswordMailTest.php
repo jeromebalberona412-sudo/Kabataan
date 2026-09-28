@@ -17,5 +17,5 @@ it('builds set-password mail without throwing', function () {
     expect(fn () => $mailable->build())->not->toThrow(Throwable::class);
 
     $built = $mailable->build();
-    expect($built->subject)->toBe('Set Your KK Profiling Account Password');
+    expect($built->subject)->toBe('SK OnePortal password setup');
 });

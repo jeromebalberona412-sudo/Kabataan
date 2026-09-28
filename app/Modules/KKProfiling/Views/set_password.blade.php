@@ -15,7 +15,7 @@
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
     ])
 </head>
-<body class="youth-signin-page kkp-setpw-page" @if(!empty($registrationAlreadyComplete)) data-registration-already-complete="1" data-auto-approved="{{ !empty($registrationAutoApproved) ? '1' : '0' }}" @endif>
+<body class="youth-signin-page kkp-setpw-page" @if(!empty($registrationAlreadyComplete)) data-registration-already-complete="1" data-auto-approved="{{ !empty($registrationAutoApproved) ? '1' : '0' }}" data-guest-ready="{{ !empty($guestAccountReady) ? '1' : '0' }}" @endif>
     @include('authentication::partials.turnstile-gate', [
         'turnstileSubtitle' => 'Complete the security check to activate your account.',
     ])
@@ -162,6 +162,24 @@
             </p>
             <div class="kkp-reg-success-actions">
                 <a href="{{ route('sign-in') }}" class="kkp-reg-success-modal-btn">Go to Sign in</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="kkp-reg-success-overlay" id="kkpGuestReadyModal" hidden aria-hidden="true">
+        <div class="kkp-reg-success-modal" role="dialog" aria-labelledby="kkpGuestReadyTitle" aria-modal="true">
+            <div class="kkp-reg-success-modal-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+            </div>
+            <h2 class="kkp-reg-success-modal-title" id="kkpGuestReadyTitle">Registration Submitted Successfully</h2>
+            <p class="kkp-reg-success-message">
+                Your KK Profiling account is ready. Sign in with the email and password you just created.
+            </p>
+            <div class="kkp-reg-success-actions">
+                <a href="{{ route('sign-in') }}" class="kkp-reg-success-modal-btn">Sign in</a>
             </div>
         </div>
     </div>

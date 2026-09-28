@@ -56,11 +56,13 @@ class RegistrationEvaluationService
     private function rejectDuplicateIfNeeded(KabataanRegistration $registration): bool
     {
         $duplicateChecker = app(DuplicateKabataanRegistrationService::class);
-        $fields = array_merge($registration->form_data ?? [], [
+        $formData = is_array($registration->form_data) ? $registration->form_data : [];
+        $suffix = trim((string) ($formData['suffix'] ?? ''));
+        $fields = array_merge($formData, [
             'first_name' => $registration->first_name,
             'middle_name' => $registration->middle_name,
             'last_name' => $registration->last_name,
-            'suffix' => $registration->suffix,
+            'suffix' => $suffix !== '' ? $suffix : $registration->suffix,
         ]);
 
         if (! $duplicateChecker->hasApprovedDuplicate((int) $registration->barangay_id, $fields, $registration->id)) {

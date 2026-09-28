@@ -1,5 +1,6 @@
 @php
-    $headerUser = $user ?? auth()->user();
+    $guestHeader = (bool) ($guestHeader ?? false);
+    $headerUser = $guestHeader ? null : ($user ?? auth()->user());
     $userName = \Illuminate\Support\Str::limit($headerUser->name ?? 'Youth User', 50, '...');
     $userEmail = $headerUser->email ?? 'youth@skportal.com';
     $avatarUrl = $headerUser
@@ -9,17 +10,17 @@
     $kabataanViewOnly = $kabataanViewOnly ?? false;
 @endphp
 
-<nav class="kabataan-header{{ $kabataanViewOnly ? ' kabataan-header--view-only' : '' }}" id="kabataanHeader" aria-label="Main navigation">
+<nav class="kabataan-header{{ $guestHeader ? ' kabataan-header--guest' : '' }}{{ $kabataanViewOnly ? ' kabataan-header--view-only' : '' }}" id="kabataanHeader" aria-label="Main navigation">
     <div class="kabataan-header__container">
-        <a href="{{ route('dashboard') }}" class="kabataan-header__brand">
+        <a href="{{ $guestHeader ? ((! empty($barangay) && ! request()->routeIs('guest_kabataan.barangays')) ? route('guest_kabataan.home') : route('guest_kabataan.barangays')) : route('dashboard') }}" class="kabataan-header__brand">
             <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal" class="kabataan-header__logo">
             <span class="kabataan-header__title">
                 Kabataan
-                <small>SK OnePortal Santa Cruz</small>
+                <small>{{ $guestHeader ? 'Guest' : 'SK OnePortal Santa Cruz' }}</small>
             </span>
         </a>
 
-        @if ($pageBadge)
+        @if ($pageBadge && ! $guestHeader)
             <span class="kabataan-header__page-badge">{{ $pageBadge }}</span>
         @endif
 
@@ -32,6 +33,9 @@
         @endif
 
         <div class="kabataan-header__actions">
+            @if ($guestHeader)
+                <button type="button" class="kabataan-header__guest-link" id="guestKabataanLogoutBtn">Log out</button>
+            @else
             <button type="button" class="kabataan-header__icon-btn programs-drawer-btn" id="programsDrawerBtn" data-tour="programs-menu" title="Programs & Barangay Profiles" aria-label="Programs and Barangay Profiles" aria-haspopup="true" aria-expanded="false">
                 <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3z"/><path d="M3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/></svg>
             </button>
@@ -133,22 +137,25 @@
                     </form>
                 </div>
             </div>
+            @endif
         </div>
     </div>
-    @if ($kabataanViewOnly)
+    @if (! $guestHeader && $kabataanViewOnly)
         <div class="kabataan-view-only-banner" role="status">
             {{ \App\Services\KabataanEligibilityService::VIEW_ONLY_MESSAGE }}
         </div>
     @endif
 </nav>
 
-@if ($kabataanViewOnly)
+@if (! $guestHeader && $kabataanViewOnly)
     <script>document.body.classList.add('kabataan-has-view-only-banner');</script>
 @endif
 
+@if (! $guestHeader)
 @include('layout::kabataan-logout-modal')
 @include('layout::kabataan-session-timeout')
 @include('kkprofiling::partials.kk-profiling-update-mandatory-modal')
+@endif
 
 @auth
 @include('communications::partials.chat-modal')

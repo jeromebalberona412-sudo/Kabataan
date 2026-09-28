@@ -2301,7 +2301,32 @@ function showEmailVerification(email) {
     const successModal = document.getElementById('kkpRegSuccessModal');
     const successMessageEl = document.getElementById('kkpRegSuccessMessage');
 
+    function showGuestReadyModal() {
+        const guestModal = document.getElementById('kkpGuestReadyModal');
+        if (!guestModal) {
+            showSuccessModal(
+                'Your KK Profiling account is ready. Sign in with the email and password you just created.',
+                true,
+            );
+            return;
+        }
+
+        if (successModal) {
+            successModal.hidden = true;
+            successModal.setAttribute('aria-hidden', 'true');
+        }
+
+        guestModal.hidden = false;
+        guestModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('kkp-wizard-success-modal-open');
+    }
+
     function showSuccessModal(message, autoApproved = false, options = {}) {
+        if (options.guestReady) {
+            showGuestReadyModal();
+            return;
+        }
+
         if (!successModal) return;
 
         const titleEl = document.getElementById('kkpRegSuccessTitle');
@@ -2341,6 +2366,7 @@ function showEmailVerification(email) {
         showSuccessModal(
             'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.',
             document.body.dataset.autoApproved === '1',
+            { guestReady: document.body.dataset.guestReady === '1' },
         );
         return;
     }
@@ -2654,6 +2680,7 @@ function showEmailVerification(email) {
                     Boolean(data.auto_approved),
                     {
                         activated: isAccountInvite || Boolean(data.activated),
+                        guestReady: Boolean(data.guest_account_ready),
                         redirectUrl: data.redirect_url || '',
                     },
                 );

@@ -578,3 +578,68 @@
     margin: 0 0 1.15rem;
     padding: 0;
 }
+
+.kkp-duplicate-overlay {
+    z-index: 8700;
+}
+
+body.kkp-duplicate-modal-open {
+    overflow: hidden;
+}
+
+.kkp-duplicate-modal.kkp-info-modal {
+    width: min(420px, 100%);
+    max-width: 420px;
+    max-height: none;
+}
+
+.kkp-duplicate-modal .kkp-info-title {
+    padding-right: 1.6rem;
+    font-size: 1.08rem;
+    line-height: 1.35;
+}
+
+.kkp-duplicate-modal .kkp-info-lang p {
+    margin: 0 0 0.7rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #334155;
+}
+
+.kkp-duplicate-modal .kkp-info-lang p:last-child {
+    margin-bottom: 0;
+}
+
+.kkp-duplicate-modal .kkp-info-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.kkp-duplicate-modal .kkp-info-btn {
+    min-width: 5.5rem;
+    min-height: 40px;
+}
+
+@media (max-width: 768px) {
+    #kkpDuplicateModal.kkp-duplicate-overlay {
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 0.75rem !important;
+    }
+
+    #kkpDuplicateModal .kkp-duplicate-modal.kkp-info-modal {
+        width: min(420px, 100%);
+        max-width: 420px;
+        margin: 0 auto;
+        border-radius: 14px;
+        max-height: min(86dvh, 640px);
+    }
+
+    #kkpDuplicateModal .kkp-info-modal-actions {
+        justify-content: stretch;
+    }
+
+    #kkpDuplicateModal .kkp-info-btn {
+        width: 100%;
+    }
+}

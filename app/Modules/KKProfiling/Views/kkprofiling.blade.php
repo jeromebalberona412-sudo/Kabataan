@@ -16,9 +16,11 @@
         'app/Modules/KKProfiling/assets/css/kkprofiling-wizard.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
+        'app/Modules/KKProfiling/assets/css/kkprofiling-security-questions.css',
         'app/Modules/Authentication/assets/css/turnstile-gate.css',
         'app/Modules/Authentication/assets/js/turnstile-gate.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
+        'app/Modules/KKProfiling/assets/js/kkprofiling-security-questions.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling-id-camera.js',
     ])
@@ -134,9 +136,11 @@
     </main>
 
     @include('kkprofiling::partials.kk-profiling-no-email-modal')
+    @include('kkprofiling::partials.kk-profiling-security-questions')
     @include('kkprofiling::partials.kk-profiling-signature-modals')
     @include('kkprofiling::partials.kk-profiling-clear-draft-modal')
     @include('kkprofiling::partials.kk-profiling-long-name-modal')
+    @include('kkprofiling::partials.kk-profiling-duplicate-modal')
 
     <div class="kkp-reg-success-overlay" id="kkpRegSuccessModal" @if(empty($registrationComplete ?? false)) hidden @endif aria-hidden="{{ ($registrationComplete ?? false) ? 'false' : 'true' }}">
         <div class="kkp-reg-success-modal" role="dialog" aria-labelledby="kkpRegSuccessTitle" aria-modal="true">
@@ -157,7 +161,7 @@
                 @endif
             </p>
             <div class="kkp-reg-success-actions">
-                <a href="{{ route('sign-in') }}" class="kkp-reg-success-modal-btn" id="kkpRegSuccessLoginBtn">Go to Sign in</a>
+                <a href="{{ route('sign-in') }}" class="kkp-reg-success-modal-btn" id="kkpRegSuccessLoginBtn" data-sign-in-url="{{ route('sign-in') }}">Go to Sign in</a>
             </div>
         </div>
     </div>

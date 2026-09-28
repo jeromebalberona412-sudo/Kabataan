@@ -12,7 +12,10 @@ class KabataanSetPasswordMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public string $setPasswordUrl) {}
+    public function __construct(
+        public string $setPasswordUrl,
+        public string $recipientName = '',
+    ) {}
 
     public function build(): self
     {
@@ -39,20 +42,22 @@ class KabataanSetPasswordMail extends Mailable
             $url = $root.'/';
         }
 
+        $name = trim($this->recipientName);
+        $payload = [
+            'setPasswordUrl' => $url,
+            'recipientName' => $name,
+            'logoPath' => null,
+            'logoUrl' => $logoUrl,
+        ];
+
         try {
-            return $this->subject('Set Your KK Profiling Account Password')
-                ->view('emails.kkprofiling-set-password', [
-                    'setPasswordUrl' => $url,
-                    'logoPath' => null,
-                    'logoUrl' => $logoUrl,
-                ]);
+            return $this->subject('SK OnePortal password setup')
+                ->view('emails.kkprofiling-set-password', $payload)
+                ->text('emails.kkprofiling-set-password-text', $payload);
         } catch (Throwable) {
-            return $this->subject('Set Your KK Profiling Account Password')
-                ->view('emails.kkprofiling-set-password', [
-                    'setPasswordUrl' => $url,
-                    'logoPath' => null,
-                    'logoUrl' => $logoUrl,
-                ]);
+            return $this->subject('SK OnePortal password setup')
+                ->view('emails.kkprofiling-set-password', $payload)
+                ->text('emails.kkprofiling-set-password-text', $payload);
         }
     }
 }
