@@ -28,29 +28,34 @@
     margin: 0;
 }
 
-/* Signature image overlay — centered above printed name */
+/* Signature sits in its own row above the printed name so neither covers the other. */
 .kkp-sig-overlay {
-    position: absolute;
-    top: -32px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: max-content;
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    width: 100%;
     max-width: 100%;
+    min-height: 0;
+    margin: 0;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
     pointer-events: none;
     z-index: 2;
+    overflow: visible;
 }
 
 .kkp-sig-overlay-img {
     display: block;
-    max-width: 320px;
-    max-height: 40px;
+    max-width: min(280px, 100%);
+    max-height: 28px;
     width: auto;
     height: auto;
     object-fit: contain;
+    object-position: center bottom;
     margin: 0 auto;
+    background: transparent;
 }
 
 .kkp-sig-overlay--visible {

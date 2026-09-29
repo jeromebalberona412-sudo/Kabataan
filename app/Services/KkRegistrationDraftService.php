@@ -45,6 +45,10 @@ class KkRegistrationDraftService
 
     public const DRAFT_COOKIE_NAME = 'kk_wizard_draft_token';
 
+    public const SET_PASSWORD_LINK_HOURS = 24;
+
+    public const SET_PASSWORD_LINK_EXPIRED_MESSAGE = 'This set-password link has expired. Links are valid for 24 hours only. Please request a new set-password email.';
+
     public function __construct(
         protected CloudinaryService $cloudinary,
         protected InvalidEmailService $invalidEmails,
@@ -425,6 +429,25 @@ class KkRegistrationDraftService
         return false;
     }
 
+    /**
+     * Set-password emails promise a 24-hour link; the draft itself may live longer.
+     *
+     * @param  array<string, mixed>  $wizard
+     */
+    public function isSetPasswordLinkExpired(array $wizard): bool
+    {
+        $sentAt = $wizard['verification_sent_at'] ?? null;
+        if (! is_string($sentAt) || trim($sentAt) === '') {
+            return false;
+        }
+
+        try {
+            return now()->greaterThan(Carbon::parse($sentAt)->addHours(self::SET_PASSWORD_LINK_HOURS));
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
     public function markEmailVerified(array $wizard): array
     {
         $wizard['email_verified_at'] = now()->toIso8601String();
@@ -518,12 +541,24 @@ class KkRegistrationDraftService
         $step1 = $wizard['step1_data'];
         $email = strtolower(trim($step1['email'] ?? $wizard['email'] ?? ''));
 
-        $existingRegistration = KabataanRegistration::query()
-            ->where('barangay_id', $barangay->id)
-            ->whereRaw('LOWER(email) = ?', [$email])
-            ->whereIn('status', ['pending_verification', 'email_verified', 'password_set', 'pending'])
-            ->latest('id')
-            ->first();
+        $claimId = (int) ($wizard['claim_registration_id'] ?? 0);
+        $existingRegistration = null;
+
+        if ($claimId > 0) {
+            $existingRegistration = KabataanRegistration::query()
+                ->where('id', $claimId)
+                ->where('barangay_id', $barangay->id)
+                ->first();
+        }
+
+        if (! $existingRegistration) {
+            $existingRegistration = KabataanRegistration::query()
+                ->where('barangay_id', $barangay->id)
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->whereIn('status', ['pending_verification', 'email_verified', 'password_set', 'pending'])
+                ->latest('id')
+                ->first();
+        }
 
         if (! $existingRegistration && app(DuplicateKabataanRegistrationService::class)->hasApprovedDuplicate((int) $barangay->id, $step1)) {
             throw ValidationException::withMessages([
@@ -551,7 +586,14 @@ class KkRegistrationDraftService
             $barangay->id,
         );
 
+        if ($claimId > 0 && $user->status !== User::STATUS_ACTIVE) {
+            $user->forceFill(['status' => User::STATUS_ACTIVE])->save();
+        }
+
         $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
+        if ($claimId > 0) {
+            $formData['guest_account_claimed'] = true;
+        }
         try {
             $formData['supporting_documents'] = $this->promoteDocuments($wizard);
         } catch (Throwable $e) {
@@ -670,6 +712,105 @@ class KkRegistrationDraftService
         $this->markRegistrationComplete($email, (int) $barangay->id, $registration);
 
         return $registration;
+    }
+
+    /**
+     * Store a completed KK Profiling form when the youth has no email and no login account.
+     *
+     * @param  array<string, mixed>  $step1
+     */
+    public function commitProfilingWithoutEmail(Barangay $barangay, array $step1, ?string $respondentNumber = null): KabataanRegistration
+    {
+        if (empty($barangay->tenant_id)) {
+            throw ValidationException::withMessages([
+                'barangay' => ['This barangay is not configured for registration. Please contact SK Officials.'],
+            ]);
+        }
+
+        if (trim((string) ($step1['email'] ?? '')) !== '') {
+            throw ValidationException::withMessages([
+                'email' => ['An email address was entered. Use Save & Continue instead.'],
+            ]);
+        }
+
+        $step1['email'] = null;
+
+        if (app(DuplicateKabataanRegistrationService::class)->findExistingIdentity((int) $barangay->id, $step1)) {
+            throw ValidationException::withMessages([
+                'registration' => [KkProfilingValidationMessages::DUPLICATE_IDENTITY],
+            ]);
+        }
+
+        $wizard = [
+            'token' => (string) Str::uuid(),
+            'respondent_number' => $respondentNumber,
+            'step2_data' => [],
+        ];
+
+        $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
+        $contactNumber = app(PhoneNumberService::class)->toLocalMobile((string) ($step1['contact_number'] ?? ''))
+            ?: mb_substr(preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? '')) ?: '', 0, 15);
+
+        $registrationPayload = [
+            'tenant_id' => $barangay->tenant_id,
+            'barangay_id' => $barangay->id,
+            'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
+            'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
+            'middle_name' => ($step1['middle_name'] ?? null)
+                ? mb_substr((string) $step1['middle_name'], 0, 100)
+                : null,
+            'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
+            'email' => null,
+            'contact_number' => $contactNumber !== '' ? $contactNumber : null,
+            'profile_photo_path' => null,
+            'form_data' => $formData,
+            'status' => 'pending_verification',
+            'profiling_year' => now()->year,
+            'email_verified_at' => null,
+            'submitted_at' => now(),
+            'user_id' => null,
+            'password_set_at' => null,
+        ];
+
+        if ($respondentNumber) {
+            $registrationPayload['respondent_number'] = mb_substr((string) $respondentNumber, 0, 32);
+        }
+
+        $registrationPayload = array_filter(
+            $registrationPayload,
+            static fn (string $column): bool => Schema::hasColumn('kabataan_registrations', $column),
+            ARRAY_FILTER_USE_KEY
+        );
+
+        $registration = KabataanRegistration::create($registrationPayload);
+
+        try {
+            (new RegistrationEvaluationService)->evaluate($registration->fresh() ?? $registration);
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        try {
+            (new SkOfficialsNotificationDispatcher)->notifyKkProfilingSubmission(
+                (int) $barangay->id,
+                $registration->full_name,
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        try {
+            (new KkSurveyResponseService)->syncFromRegistration(
+                $registration->fresh() ?? $registration,
+                'pending'
+            );
+        } catch (Throwable $e) {
+            report($e);
+        }
+
+        $this->clearSessionDraft();
+
+        return $registration->fresh() ?? $registration;
     }
 
     public function markRegistrationComplete(string $email, int $barangayId, ?KabataanRegistration $registration = null): void
@@ -839,6 +980,32 @@ class KkRegistrationDraftService
                 ? $wizard['step2_data']['id_verification']
                 : null,
         ];
+    }
+
+    /**
+     * Continue an existing no-email KK Profiling into the set-password email step.
+     *
+     * @return array<string, mixed>
+     */
+    public function beginGuestClaim(KabataanRegistration $registration, string $email): array
+    {
+        $email = strtolower(trim($email));
+        $form = is_array($registration->form_data) ? $registration->form_data : [];
+        $form['email'] = $email;
+        $form['first_name'] = $registration->first_name;
+        $form['last_name'] = $registration->last_name;
+        $form['middle_name'] = $registration->middle_name;
+        $form['suffix'] = $registration->suffix;
+
+        $wizard = $this->blankWizard((int) $registration->barangay_id);
+        $wizard['email'] = $email;
+        $wizard['step1_data'] = $form;
+        $wizard['step2_data'] = ['documents' => []];
+        $wizard['current_step'] = 3;
+        $wizard['respondent_number'] = $registration->respondent_number;
+        $wizard['claim_registration_id'] = $registration->id;
+
+        return $this->persist($wizard);
     }
 
     private function blankWizard(int $barangayId): array

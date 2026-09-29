@@ -9,6 +9,11 @@ export default defineConfig({
                 'resources/css/app.css',
                 'resources/js/app.js',
 
+                // Guest Kabataan
+                'app/Modules/Guest_Kabataan/assets/css/guest_kabataan.css',
+                'app/Modules/Guest_Kabataan/assets/css/guest_kabataan_security_questions.css',
+                'app/Modules/Guest_Kabataan/assets/js/guest_kabataan.js',
+
                 // Authentication
                 'app/Modules/Authentication/assets/css/sign-in.css',
                 'app/Modules/Authentication/assets/css/turnstile-gate.css',
@@ -145,9 +150,11 @@ export default defineConfig({
                 'app/Modules/KKProfiling/assets/css/kkprofiling-wizard.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
                 'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
+                'app/Modules/KKProfiling/assets/css/kkprofiling-security-questions.css',
                 'app/Modules/KKProfiling/assets/js/kkprofiling.js',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-signup.js',
                 'app/Modules/KKProfiling/assets/js/kk-profiling-update.js',
+                'app/Modules/KKProfiling/assets/js/kkprofiling-security-questions.js',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
                 'app/Modules/KKProfiling/assets/js/kkprofiling-id-camera.js',
             ],

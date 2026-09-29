@@ -1,0 +1,177 @@
+.kkp-secq-overlay {
+    z-index: 8600;
+}
+
+.kkp-secq-modal {
+    max-width: 720px;
+    max-height: min(92vh, 860px);
+}
+
+.kkp-secq-modal .kkp-info-modal-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-bottom: 1rem;
+}
+
+.kkp-secq-modal .kkp-info-modal-actions {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #e2e8f0;
+    background: #fff;
+}
+
+.kkp-secq-modal .kkp-info-btn {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.kkp-secq-lead,
+.kkp-secq-count-label {
+    margin: 0 0 0.75rem;
+    color: #334155;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.kkp-secq-count-label {
+    font-weight: 700;
+    color: #0450a8;
+}
+
+.kkp-secq-form-error,
+.kkp-secq-field-error {
+    margin: 0 0 0.75rem;
+    color: #b91c1c;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.kkp-secq-field-error {
+    display: block;
+    margin: 0.35rem 0 0;
+}
+
+.kkp-secq-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.kkp-secq {
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 0.75rem;
+}
+
+.kkp-secq.is-selected {
+    border-color: #0450a8;
+    background: #fff;
+}
+
+.kkp-secq-pick {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    font-weight: 700;
+    line-height: 1.35;
+    cursor: pointer;
+}
+
+.kkp-secq-pick input {
+    margin-top: 0.2rem;
+    width: 1.05rem;
+    height: 1.05rem;
+    flex-shrink: 0;
+}
+
+.kkp-secq-body {
+    margin-top: 0.75rem;
+}
+
+.kkp-secq-choices {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.4rem;
+}
+
+.kkp-secq-choice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 40px;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+}
+
+.kkp-secq-choice input {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+.kkp-secq-custom {
+    margin-top: 0.75rem;
+}
+
+.kkp-secq-custom-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-weight: 700;
+}
+
+.kkp-secq-custom-input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+}
+
+.kkp-secq-custom-input:focus {
+    outline: 3px solid rgba(4, 80, 168, 0.25);
+    border-color: #0450a8;
+}
+
+.kkp-secq-remaining {
+    display: block;
+    margin-top: 0.25rem;
+    color: #64748b;
+    font-size: 0.8rem;
+    text-align: right;
+}
+
+@media (min-width: 640px) {
+    .kkp-secq-choices {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 390px) {
+    .kkp-secq-overlay {
+        padding: 0.5rem;
+    }
+
+    .kkp-secq-modal .kkp-info-modal-actions {
+        flex-direction: row;
+        flex-wrap: nowrap;
+        padding: 0.65rem 0.75rem;
+    }
+
+    .kkp-secq-modal .kkp-info-btn {
+        width: auto;
+        min-height: 44px;
+        padding: 0.5rem 0.4rem;
+        font-size: 0.8rem;
+    }
+}

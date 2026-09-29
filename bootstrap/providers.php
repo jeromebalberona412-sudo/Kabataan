@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Authentication\Providers\AuthenticationServiceProvider;
+use App\Modules\Guest_Kabataan\Providers\GuestKabataanServiceProvider;
 use App\Modules\Baranggay_ABYIP\Providers\Baranggay_ABYIPServiceProvider;
 use App\Modules\Communications\Providers\CommunicationsServiceProvider;
 use App\Modules\Dashboard\Providers\DashboardServiceProvider;
@@ -17,6 +18,7 @@ use App\Providers\AppServiceProvider;
 return [
     AppServiceProvider::class,
     AuthenticationServiceProvider::class,
+    GuestKabataanServiceProvider::class,
     ProfileServiceProvider::class,
     DashboardServiceProvider::class,
     HomepageServiceProvider::class,

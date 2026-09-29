@@ -37,7 +37,7 @@ return new class extends Migration
             });
         }
 
-        if (! Schema::hasTable('programs_accomplishment_documents')) {
+        if (! Schema::hasTable('programs_accomplishment_documents') && Schema::hasTable('programs_accomplishment_reports')) {
             Schema::create('programs_accomplishment_documents', function (Blueprint $table) {
                 $table->id();
                 $table->unsignedBigInteger('accomplishment_report_id');

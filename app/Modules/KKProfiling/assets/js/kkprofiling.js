@@ -260,6 +260,11 @@ function kkpValidateEmail(value, touched, options = {}) {
     const v = (value || '').trim().toLowerCase();
 
     if (!v) {
+        const emailEl = document.getElementById('kkpEmail');
+        const optional = options.allowEmpty === true || (emailEl && !emailEl.required);
+        if (optional) {
+            return null;
+        }
         return (touched && strict) ? 'Email is required.' : null;
     }
 
@@ -1284,6 +1289,11 @@ function kkpValidateContact(value, requireEmpty) {
         }
 
         // ── When Registered SK Voter = No, auto-set "Did you vote last SK?" to No ──
+        if (hiddenId === 'kkpYouthClass') {
+            kkpSyncYouthClassification();
+            return;
+        }
+
         if (hiddenId === 'kkpSkVoter') {
             const skVoterVal = hidden ? hidden.value : '';
             const votedHidden = document.getElementById('kkpSkVoted');
@@ -1312,6 +1322,105 @@ function kkpValidateContact(value, requireEmpty) {
             }
         }
     };
+
+    const KKP_SPECIFIC_NEEDS = [
+        'Person w/ Disability',
+        'Children in Conflict w/ Law',
+        'Indigenous People',
+    ];
+
+    function kkpSyncYouthClassification() {
+        const hidden = document.getElementById('kkpYouthClass');
+        const main = document.querySelector('input[name="youth_classificationChk"]:checked');
+        const specific = document.querySelector('input[name="youth_specific_needChk"]:checked');
+        const options = document.querySelector('.kkp-youth-specific-options');
+        const parentChecked = Boolean(main && main.value === 'Youth w/ Specific Needs');
+
+        document.querySelectorAll('input[name="youth_specific_needChk"]').forEach((cb) => {
+            cb.disabled = !parentChecked;
+            if (!parentChecked) {
+                cb.checked = false;
+            }
+        });
+
+        if (options) {
+            options.classList.toggle('is-locked', !parentChecked);
+        }
+
+        if (!hidden) {
+            return;
+        }
+
+        if (!main) {
+            hidden.value = '';
+            return;
+        }
+
+        if (main.value === 'Youth w/ Specific Needs') {
+            hidden.value = specific ? ('Youth w/ Specific Needs|' + specific.value) : '';
+        } else {
+            hidden.value = main.value;
+        }
+
+        if (hidden.value && typeof clearDemoBlockError === 'function') {
+            clearDemoBlockError('kkpYouthClass');
+        }
+    }
+
+    window.kkpYouthClassCheck = function (checkbox) {
+        document.querySelectorAll('input[name="youth_classificationChk"]').forEach((cb) => {
+            if (cb !== checkbox) {
+                cb.checked = false;
+            }
+        });
+        kkpSyncYouthClassification();
+    };
+
+    window.kkpYouthSpecificCheck = function (checkbox) {
+        document.querySelectorAll('input[name="youth_specific_needChk"]').forEach((cb) => {
+            if (cb !== checkbox) {
+                cb.checked = false;
+            }
+        });
+
+        if (checkbox.checked) {
+            const parent = document.querySelector('input[name="youth_classificationChk"][value="Youth w/ Specific Needs"]');
+            document.querySelectorAll('input[name="youth_classificationChk"]').forEach((cb) => {
+                cb.checked = parent ? cb === parent : false;
+            });
+        }
+
+        kkpSyncYouthClassification();
+    };
+
+    window.kkpRestoreYouthClassification = function (value) {
+        const raw = String(value || '').trim();
+        if (!raw) {
+            return;
+        }
+
+        let mainValue = raw;
+        let specificValue = '';
+
+        if (raw.indexOf('|') !== -1) {
+            const parts = raw.split('|');
+            mainValue = parts[0];
+            specificValue = parts.slice(1).join('|');
+        } else if (KKP_SPECIFIC_NEEDS.indexOf(raw) !== -1) {
+            mainValue = 'Youth w/ Specific Needs';
+            specificValue = raw;
+        }
+
+        document.querySelectorAll('input[name="youth_classificationChk"]').forEach((cb) => {
+            cb.checked = cb.value === mainValue;
+        });
+        document.querySelectorAll('input[name="youth_specific_needChk"]').forEach((cb) => {
+            cb.checked = specificValue !== '' && cb.value === specificValue;
+        });
+        kkpSyncYouthClassification();
+    };
+
+    kkpSyncYouthClassification();
 
     function setAssemblyFollowupState(cell, enabled) {
         if (!cell) {
@@ -1645,7 +1754,12 @@ window.validateKkProfilingForm = async function (options = {}) {
     }
 
     // ── 12. Youth Classification ──
-    if (!hiddenVal('kkpYouthClass')) {
+    const youthClassVal = hiddenVal('kkpYouthClass');
+    const specificNeedsParent = document.querySelector('input[name="youth_classificationChk"][value="Youth w/ Specific Needs"]');
+    if (specificNeedsParent && specificNeedsParent.checked && youthClassVal.indexOf('|') === -1) {
+        errors.push('Please select Person w/ Disability, Children In Conflict w/ Law, or Indigenous People.');
+        demoBlockError('kkpYouthClass', 'Please select Person w/ Disability, Children In Conflict w/ Law, or Indigenous People.');
+    } else if (!youthClassVal) {
         errors.push('Youth Classification is required.');
         demoBlockError('kkpYouthClass', 'Please select Youth Classification.');
     }
@@ -2187,7 +2301,32 @@ function showEmailVerification(email) {
     const successModal = document.getElementById('kkpRegSuccessModal');
     const successMessageEl = document.getElementById('kkpRegSuccessMessage');
 
+    function showGuestReadyModal() {
+        const guestModal = document.getElementById('kkpGuestReadyModal');
+        if (!guestModal) {
+            showSuccessModal(
+                'Your KK Profiling account is ready. Sign in with the email and password you just created.',
+                true,
+            );
+            return;
+        }
+
+        if (successModal) {
+            successModal.hidden = true;
+            successModal.setAttribute('aria-hidden', 'true');
+        }
+
+        guestModal.hidden = false;
+        guestModal.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('kkp-wizard-success-modal-open');
+    }
+
     function showSuccessModal(message, autoApproved = false, options = {}) {
+        if (options.guestReady) {
+            showGuestReadyModal();
+            return;
+        }
+
         if (!successModal) return;
 
         const titleEl = document.getElementById('kkpRegSuccessTitle');
@@ -2227,6 +2366,7 @@ function showEmailVerification(email) {
         showSuccessModal(
             'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.',
             document.body.dataset.autoApproved === '1',
+            { guestReady: document.body.dataset.guestReady === '1' },
         );
         return;
     }
@@ -2540,6 +2680,7 @@ function showEmailVerification(email) {
                     Boolean(data.auto_approved),
                     {
                         activated: isAccountInvite || Boolean(data.activated),
+                        guestReady: Boolean(data.guest_account_ready),
                         redirectUrl: data.redirect_url || '',
                     },
                 );
@@ -2739,6 +2880,70 @@ function showEmailVerification(email) {
         }
     }
 
+    function cropSignatureToInk(dataUrl) {
+        return new Promise(function (resolve) {
+            const image = new Image();
+            image.onload = function () {
+                const source = document.createElement('canvas');
+                source.width = image.width;
+                source.height = image.height;
+                const sourceCtx = source.getContext('2d');
+                sourceCtx.drawImage(image, 0, 0);
+                const frame = sourceCtx.getImageData(0, 0, source.width, source.height);
+                const pixels = frame.data;
+                let minX = source.width;
+                let minY = source.height;
+                let maxX = 0;
+                let maxY = 0;
+                let found = false;
+
+                for (let y = 0; y < source.height; y++) {
+                    for (let x = 0; x < source.width; x++) {
+                        const index = (y * source.width + x) * 4;
+                        const alpha = pixels[index + 3];
+                        if (alpha < 32) {
+                            continue;
+                        }
+                        if (pixels[index] >= 245 && pixels[index + 1] >= 245 && pixels[index + 2] >= 245) {
+                            pixels[index + 3] = 0;
+                            continue;
+                        }
+                        found = true;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+
+                if (!found) {
+                    resolve(dataUrl);
+                    return;
+                }
+
+                sourceCtx.putImageData(frame, 0, 0);
+                const pad = 6;
+                minX = Math.max(0, minX - pad);
+                minY = Math.max(0, minY - pad);
+                maxX = Math.min(source.width - 1, maxX + pad);
+                maxY = Math.min(source.height - 1, maxY + pad);
+                const cropWidth = maxX - minX + 1;
+                const cropHeight = maxY - minY + 1;
+                const cropped = document.createElement('canvas');
+                cropped.width = cropWidth;
+                cropped.height = cropHeight;
+                const croppedCtx = cropped.getContext('2d');
+                croppedCtx.clearRect(0, 0, cropWidth, cropHeight);
+                croppedCtx.drawImage(source, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+                resolve(cropped.toDataURL('image/png'));
+            };
+            image.onerror = function () {
+                resolve(dataUrl);
+            };
+            image.src = dataUrl;
+        });
+    }
+
     function applySavedSignature(dataUrl, options = {}) {
         if (sigInput) sigInput.value = dataUrl;
         if (typeof window.clearSignatureError === 'function') {
@@ -2748,8 +2953,13 @@ function showEmailVerification(email) {
         setSignatureStatus('', false);
 
         if (sigPreview && sigOverlay) {
-            sigPreview.src = dataUrl;
-            sigOverlay.style.display = 'flex';
+            cropSignatureToInk(dataUrl).then(function (cropped) {
+                if (sigInput && sigInput.value !== dataUrl) {
+                    return;
+                }
+                sigPreview.src = cropped;
+                sigOverlay.style.display = 'flex';
+            });
         }
 
         // Keep Sign enabled so the user can reopen pad to redraw or upload again

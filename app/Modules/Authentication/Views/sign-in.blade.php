@@ -20,7 +20,7 @@
 
     @inject('turnstileService', 'App\Services\TurnstileService')
 </head>
-<body class="youth-signin-page">
+<body class="youth-signin-page youth-signin-page--main">
     @include('authentication::partials.turnstile-gate', [
         'turnstileService' => $turnstileService,
         'turnstileSubtitle' => 'Complete the security check to continue logging in.',
@@ -216,9 +216,22 @@
                     @endif
 
                     <!-- Submit Button -->
-                    <button type="submit" class="youth-submit-btn" id="signInBtn">
-                        <span>Sign In</span>
-                    </button>
+                    <div class="youth-signin-actions">
+                        <button type="submit" class="youth-submit-btn" id="signInBtn">
+                            <span>Sign In</span>
+                        </button>
+
+                        <div class="youth-guest-divider" role="separator" aria-label="or">
+                            <span>or</span>
+                        </div>
+                        <a href="{{ route('guest_kabataan.barangays') }}" class="youth-guest-btn" id="guestKabataanBtn">
+                            <svg class="youth-guest-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="8" r="4"></circle>
+                                <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"></path>
+                            </svg>
+                            <span>Continue as Guest</span>
+                        </a>
+                    </div>
 
                 </form>
 

@@ -2328,11 +2328,16 @@
         }
     }
 
-    function showRegistrationCompleteState(autoApproved = registrationAutoApproved) {
+    function showRegistrationCompleteState(autoApproved = registrationAutoApproved, options = {}) {
         registrationCompleted = true;
         root.dataset.registrationComplete = '1';
         root.dataset.autoApproved = autoApproved ? '1' : '0';
         stopRegistrationCompletionPoll();
+        try {
+            sessionStorage.removeItem(STEP_STORAGE_KEY);
+        } catch (error) {
+            // Non-blocking
+        }
 
         if (window.kkpStopResendTimer) {
             window.kkpStopResendTimer();
@@ -2374,12 +2379,26 @@
             const messageEl = document.getElementById('kkpRegSuccessMessage');
             const loginBtn = modal.querySelector('.kkp-reg-success-modal-btn');
 
-            if (autoApproved) {
+            if (options.withoutEmail) {
+                if (titleEl) {
+                    titleEl.textContent = 'KK Profiling submitted successfully';
+                }
+                if (messageEl) {
+                    messageEl.textContent = 'Your KK Profiling was submitted successfully. SK Officials will review it. Without an email address, you will not get online access to programs and announcements, and setting up an account later will need help from your SK officials.';
+                }
+                if (loginBtn) {
+                    loginBtn.textContent = 'Done';
+                    loginBtn.setAttribute('href', loginBtn.dataset.signInUrl || loginBtn.getAttribute('href') || '/sign-in');
+                }
+            } else if (autoApproved) {
                 if (titleEl) {
                     titleEl.textContent = 'Registration Verified!';
                 }
                 if (messageEl) {
                     messageEl.textContent = 'Your ID address matches your registered barangay. Your account is approved — you can log in now.';
+                }
+                if (loginBtn) {
+                    loginBtn.textContent = 'Go to Sign in';
                 }
             } else {
                 if (titleEl) {
@@ -2388,10 +2407,9 @@
                 if (messageEl) {
                     messageEl.textContent = 'Your account has been created successfully. Please wait for SK Officials to review and verify your registration before you can access the system.';
                 }
-            }
-
-            if (loginBtn) {
-                loginBtn.textContent = 'Go to Sign in';
+                if (loginBtn) {
+                    loginBtn.textContent = 'Go to Sign in';
+                }
             }
 
             modal.hidden = false;
@@ -2401,6 +2419,15 @@
     }
 
     window.kkpShowRegistrationComplete = showRegistrationCompleteState;
+
+    // Back button: the browser may restore this page from its back/forward cache with a
+    // stale step or the success modal still open. Reload so the server decides between
+    // the unfinished draft and a fresh step 1.
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
 
     async function pollRegistrationCompletion() {
         if (registrationCompleted || !verificationSent) {
@@ -2520,9 +2547,14 @@
             const value = name === 'group_chat'
                 ? (raw === 'Yes' || raw === 'No' ? raw : '')
                 : raw;
-            if (value) {
-                setCheckboxGroupValue(chk, hiddenId, value);
+            if (!value) {
+                return;
             }
+            if (name === 'youth_classification' && typeof window.kkpRestoreYouthClassification === 'function') {
+                window.kkpRestoreYouthClassification(value);
+                return;
+            }
+            setCheckboxGroupValue(chk, hiddenId, value);
         });
 
         if (typeof window.syncAssemblyFollowUp === 'function') {
@@ -2852,11 +2884,11 @@
             if (wizardNavBusy && step === 2) {
                 nextLabelEl.textContent = hasSelectedFiles ? 'Uploading…' : 'Continuing…';
             } else if (wizardNavBusy && step === 1) {
-                nextLabelEl.textContent = 'Saving…';
+                nextLabelEl.textContent = step1EmailFilled() ? 'Saving…' : 'Submitting…';
             } else if (analyzing) {
                 nextLabelEl.textContent = 'Verifying ID…';
             } else if (step === 1) {
-                nextLabelEl.textContent = 'Save & Continue';
+                nextLabelEl.textContent = step1EmailFilled() ? 'Save & Continue' : 'Submit KK Profiling';
             } else if (step === 2) {
                 nextLabelEl.textContent = hasSelectedFiles ? 'Upload & Continue' : 'Skip & Continue';
             } else {
@@ -3154,8 +3186,14 @@
                     }
                 }
             } catch (error) {
+                const registrationMessage = error.errors?.registration?.[0] || '';
+                if (isDuplicateRegistrationMessage(registrationMessage)) {
+                    showDuplicateRegistrationModal();
+                    return saved;
+                }
+
                 const message = error.errors?.document_type?.[0]
-                    || error.errors?.registration?.[0]
+                    || registrationMessage
                     || error.message;
 
                 showDocUploadError(message);
@@ -3225,9 +3263,16 @@
 
                 return true;
             } catch (error) {
+                const registrationMessage = error.errors?.registration?.[0] || '';
+                if (isDuplicateRegistrationMessage(registrationMessage)) {
+                    showDuplicateRegistrationModal();
+                    updateNavButtons(currentStep);
+                    return false;
+                }
+
                 const message = friendlyUploadFailureMessage(
                     error.errors?.document_type?.[0]
-                    || error.errors?.registration?.[0]
+                    || registrationMessage
                     || error.message
                     || 'We couldn\'t continue with your saved ID photos. Please re-upload and try again.',
                 );
@@ -3355,9 +3400,16 @@
 
             return true;
         } catch (error) {
+            const registrationMessage = error.errors?.registration?.[0] || '';
+            if (isDuplicateRegistrationMessage(registrationMessage)) {
+                showDuplicateRegistrationModal();
+                updateNavButtons(currentStep);
+                return false;
+            }
+
             const message = friendlyUploadFailureMessage(
                 error.errors?.document_type?.[0]
-                || error.errors?.registration?.[0]
+                || registrationMessage
                 || error.errors?.back?.[0]
                 || error.errors?.front?.[0]
                 || Object.values(error.errors || {}).flat?.()?.[0]
@@ -3490,6 +3542,287 @@
 
     window.kkpWizardSendVerification = sendVerificationEmail;
 
+    function step1EmailFilled() {
+        const value = form?.querySelector('input[name="email"]')?.value || '';
+        return value.trim() !== '';
+    }
+
+    function setNoEmailModalOpen(open) {
+        const modal = document.getElementById('kkpNoEmailModal');
+        if (!modal) {
+            return;
+        }
+
+        if (!open) {
+            const active = document.activeElement;
+            if (active && modal.contains(active) && typeof active.blur === 'function') {
+                active.blur();
+            }
+        }
+        modal.hidden = !open;
+        modal.setAttribute('aria-hidden', open ? 'false' : 'true');
+        document.body.classList.toggle('kkp-no-email-modal-open', open);
+
+        if (open) {
+            const agree = document.getElementById('kkpNoEmailAgree');
+            const okBtn = document.getElementById('kkpNoEmailOkBtn');
+            if (agree) {
+                agree.checked = false;
+                agree.disabled = true;
+            }
+            if (okBtn) {
+                okBtn.disabled = true;
+            }
+            const hint = document.getElementById('kkpNoEmailScrollHint');
+            if (hint) {
+                hint.hidden = false;
+            }
+            const scroll = modal.querySelector('.kkp-info-modal-scroll');
+            if (scroll) {
+                scroll.scrollTop = 0;
+            }
+            requestAnimationFrame(() => {
+                requestAnimationFrame(syncNoEmailAgreeLock);
+            });
+        }
+    }
+
+    function noEmailScrolledToEnd() {
+        const scroll = document.querySelector('#kkpNoEmailModal .kkp-info-modal-scroll');
+        if (!scroll) {
+            return false;
+        }
+
+        return scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop <= 24;
+    }
+
+    function syncNoEmailAgreeLock() {
+        const agree = document.getElementById('kkpNoEmailAgree');
+        const okBtn = document.getElementById('kkpNoEmailOkBtn');
+        if (!agree) {
+            return;
+        }
+
+        const atEnd = noEmailScrolledToEnd();
+        const hint = document.getElementById('kkpNoEmailScrollHint');
+        if (hint) {
+            hint.hidden = atEnd;
+        }
+        agree.disabled = !atEnd;
+        if (!atEnd) {
+            agree.checked = false;
+            if (okBtn) {
+                okBtn.disabled = true;
+            }
+            return;
+        }
+
+        if (okBtn) {
+            okBtn.disabled = !agree.checked;
+        }
+    }
+
+    async function beginSubmitWithoutEmail() {
+        if (!form || wizardNavBusy) {
+            return;
+        }
+
+        document.querySelectorAll('.kkp-field-error').forEach((el) => el.remove());
+        document.querySelectorAll('.kkp-input-err').forEach((el) => el.classList.remove('kkp-input-err'));
+
+        if (typeof window.validateKkProfilingForm !== 'function') {
+            return;
+        }
+
+        const valid = await window.validateKkProfilingForm({
+            skipEmailExistenceCheck: true,
+        });
+
+        if (!valid) {
+            return;
+        }
+
+        setNoEmailModalOpen(true);
+    }
+
+    function appendSecurityAnswers(formData, answers) {
+        (answers || []).forEach((answer, index) => {
+            formData.append(`security_questions[${index}][question_number]`, answer.questionNumber);
+            formData.append(`security_questions[${index}][selected_choice]`, answer.selectedChoice);
+            formData.append(`security_questions[${index}][custom_answer]`, answer.customAnswer || '');
+        });
+    }
+
+    async function confirmSubmitWithoutEmail(securityAnswers) {
+        if (!form || wizardNavBusy) {
+            return;
+        }
+
+        const agree = document.getElementById('kkpNoEmailAgree');
+        if (!agree || !agree.checked) {
+            return;
+        }
+
+        if (!Array.isArray(securityAnswers) || securityAnswers.length !== 3) {
+            window.kkpReopenSecurityQuestions?.('Pumili at sagutan ang eksaktong 3 tanong.');
+            return;
+        }
+
+        setNoEmailModalOpen(false);
+        setWizardNavBusy(true);
+        let retryMessage = null;
+        let shouldRetry = false;
+
+        try {
+            let turnstileToken = '';
+            try {
+                turnstileToken = await getStep2TurnstileToken();
+            } catch (error) {
+                shouldRetry = true;
+                if (error?.message !== 'Verification cancelled.') {
+                    alert(error?.message || 'Security verification failed. Please try again.');
+                }
+            }
+
+            if (!shouldRetry) {
+                syncHiddenCheckboxFields();
+                const formData = new FormData(form);
+                formData.set('email', '');
+                formData.append('respondent_number', root.dataset.respondentNumber || '');
+                appendSecurityAnswers(formData, securityAnswers);
+                if (turnstileToken) {
+                    formData.append('cf-turnstile-response', turnstileToken);
+                }
+
+                await postFormData(`${apiBase}/submit-without-email`, formData);
+                showRegistrationCompleteState(false, { withoutEmail: true });
+                return;
+            }
+        } catch (error) {
+            applyServerErrors(error.errors);
+            const securityMessage = error.errors?.security_questions?.[0] || '';
+            const turnstileMessage = error.errors?.['cf-turnstile-response']?.[0] || '';
+            const firstFieldMessage = Object.values(error.errors || {}).flat()[0] || '';
+            if (securityMessage) {
+                retryMessage = securityMessage;
+                shouldRetry = true;
+            } else if (isDuplicateRegistrationMessage(firstFieldMessage || error.message)) {
+                showDuplicateRegistrationModal();
+            } else {
+                alert(turnstileMessage || firstFieldMessage || error.message || 'Unable to submit KK Profiling. Please try again.');
+            }
+        } finally {
+            setWizardNavBusy(false);
+        }
+
+        if (shouldRetry && typeof window.kkpReopenSecurityQuestions === 'function') {
+            const answers = await window.kkpReopenSecurityQuestions(retryMessage || '');
+            if (answers) {
+                confirmSubmitWithoutEmail(answers);
+            }
+        }
+    }
+
+    function isDuplicateRegistrationMessage(message) {
+        return String(message || '').indexOf('Duplicate Registration Detected') === 0;
+    }
+
+    function setDuplicateRegistrationModalOpen(open) {
+        const modal = document.getElementById('kkpDuplicateModal');
+        if (!modal) {
+            return;
+        }
+
+        if (!open) {
+            const active = document.activeElement;
+            if (active && modal.contains(active) && typeof active.blur === 'function') {
+                active.blur();
+            }
+        }
+
+        modal.hidden = !open;
+        modal.setAttribute('aria-hidden', open ? 'false' : 'true');
+        document.body.classList.toggle('kkp-duplicate-modal-open', open);
+
+        if (open) {
+            document.getElementById('kkpDuplicateOkBtn')?.focus();
+        }
+    }
+
+    function showDuplicateRegistrationModal() {
+        if (!document.getElementById('kkpDuplicateModal')) {
+            alert('Duplicate Registration Detected\n\nIt looks like you may already have an existing registration in the system.\n\nIf you have registered before, please use your existing account or registration instead of creating a new one.\n\nIf you believe this is your first registration, please contact your Barangay SK Officials for assistance in checking and verifying your registration.');
+            return;
+        }
+
+        setDuplicateRegistrationModalOpen(true);
+    }
+
+    function bindDuplicateRegistrationModal() {
+        const modal = document.getElementById('kkpDuplicateModal');
+        if (!modal) {
+            return;
+        }
+
+        const close = () => setDuplicateRegistrationModalOpen(false);
+        document.getElementById('kkpDuplicateOkBtn')?.addEventListener('click', close);
+        document.getElementById('kkpDuplicateCloseBtn')?.addEventListener('click', close);
+        document.getElementById('kkpDuplicateBackdrop')?.addEventListener('click', close);
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !modal.hidden) {
+                close();
+            }
+        });
+    }
+
+    function bindNoEmailModal() {
+        const agree = document.getElementById('kkpNoEmailAgree');
+        const okBtn = document.getElementById('kkpNoEmailOkBtn');
+        const cancelBtn = document.getElementById('kkpNoEmailCancelBtn');
+        const closeBtn = document.getElementById('kkpNoEmailCloseBtn');
+        const backdrop = document.getElementById('kkpNoEmailBackdrop');
+
+        const scroll = document.querySelector('#kkpNoEmailModal .kkp-info-modal-scroll');
+        scroll?.addEventListener('scroll', syncNoEmailAgreeLock, { passive: true });
+
+        if (agree && okBtn) {
+            agree.addEventListener('change', () => {
+                if (agree.disabled) {
+                    agree.checked = false;
+                    okBtn.disabled = true;
+                    return;
+                }
+                okBtn.disabled = !agree.checked;
+            });
+        }
+
+        if (okBtn) {
+            okBtn.addEventListener('click', async () => {
+                if (!agree || !agree.checked) {
+                    return;
+                }
+                setNoEmailModalOpen(false);
+                if (typeof window.kkpOpenSecurityQuestions !== 'function') {
+                    alert('Security questions are unavailable. Please refresh the page.');
+                    return;
+                }
+                const answers = await window.kkpOpenSecurityQuestions();
+                if (!answers) {
+                    setNoEmailModalOpen(true);
+                    return;
+                }
+                confirmSubmitWithoutEmail(answers);
+            });
+        }
+
+        [cancelBtn, closeBtn, backdrop].forEach((el) => {
+            if (!el) {
+                return;
+            }
+            el.addEventListener('click', () => setNoEmailModalOpen(false));
+        });
+    }
+
     async function handleNext() {
         if (wizardNavBusy) {
             return;
@@ -3509,7 +3842,11 @@
         }
 
         if (currentStep === 1) {
-            await saveStep1();
+            if (step1EmailFilled()) {
+                await saveStep1();
+            } else {
+                await beginSubmitWithoutEmail();
+            }
             return;
         }
 
@@ -3553,9 +3890,23 @@
         nextBtn.addEventListener('click', handleNext);
     }
 
+    const step1EmailInput = form?.querySelector('input[name="email"]');
+    if (step1EmailInput) {
+        step1EmailInput.addEventListener('input', () => {
+            if (currentStep === 1 && !wizardNavBusy) {
+                updateNavButtons(1);
+            }
+        });
+    }
+
+    bindDuplicateRegistrationModal();
+    bindNoEmailModal();
+
     if (backBtn) {
         backBtn.addEventListener('click', handleBack);
     }
+
+    let serverHasDraft = true;
 
     async function restoreDraftState() {
         try {
@@ -3577,6 +3928,7 @@
             }
 
             if (!draft) {
+                serverHasDraft = false;
                 return;
             }
 
@@ -4099,6 +4451,12 @@
 
         await restoreDraftState();
         suppressStep1Autosave = false;
+
+        if (!serverHasDraft && initialStep <= 1) {
+            await setStep(1, { skipAutoSend: true, skipRemotePersist: true });
+            persistWizardStepLocally(1);
+            return;
+        }
 
         const serverEmailError = root.dataset.emailError;
 

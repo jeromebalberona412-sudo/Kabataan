@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 
@@ -155,9 +156,18 @@ class KabataanRegistration extends Model
         ]);
     }
 
+    public function securityQuestions(): HasMany
+    {
+        return $this->hasMany(KabataanSecurityQuestion::class);
+    }
+
     public function linkUser(int $userId): void
     {
         $this->update([
+            'user_id' => $userId,
+        ]);
+
+        $this->securityQuestions()->whereNull('user_id')->update([
             'user_id' => $userId,
         ]);
     }
