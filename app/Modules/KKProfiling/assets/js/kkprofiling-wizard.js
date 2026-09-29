@@ -2333,6 +2333,11 @@
         root.dataset.registrationComplete = '1';
         root.dataset.autoApproved = autoApproved ? '1' : '0';
         stopRegistrationCompletionPoll();
+        try {
+            sessionStorage.removeItem(STEP_STORAGE_KEY);
+        } catch (error) {
+            // Non-blocking
+        }
 
         if (window.kkpStopResendTimer) {
             window.kkpStopResendTimer();
@@ -2414,6 +2419,15 @@
     }
 
     window.kkpShowRegistrationComplete = showRegistrationCompleteState;
+
+    // Back button: the browser may restore this page from its back/forward cache with a
+    // stale step or the success modal still open. Reload so the server decides between
+    // the unfinished draft and a fresh step 1.
+    window.addEventListener('pageshow', (event) => {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
 
     async function pollRegistrationCompletion() {
         if (registrationCompleted || !verificationSent) {
@@ -3892,6 +3906,8 @@
         backBtn.addEventListener('click', handleBack);
     }
 
+    let serverHasDraft = true;
+
     async function restoreDraftState() {
         try {
             const response = await fetch(`${apiBase}/status`, {
@@ -3912,6 +3928,7 @@
             }
 
             if (!draft) {
+                serverHasDraft = false;
                 return;
             }
 
@@ -4434,6 +4451,12 @@
 
         await restoreDraftState();
         suppressStep1Autosave = false;
+
+        if (!serverHasDraft && initialStep <= 1) {
+            await setStep(1, { skipAutoSend: true, skipRemotePersist: true });
+            persistWizardStepLocally(1);
+            return;
+        }
 
         const serverEmailError = root.dataset.emailError;
 

@@ -16,9 +16,10 @@ Route::prefix('guest')->name('guest_kabataan.')->group(function () {
     Route::post('/claim', [GuestKabataanController::class, 'claim'])
         ->middleware('throttle:20,1')
         ->name('claim');
-    Route::get('/activate', [GuestKabataanController::class, 'activate'])->name('activate');
+    Route::get('/activate', fn () => redirect()->route('guest_kabataan.activate'))->name('activate.legacy');
+    Route::get('/activate/add-email', [GuestKabataanController::class, 'activate'])->name('activate');
     Route::get('/activate/sent', [GuestKabataanController::class, 'activateSent'])->name('activate.sent');
-    Route::post('/activate', [GuestKabataanController::class, 'sendActivation'])
+    Route::post('/activate/add-email', [GuestKabataanController::class, 'sendActivation'])
         ->middleware('throttle:10,1')
         ->name('activate.send');
     Route::post('/activate/resend', [GuestKabataanController::class, 'resendActivation'])

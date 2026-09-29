@@ -1,3 +1,5 @@
+import { flashGuestToast, showFlashedGuestToast, showGuestToast } from './guest_kabataan_toast';
+
 function filterList(input, itemSelector, emptyEl) {
     if (!input) {
         return;
@@ -35,7 +37,13 @@ function bindLogout() {
         return;
     }
 
+    const logoutForm = modal.querySelector('form');
+    let loggingOut = false;
+
     const close = () => {
+        if (loggingOut) {
+            return;
+        }
         modal.hidden = true;
         openBtn.focus();
     };
@@ -43,6 +51,33 @@ function bindLogout() {
     openBtn.addEventListener('click', () => {
         modal.hidden = false;
         modal.querySelector('[data-guest-logout-close]')?.focus();
+    });
+
+    logoutForm?.addEventListener('submit', (event) => {
+        if (loggingOut) {
+            event.preventDefault();
+            return;
+        }
+        loggingOut = true;
+        modal.querySelectorAll('button[data-guest-logout-close]').forEach((button) => {
+            button.disabled = true;
+        });
+        setBusy(logoutForm.querySelector('button[type="submit"]'), true, 'Logging out');
+        openBtn.disabled = true;
+    });
+
+    // bfcache restores the page with the busy state still applied when the user presses Back.
+    window.addEventListener('pageshow', (event) => {
+        if (!event.persisted || !loggingOut) {
+            return;
+        }
+        loggingOut = false;
+        openBtn.disabled = false;
+        modal.querySelectorAll('button[data-guest-logout-close]').forEach((button) => {
+            button.disabled = false;
+        });
+        setBusy(logoutForm?.querySelector('button[type="submit"]'), false);
+        modal.hidden = true;
     });
 
     modal.querySelectorAll('[data-guest-logout-close]').forEach((button) => {
@@ -71,6 +106,7 @@ filterList(
 bindLogout();
 bindGuestClaim();
 bindGuestActivation();
+showFlashedGuestToast();
 
 function csrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -86,9 +122,16 @@ function setBusy(button, busy, busyLabel) {
         }
         button.disabled = true;
         button.classList.add('is-busy');
-        button.textContent = busyLabel || 'Submitting...';
+        button.setAttribute('aria-busy', 'true');
+        const label = document.createElement('span');
+        label.textContent = String(busyLabel || 'Submitting').replace(/\.+$/, '');
+        const dots = document.createElement('span');
+        dots.className = 'guest-kabataan-btn__dots';
+        dots.setAttribute('aria-hidden', 'true');
+        button.replaceChildren(label, dots);
         return;
     }
+    button.removeAttribute('aria-busy');
     button.disabled = false;
     button.classList.remove('is-busy');
     if (button.dataset.idleLabel) {
@@ -122,21 +165,28 @@ function bindGuestClaim() {
     function setLocked(seconds) {
         remaining = Math.max(0, Number(seconds) || 0);
         home.dataset.locked = remaining > 0 ? '1' : '0';
-        document.querySelectorAll('[data-guest-apply]').forEach((button) => {
+        document.querySelectorAll('[data-guest-apply], [data-guest-add-email]').forEach((button) => {
             button.disabled = remaining > 0;
         });
+        const message = lockMessage(remaining);
+        const lockedNoticeCopy = document.querySelector('#guestKabataanWrongModal[data-mode="locked"]:not([hidden]) #guestKabataanWrongCopy');
+        if (lockedNoticeCopy) {
+            lockedNoticeCopy.textContent = message || 'Maaari ka nang sumubok muli.';
+        }
         if (!lockEl) {
             return;
         }
-        if (remaining <= 0) {
-            lockEl.hidden = true;
-            lockEl.textContent = '';
-            return;
+        lockEl.hidden = !message;
+        lockEl.textContent = message;
+    }
+
+    function lockMessage(seconds) {
+        if (seconds <= 0) {
+            return '';
         }
-        const minutes = Math.floor(remaining / 60);
-        const padded = String(remaining % 60).padStart(2, '0');
-        lockEl.hidden = false;
-        lockEl.textContent = `Masyadong maraming maling subok. Maaari kang sumubok muli pagkalipas ng ${minutes}:${padded}.`;
+        const minutes = Math.floor(seconds / 60);
+        const padded = String(seconds % 60).padStart(2, '0');
+        return `Masyadong maraming maling subok. Maaari kang sumubok muli pagkalipas ng ${minutes}:${padded}.`;
     }
 
     async function refreshLock() {
@@ -267,6 +317,16 @@ function bindGuestClaim() {
     document.getElementById('guestKabataanHasProfiling')?.addEventListener('click', () => {
         showConfirm();
     });
+    document.querySelectorAll('[data-guest-add-email]').forEach((button) => {
+        button.addEventListener('click', () => {
+            if (home.dataset.locked === '1') {
+                return;
+            }
+            resetClaimForm();
+            modal.hidden = false;
+            showConfirm();
+        });
+    });
 
     const suffix = document.getElementById('guestKabataanSuffix');
     const customSuffix = document.getElementById('guestKabataanCustomSuffixWrap');
@@ -348,7 +408,7 @@ function bindGuestClaim() {
         });
     });
 
-    const NAME_PATTERN = /^[A-Za-z.\-\s]+$/;
+    const NAME_PATTERN = /^[A-Za-z.\s]+$/;
     const ROMAN_SUFFIXES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
     function normalizeName(value) {
@@ -358,7 +418,7 @@ function bindGuestClaim() {
     function sanitizeName(value) {
         return String(value || '')
             .toUpperCase()
-            .replace(/[^A-Z.\-\s]/g, '')
+            .replace(/[^A-Z.\s]/g, '')
             .replace(/^\s+/, '')
             .replace(/\s{2,}/g, ' ');
     }
@@ -379,7 +439,7 @@ function bindGuestClaim() {
             return '150 maximum characters only.';
         }
         if (!NAME_PATTERN.test(normalized)) {
-            return 'Letters, spaces, periods, and hyphens only.';
+            return 'Letters, spaces, and periods only.';
         }
         return '';
     }
@@ -579,42 +639,13 @@ function bindGuestClaim() {
         form.querySelectorAll('input[name="sex"]').forEach((input) => {
             input.addEventListener('change', () => touchField('sex'));
         });
-        function ageCanStillGrow(raw) {
-            if (!/^\d$/.test(raw)) {
-                return false;
-            }
-            const tens = parseInt(raw, 10) * 10;
-            for (let digit = 0; digit <= 9; digit += 1) {
-                const next = tens + digit;
-                if (next >= 15 && next <= 30) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        form.age?.addEventListener('input', () => {
-            const raw = String(form.age.value || '').replace(/\D/g, '').slice(0, 2);
-            if (form.age.value !== raw) {
-                form.age.value = raw;
-            }
-            touchedFields.add('age');
-            const value = parseInt(raw, 10);
-            if (raw && value >= 15 && value <= 30) {
-                form.birthday.value = defaultBirthdayForAge(value);
-                touchedFields.add('birthday');
-                paintTouchedFields();
-                return;
-            }
-            if (!raw || ageCanStillGrow(raw)) {
-                setFieldMessage('age', '');
-                return;
-            }
-            paintTouchedFields();
-        });
         form.age?.addEventListener('change', () => {
             const value = parseInt(form.age.value, 10);
             touchedFields.add('age');
+            if (form.age.value === '') {
+                paintTouchedFields();
+                return;
+            }
             if (Number.isNaN(value) || value < 15 || value > 30) {
                 form.age.value = '';
                 form.birthday.value = '';
@@ -724,6 +755,105 @@ function bindGuestClaim() {
         }
     }
 
+    const hasEmailModal = document.getElementById('guestKabataanHasEmailModal');
+
+    function showHasEmail(message) {
+        if (securityModal && !securityModal.hidden) {
+            securityModal.hidden = true;
+            modal.hidden = false;
+            showConfirm();
+        }
+        showError('');
+        const copy = document.getElementById('guestKabataanHasEmailCopy');
+        if (copy && message) {
+            copy.textContent = message;
+        }
+        if (hasEmailModal) {
+            hasEmailModal.hidden = false;
+            document.getElementById('guestKabataanHasEmailOk')?.focus();
+        }
+    }
+
+    function closeHasEmail() {
+        if (hasEmailModal) {
+            hasEmailModal.hidden = true;
+        }
+    }
+
+    hasEmailModal?.querySelectorAll('[data-guest-hasemail-close]').forEach((button) => {
+        button.addEventListener('click', closeHasEmail);
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && hasEmailModal && !hasEmailModal.hidden) {
+            event.stopImmediatePropagation();
+            closeHasEmail();
+        }
+    }, true);
+
+    const wrongModal = document.getElementById('guestKabataanWrongModal');
+
+    function showWrongAnswer(payload) {
+        if (!wrongModal) {
+            return false;
+        }
+        const locked = Boolean(payload.locked);
+        const attemptsLeft = Number(payload.attempts_left);
+        const title = document.getElementById('guestKabataanWrongTitle');
+        const copy = document.getElementById('guestKabataanWrongCopy');
+        const attempts = document.getElementById('guestKabataanWrongAttempts');
+        const note = document.getElementById('guestKabataanWrongNote');
+        const okBtn = document.getElementById('guestKabataanWrongOk');
+
+        wrongModal.dataset.mode = locked ? 'locked' : 'wrong';
+        if (title) {
+            title.textContent = locked ? 'Pansamantalang naka-lock' : 'Mali ang sagot';
+        }
+        if (copy) {
+            copy.textContent = locked
+                ? lockMessage(Number(payload.remaining_seconds) || remaining)
+                : 'Mali ang mga security questions.';
+        }
+        if (attempts) {
+            attempts.hidden = locked || !Number.isFinite(attemptsLeft);
+            attempts.textContent = `Natitirang subok: ${attemptsLeft}`;
+        }
+        if (note) {
+            note.hidden = locked;
+        }
+        if (okBtn) {
+            okBtn.textContent = locked ? 'OK' : 'Subukan muli';
+        }
+        wrongModal.hidden = false;
+        okBtn?.focus();
+        return true;
+    }
+
+    function closeWrongAnswer() {
+        if (!wrongModal || wrongModal.hidden) {
+            return;
+        }
+        const wasLocked = wrongModal.dataset.mode === 'locked';
+        wrongModal.hidden = true;
+        if (wasLocked) {
+            if (securityModal) {
+                securityModal.hidden = true;
+            }
+            closeModal();
+            return;
+        }
+        securityForm?.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
+    }
+
+    wrongModal?.querySelectorAll('[data-guest-wrong-close]').forEach((button) => {
+        button.addEventListener('click', closeWrongAnswer);
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && wrongModal && !wrongModal.hidden) {
+            event.stopImmediatePropagation();
+            closeWrongAnswer();
+        }
+    }, true);
+
     function showSecurity() {
         modal.hidden = true;
         resetSecurityForm();
@@ -773,7 +903,7 @@ function bindGuestClaim() {
         }
 
         const continueBtn = document.getElementById('guestKabataanContinue');
-        setBusy(continueBtn, true);
+        setBusy(continueBtn, true, 'Continuing');
         try {
             const body = new FormData(form);
             body.delete('custom_suffix');
@@ -803,17 +933,20 @@ function bindGuestClaim() {
                 showNoData(payload.message);
                 return;
             }
-            if (payload.already_account && payload.sign_in_url) {
-                window.location.href = payload.sign_in_url;
+            if (payload.already_account) {
+                showHasEmail(payload.message);
                 return;
             }
             if (!response.ok || !payload.success) {
                 showError(payload.message || 'Unable to confirm KK Profiling. Please try again.');
+                showGuestToast(payload.message || 'Unable to confirm KK Profiling. Please try again.', 'error');
                 return;
             }
             showSecurity();
+            showGuestToast('KK Profiling found. Answer your security questions.', 'success');
         } catch (error) {
             showError(error?.message || 'Unable to confirm KK Profiling. Please try again.');
+            showGuestToast('Unable to confirm KK Profiling. Check your connection and try again.', 'error');
         } finally {
             setBusy(continueBtn, false);
         }
@@ -822,10 +955,7 @@ function bindGuestClaim() {
     securityForm?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (home.dataset.locked === '1') {
-            if (securityError) {
-                securityError.hidden = false;
-                securityError.textContent = lockEl?.textContent || 'Please wait before trying again.';
-            }
+            showWrongAnswer({ locked: true, remaining_seconds: remaining });
             return;
         }
         if (securityError) {
@@ -853,6 +983,7 @@ function bindGuestClaim() {
                     securityError.hidden = false;
                     securityError.textContent = 'Security verification failed. Please try again.';
                 }
+                showGuestToast('Security verification failed. Please try again.', 'error');
                 return;
             }
             const body = new FormData();
@@ -868,8 +999,17 @@ function bindGuestClaim() {
             if (payload.locked) {
                 setLocked(payload.remaining_seconds || 0);
             }
-            if (payload.already_account && payload.sign_in_url) {
-                window.location.href = payload.sign_in_url;
+            if (payload.already_account) {
+                showHasEmail(payload.message);
+                return;
+            }
+            const isWrongAnswer = Object.prototype.hasOwnProperty.call(payload, 'attempts_left');
+            const isLockedOut = /maling subok/i.test(payload.errors?.claim?.[0] || '');
+            if (isWrongAnswer || isLockedOut) {
+                if (isLockedOut) {
+                    await refreshLock();
+                }
+                showWrongAnswer(isWrongAnswer ? payload : { locked: true, remaining_seconds: remaining });
                 return;
             }
             if (response.status === 422 || payload.success === false) {
@@ -882,18 +1022,22 @@ function bindGuestClaim() {
                     securityError.hidden = false;
                     securityError.textContent = message;
                 }
+                showGuestToast(message, 'error');
                 if (payload.locked) {
                     refreshLock();
                 }
                 return;
             }
             if (!response.ok || !payload.redirect) {
+                const message = payload.message || 'Unable to confirm the security questions. Please try again.';
                 if (securityError) {
                     securityError.hidden = false;
-                    securityError.textContent = payload.message || 'Unable to confirm the security questions. Please try again.';
+                    securityError.textContent = message;
                 }
+                showGuestToast(message, 'error');
                 return;
             }
+            flashGuestToast('Security questions confirmed. Add your email to activate your account.', 'success');
             window.location.href = payload.redirect;
         } catch (error) {
             if (error && error.message === 'Verification cancelled.') {
@@ -903,6 +1047,7 @@ function bindGuestClaim() {
                 securityError.hidden = false;
                 securityError.textContent = error?.message || 'Unable to confirm the security questions. Please try again.';
             }
+            showGuestToast('Unable to confirm the security questions. Please try again.', 'error');
         } finally {
             setBusy(submitBtn, false);
         }
@@ -1011,9 +1156,49 @@ function bindGuestActivation() {
         }
         showEmailError(emailMessage(emailInput.value, false), false);
     });
-    emailInput?.addEventListener('blur', () => {
+    // Same server rules as KK Profiling (format, DNS, disposable/temporary domains, already taken).
+    let emailCheckController = null;
+    async function serverEmailMessage(email) {
+        if (!root.dataset.checkUrl || !email) {
+            return '';
+        }
+        emailCheckController?.abort();
+        emailCheckController = new AbortController();
+        const response = await fetch(root.dataset.checkUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({ email, current_email: root.dataset.currentEmail || '' }),
+            credentials: 'same-origin',
+            signal: emailCheckController.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return data.errors?.email?.[0] || data.message || 'Please enter a valid email address.';
+        }
+        return data.exists ? (data.message || 'This email is already taken. Please use another email.') : '';
+    }
+
+    emailInput?.addEventListener('blur', async () => {
         emailInput.value = String(emailInput.value || '').trim().toLowerCase().slice(0, 64);
-        showEmailError(emailMessage(emailInput.value, true), false);
+        const localError = emailMessage(emailInput.value, true);
+        showEmailError(localError, false);
+        if (localError) {
+            return;
+        }
+        const checked = emailInput.value;
+        try {
+            const message = await serverEmailMessage(checked);
+            if (emailInput.value === checked) {
+                showEmailError(message, false);
+            }
+        } catch (error) {
+            // Network/abort: the submit request still validates on the server.
+        }
     });
 
     async function challengeToken() {
@@ -1032,15 +1217,45 @@ function bindGuestActivation() {
         const formatError = emailMessage(input?.value);
         if (formatError) {
             showEmailError(formatError, false);
+            showGuestToast(formatError, 'error');
             return;
         }
         showEmailError('');
         const submitBtn = form.querySelector('button[type="submit"]');
-        setBusy(submitBtn, true);
+        if (submitBtn?.disabled) {
+            return;
+        }
+        setBusy(submitBtn, true, 'Verifying');
         try {
-            const token = await challengeToken();
+            // Open Cloudflare right away; the email check runs alongside and closes it if the email is rejected.
+            let serverError = '';
+            const emailCheck = serverEmailMessage(input.value)
+                .catch(() => '')
+                .then((message) => {
+                    serverError = message;
+                    if (message && window.KabataanTurnstileGate?.isOpen?.()) {
+                        window.KabataanTurnstileGate.cancel();
+                    }
+                    return message;
+                });
+            let token = '';
+            try {
+                token = await challengeToken();
+            } catch (error) {
+                if (!serverError) {
+                    throw error;
+                }
+            }
+            await emailCheck;
+            if (serverError) {
+                showEmailError(serverError, false);
+                showGuestToast(serverError, 'error');
+                return;
+            }
+            setBusy(submitBtn, true, 'Sending');
             if (window.KabataanTurnstileGate?.isEnabled?.() && !token) {
                 showEmailError('Security verification failed. Please try again.', true);
+                showGuestToast('Security verification failed. Please try again.', 'error');
                 return;
             }
             const body = new FormData(form);
@@ -1061,11 +1276,15 @@ function bindGuestActivation() {
                 const emailError = payload.errors?.email?.[0];
                 if (emailError) {
                     showEmailError(emailError, false);
+                    showGuestToast(emailError, 'error');
                     return;
                 }
-                showEmailError(payload.errors?.['cf-turnstile-response']?.[0] || payload.errors?.registration?.[0] || payload.message || 'Unable to send the set-password email.', true);
+                const message = payload.errors?.['cf-turnstile-response']?.[0] || payload.errors?.registration?.[0] || payload.message || 'Unable to send the set-password email.';
+                showEmailError(message, true);
+                showGuestToast(message, 'error');
                 return;
             }
+            flashGuestToast(payload.message || 'Set password link sent. Please check your inbox.', 'success');
             window.location.assign(payload.redirect || root.dataset.sentUrl || '/guest/activate/sent');
             return;
         } catch (error) {
@@ -1073,6 +1292,7 @@ function bindGuestActivation() {
                 return;
             }
             showEmailError(error?.message || 'Unable to send the set-password email.', true);
+            showGuestToast('Unable to send the set-password email. Please try again.', 'error');
         } finally {
             setBusy(submitBtn, false);
         }
@@ -1140,7 +1360,7 @@ function bindGuestActivation() {
             resendError.textContent = '';
         }
         let cooldownAfter = 0;
-        setBusy(resendBtn, true);
+        setBusy(resendBtn, true, 'Sending');
         try {
             const response = await fetch(root.dataset.resendUrl, {
                 method: 'POST',
@@ -1156,18 +1376,22 @@ function bindGuestActivation() {
                 if (Number.isFinite(wait) && wait > 0) {
                     cooldownAfter = Math.ceil(wait);
                 }
+                const message = payload.errors?.email?.[0] || payload.message || 'Unable to resend the email.';
                 if (resendError) {
                     resendError.hidden = false;
-                    resendError.textContent = payload.errors?.email?.[0] || payload.message || 'Unable to resend the email.';
+                    resendError.textContent = message;
                 }
+                showGuestToast(message, 'error');
                 return;
             }
             cooldownAfter = Number.isFinite(wait) && wait > 0 ? Math.ceil(wait) : 60;
+            showGuestToast(payload.message || 'Set password link sent. Please check your inbox.', 'success');
         } catch (error) {
             if (resendError) {
                 resendError.hidden = false;
                 resendError.textContent = error?.message || 'Unable to resend the email.';
             }
+            showGuestToast('Unable to resend the email. Please try again.', 'error');
         } finally {
             setBusy(resendBtn, false);
         }

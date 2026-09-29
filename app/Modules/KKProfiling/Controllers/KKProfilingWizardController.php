@@ -662,6 +662,13 @@ class KKProfilingWizardController extends Controller
                 ]);
         }
 
+        if ($this->draftService->isSetPasswordLinkExpired($wizard)) {
+            return redirect()->route('kkprofiling', ['barangay' => $this->barangaySlugFromId((int) $barangayRecord->id)])
+                ->withErrors([
+                    'verification' => KkRegistrationDraftService::SET_PASSWORD_LINK_EXPIRED_MESSAGE,
+                ]);
+        }
+
         if ($this->draftService->isExpiredWizard($wizard)) {
             return redirect()->route('kkprofiling.signup')->withErrors([
                 'verification' => 'This registration link has expired. Please start again.',
@@ -737,15 +744,19 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        $valid = $this->draftService->matchesSetPasswordLink($wizard, $hash);
+        $matches = $this->draftService->matchesSetPasswordLink($wizard, $hash);
+        $timedOut = $matches && $this->draftService->isSetPasswordLinkExpired($wizard);
+        $valid = $matches && ! $timedOut;
 
         return response()->json([
             'valid' => $valid,
             'completed' => false,
             'expired' => ! $valid,
-            'message' => $valid
-                ? null
-                : 'This set-password link has expired because a newer email was sent. Please open the latest set-password email.',
+            'message' => match (true) {
+                $valid => null,
+                $timedOut => KkRegistrationDraftService::SET_PASSWORD_LINK_EXPIRED_MESSAGE,
+                default => 'This set-password link has expired because a newer email was sent. Please open the latest set-password email.',
+            },
         ]);
     }
 
@@ -784,6 +795,12 @@ class KKProfilingWizardController extends Controller
         if ($email === '' || ! $this->draftService->matchesSetPasswordLink($wizard, $emailHash)) {
             throw ValidationException::withMessages([
                 'email' => ['This set-password link has expired because a newer email was sent. Please open the latest set-password email.'],
+            ]);
+        }
+
+        if ($this->draftService->isSetPasswordLinkExpired($wizard)) {
+            throw ValidationException::withMessages([
+                'email' => [KkRegistrationDraftService::SET_PASSWORD_LINK_EXPIRED_MESSAGE],
             ]);
         }
 
@@ -950,37 +967,12 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        if ($completed = $this->draftService->resolveCompletedRegistration((int) $barangayRecord->id)) {
-            $registration = KabataanRegistration::query()
-                ->where('barangay_id', $barangayRecord->id)
-                ->where('email', strtolower(trim($completed['email'] ?? '')))
-                ->whereIn('status', ['password_set', 'active'])
-                ->latest('id')
-                ->first();
-
-            if (! $registration) {
-                $this->draftService->clearCompletedRegistration();
-
-                return response()->json([
-                    'draft' => null,
-                    'registration_completed' => false,
-                ]);
-            }
-
-            $autoApproved = RegistrationEvaluationService::isAutoApprovedStatus($registration->evaluation_status);
-
-            $this->draftService->markRegistrationComplete(
-                (string) $completed['email'],
-                (int) $barangayRecord->id,
-                $registration,
-            );
+        if ($this->draftService->resolveCompletedRegistration((int) $barangayRecord->id)) {
+            $this->draftService->clearCompletedRegistration();
 
             return response()->json([
                 'draft' => null,
-                'registration_completed' => true,
-                'email' => $completed['email'],
-                'auto_approved' => $autoApproved,
-                'evaluation_status' => $registration->evaluation_status,
+                'registration_completed' => false,
             ]);
         }
 

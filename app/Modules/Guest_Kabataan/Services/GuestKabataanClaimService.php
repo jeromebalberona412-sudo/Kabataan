@@ -15,6 +15,7 @@ use App\Services\InvalidEmailService;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Mail;
@@ -29,6 +30,9 @@ class GuestKabataanClaimService
     public const MAX_ATTEMPTS = 3;
 
     public const LOCK_MINUTES = 3;
+
+    /** Wrong answers are forgiven after this many minutes without another wrong answer. */
+    public const ATTEMPT_RESET_MINUTES = 5;
 
     public const PENDING_KEY = 'guest_kabataan_identity';
 
@@ -57,7 +61,7 @@ class GuestKabataanClaimService
             return $this->statusPayload(true, $remaining, 0);
         }
 
-        if ($row->locked_until !== null) {
+        if ($row->locked_until !== null || $this->attemptsExpired($row)) {
             $row->forceFill([
                 'failed_attempts' => 0,
                 'locked_until' => null,
@@ -176,7 +180,7 @@ class GuestKabataanClaimService
             return null;
         }
 
-        return KabataanRegistration::query()
+        return $this->currentYear(KabataanRegistration::query())
             ->where('id', (int) $registrationId)
             ->where('barangay_id', $barangayId)
             ->whereNull('user_id')
@@ -263,9 +267,9 @@ class GuestKabataanClaimService
         $input['middle_name'] = $middle === '' ? null : $middle;
 
         $validator = validator($input, [
-            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\s]+$/'],
+            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\s]+$/'],
+            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\s]+$/'],
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->zones->purokZoneRules($barangayId),
@@ -281,9 +285,9 @@ class GuestKabataanClaimService
             'last_name.max' => '150 maximum characters only.',
             'first_name.max' => '150 maximum characters only.',
             'middle_name.max' => '150 maximum characters only.',
-            'last_name.regex' => 'Letters, spaces, periods, and hyphens only.',
-            'first_name.regex' => 'Letters, spaces, periods, and hyphens only.',
-            'middle_name.regex' => 'Letters, spaces, periods, and hyphens only.',
+            'last_name.regex' => 'Letters, spaces, and periods only.',
+            'first_name.regex' => 'Letters, spaces, and periods only.',
+            'middle_name.regex' => 'Letters, spaces, and periods only.',
             'suffix.required' => 'Please select a suffix.',
             'custom_suffix.required_if' => 'Please specify your suffix.',
             'custom_suffix.max' => 'Suffix must not exceed 5 characters.',
@@ -362,12 +366,29 @@ class GuestKabataanClaimService
             return null;
         }
 
-        return KabataanRegistration::query()
+        return $this->currentYear(KabataanRegistration::query())
             ->with('securityQuestions')
             ->where('id', (int) $registrationId)
             ->where('barangay_id', $barangayId)
             ->whereNotIn('status', ['rejected'])
             ->first();
+    }
+
+    /**
+     * Guests may only claim this year's KK Profiling. Older rows without
+     * profiling_year fall back to the year they were submitted.
+     */
+    private function currentYear(Builder $query): Builder
+    {
+        $year = (int) now()->year;
+
+        return $query->where(function (Builder $inner) use ($year) {
+            $inner->where('profiling_year', $year)
+                ->orWhere(function (Builder $legacy) use ($year) {
+                    $legacy->whereNull('profiling_year')
+                        ->whereRaw('EXTRACT(YEAR FROM COALESCE(submitted_at, created_at)) = ?', [$year]);
+                });
+        });
     }
 
     /**
@@ -378,7 +399,7 @@ class GuestKabataanClaimService
         $last = mb_strtolower(trim((string) $fields['last_name']));
         $first = mb_strtolower(trim((string) $fields['first_name']));
 
-        $candidates = KabataanRegistration::query()
+        $candidates = $this->currentYear(KabataanRegistration::query())
             ->where('barangay_id', $barangayId)
             ->whereNotIn('status', ['rejected'])
             ->whereRaw('LOWER(last_name) = ?', [$last])
@@ -498,7 +519,8 @@ class GuestKabataanClaimService
             return;
         }
 
-        $attempts = (int) $row->failed_attempts + 1;
+        $previous = $this->attemptsExpired($row) ? 0 : (int) $row->failed_attempts;
+        $attempts = $previous + 1;
         $row->forceFill([
             'failed_attempts' => $attempts >= self::MAX_ATTEMPTS ? 0 : $attempts,
             'locked_until' => $attempts >= self::MAX_ATTEMPTS ? now()->addMinutes(self::LOCK_MINUTES) : null,
@@ -548,6 +570,13 @@ class GuestKabataanClaimService
         }
 
         return $token;
+    }
+
+    private function attemptsExpired(GuestClaimLockout $row): bool
+    {
+        return (int) $row->failed_attempts > 0
+            && $row->updated_at !== null
+            && $row->updated_at->lte(now()->subMinutes(self::ATTEMPT_RESET_MINUTES));
     }
 
     private function remainingLockSeconds(GuestClaimLockout $row): int

@@ -1,4 +1,4 @@
-/* Kabataan — shared Cloudflare Turnstile modal (blue theme, mobile-safe) */
+/* Kabataan - shared Cloudflare Turnstile modal (blue theme, mobile-safe) */
 
 :root {
     --kab-ts-blue: #0450a8;
@@ -16,7 +16,7 @@
     inset: 0;
     z-index: 10050;
     isolation: isolate;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
@@ -24,6 +24,7 @@
     min-height: 100svh;
     padding: 1rem;
     box-sizing: border-box;
+    overscroll-behavior: contain;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -32,9 +33,14 @@
 }
 
 .turnstile-modal.turnstile-modal-visible {
+    display: flex;
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
+}
+
+.turnstile-modal[hidden] {
+    display: none !important;
 }
 
 .turnstile-modal-backdrop {
@@ -165,15 +171,8 @@
     position: relative;
     z-index: 3;
     width: 100%;
-    max-width: 420px;
-}
-
-#turnstile-container.is-size-flexible {
     max-width: 100%;
-}
-
-#turnstile-container.is-size-compact {
-    max-width: 150px;
+    overflow: visible;
 }
 
 #turnstile-container iframe {
@@ -199,6 +198,41 @@
     box-sizing: border-box;
 }
 
+.turnstile-modal-error-hint {
+    display: block;
+    margin-top: 0.375rem;
+    color: #7f1d1d;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.45;
+}
+
+.turnstile-retry-btn {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    margin-top: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 8px;
+    background: var(--kab-ts-blue);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.turnstile-retry-btn:hover,
+.turnstile-retry-btn:focus-visible {
+    background: var(--kab-ts-blue-dark);
+}
+
+.turnstile-retry-btn:focus-visible {
+    outline: 3px solid rgba(4, 80, 168, 0.35);
+    outline-offset: 2px;
+}
+
 .turnstile-modal-footer {
     padding: 0.25rem 1.5rem 1.25rem;
     text-align: center;
@@ -222,6 +256,11 @@
 .turnstile-cancel-link:hover {
     color: var(--kab-ts-blue);
     background: rgba(4, 80, 168, 0.08);
+}
+
+.login-btn.waiting-for-turnstile {
+    opacity: 0.65;
+    cursor: default;
 }
 
 @media (max-width: 768px) {
@@ -272,10 +311,46 @@
         max-width: 100%;
         min-height: 78px;
     }
+}
 
-    #turnstile-container.is-size-compact {
-        max-width: 150px;
-        min-height: 140px;
+@media (max-width: 390px) {
+    .turnstile-modal-card {
+        max-width: calc(100vw - 0.875rem);
+    }
+
+    .turnstile-modal-header {
+        padding: 0.625rem 0.75rem 0.375rem;
+    }
+
+    .turnstile-modal-body {
+        padding: 0.375rem 0.625rem 0.625rem;
+    }
+
+    #turnstile-container {
+        min-height: 80px;
+    }
+}
+
+@media (max-width: 360px) {
+    .turnstile-modal {
+        padding: 0.25rem;
+    }
+
+    .turnstile-modal-card {
+        max-width: calc(100vw - 0.5rem);
+        border-radius: 12px;
+    }
+
+    .turnstile-modal-title {
+        font-size: 0.8125rem;
+    }
+
+    .turnstile-modal-subtitle {
+        font-size: 0.6875rem;
+    }
+
+    #turnstile-container {
+        min-height: 82px;
     }
 }
 

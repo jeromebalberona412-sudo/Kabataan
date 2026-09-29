@@ -27,7 +27,7 @@
         ])
     @endif
 
-    <main class="guest-kabataan-main guest-kabataan-activate" id="guestKabataanActivate" data-mode="{{ $mode ?? 'form' }}" data-send-url="{{ route('guest_kabataan.activate.send') }}" data-sent-url="{{ route('guest_kabataan.activate.sent') }}" data-resend-url="{{ route('guest_kabataan.activate.resend') }}" data-cooldown="{{ (int) ($cooldown ?? 0) }}">
+    <main class="guest-kabataan-main guest-kabataan-activate" id="guestKabataanActivate" data-mode="{{ $mode ?? 'form' }}" data-send-url="{{ route('guest_kabataan.activate.send') }}" data-sent-url="{{ route('guest_kabataan.activate.sent') }}" data-resend-url="{{ route('guest_kabataan.activate.resend') }}" data-check-url="{{ route('kkprofiling.check-email-exists') }}" data-current-email="{{ $email }}" data-cooldown="{{ (int) ($cooldown ?? 0) }}">
         @if (($mode ?? 'form') === 'form')
             <section class="guest-kabataan-panel" id="guestKabataanEmailForm">
                 <p class="guest-kabataan-kicker">Account activation</p>
@@ -51,7 +51,7 @@
                 <p>Open your inbox and click the <strong>Set Password</strong> link. After you create your password, you can sign in.</p>
                 <p class="guest-kabataan-error" id="guestKabataanResendError" role="alert" hidden></p>
                 <div class="guest-kabataan-sent-actions">
-                    <button type="button" class="guest-kabataan-btn guest-kabataan-btn--ghost" id="guestKabataanResend">Resend set password link</button>
+                    <button type="button" class="guest-kabataan-btn guest-kabataan-btn--resend" id="guestKabataanResend">Resend set password link</button>
                     <p class="guest-kabataan-resend-timer" id="guestKabataanResendTimer" hidden></p>
                     <a href="{{ route('guest_kabataan.activate') }}" class="guest-kabataan-btn guest-kabataan-btn--ghost">Cancel</a>
                 </div>

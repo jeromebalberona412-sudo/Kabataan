@@ -193,48 +193,11 @@ class KKProfilingController extends Controller
 
         $wizardInitialStep = 1;
         $verificationSent = false;
-        $registrationComplete = false;
-        $completedEmail = null;
         $wizardDraftEmail = null;
-        $registrationAutoApproved = false;
 
-        $hasActiveUnfinishedDraft = is_array($wizard)
-            && (int) ($wizard['barangay_id'] ?? 0) === (int) $barangayRecord->id
-            && ! empty($wizard['step1_data']);
-
-        // An unfinished draft always wins over a leftover success session from a prior submit.
-        if ($hasActiveUnfinishedDraft) {
-            $draftService->clearCompletedRegistration();
-        }
-
-        $completedSession = $hasActiveUnfinishedDraft
-            ? null
-            : $draftService->resolveCompletedRegistration((int) $barangayRecord->id);
-
-        if ($completedSession) {
-            $registration = KabataanRegistration::query()
-                ->where('barangay_id', $barangayRecord->id)
-                ->where('email', strtolower(trim((string) ($completedSession['email'] ?? ''))))
-                ->whereIn('status', ['password_set', 'active'])
-                ->latest('id')
-                ->first();
-
-            // Success UI only after password was set and the row exists in the database.
-            if ($registration) {
-                $registrationComplete = true;
-                $completedEmail = $completedSession['email'];
-                $registrationAutoApproved = RegistrationEvaluationService::isAutoApprovedStatus(
-                    $registration->evaluation_status
-                );
-                $draftService->markRegistrationComplete(
-                    (string) $completedSession['email'],
-                    (int) $barangayRecord->id,
-                    $registration,
-                );
-            } else {
-                $draftService->clearCompletedRegistration();
-            }
-        }
+        // The success modal is shown once, right after submitting. Revisiting the page
+        // (Back, reload, new tab) starts a fresh, empty step 1 instead.
+        $draftService->clearCompletedRegistration();
 
         if ($wizard && (int) ($wizard['barangay_id'] ?? 0) === (int) $barangayRecord->id) {
             $verificationSent = ! empty($wizard['verification_sent_at']);
@@ -243,13 +206,7 @@ class KKProfilingController extends Controller
             $wizardInitialStep = max(1, min(3, (int) ($wizard['current_step'] ?? 1)));
         }
 
-        if ($registrationComplete) {
-            $wizardInitialStep = 3;
-            $wizardDraftEmail = $completedEmail;
-            $verificationSent = true;
-        }
-
-        return view('kkprofiling::kkprofiling', [
+        return response()->view('kkprofiling::kkprofiling', [
             'barangay' => $displayName,
             'slug' => $slug,
             'respondentNumber' => $respondentNumber,
@@ -258,9 +215,9 @@ class KKProfilingController extends Controller
             'barangayZones' => $this->barangayZoneService->activeZonesForBarangay((int) $barangayRecord->id),
             'wizardInitialStep' => $wizardInitialStep,
             'verificationSent' => $verificationSent,
-            'registrationComplete' => $registrationComplete,
-            'completedEmail' => $completedEmail,
-            'registrationAutoApproved' => $registrationAutoApproved,
+            'registrationComplete' => false,
+            'completedEmail' => null,
+            'registrationAutoApproved' => false,
             'wizardDraftEmail' => $wizardDraftEmail,
             'turnstileEnabled' => app(TurnstileService::class)->isEnabled(),
             'turnstileSiteKey' => app(TurnstileService::class)->getSiteKey(),
@@ -268,6 +225,9 @@ class KKProfilingController extends Controller
                 TurnstileAttemptGuard::ACTION_KK_EMAIL_VERIFY,
                 request()
             ),
+        ])->withHeaders([
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
         ]);
     }
 

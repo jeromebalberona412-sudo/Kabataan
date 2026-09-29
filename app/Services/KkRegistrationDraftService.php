@@ -45,6 +45,10 @@ class KkRegistrationDraftService
 
     public const DRAFT_COOKIE_NAME = 'kk_wizard_draft_token';
 
+    public const SET_PASSWORD_LINK_HOURS = 24;
+
+    public const SET_PASSWORD_LINK_EXPIRED_MESSAGE = 'This set-password link has expired. Links are valid for 24 hours only. Please request a new set-password email.';
+
     public function __construct(
         protected CloudinaryService $cloudinary,
         protected InvalidEmailService $invalidEmails,
@@ -423,6 +427,25 @@ class KkRegistrationDraftService
         }
 
         return false;
+    }
+
+    /**
+     * Set-password emails promise a 24-hour link; the draft itself may live longer.
+     *
+     * @param  array<string, mixed>  $wizard
+     */
+    public function isSetPasswordLinkExpired(array $wizard): bool
+    {
+        $sentAt = $wizard['verification_sent_at'] ?? null;
+        if (! is_string($sentAt) || trim($sentAt) === '') {
+            return false;
+        }
+
+        try {
+            return now()->greaterThan(Carbon::parse($sentAt)->addHours(self::SET_PASSWORD_LINK_HOURS));
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     public function markEmailVerified(array $wizard): array

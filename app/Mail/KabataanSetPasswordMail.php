@@ -36,6 +36,7 @@ class KabataanSetPasswordMail extends Mailable
         }
 
         $logoUrl = $root.'/images/'.rawurlencode($logoFile);
+        $logoPath = public_path('images/'.$logoFile);
 
         $url = trim((string) $this->setPasswordUrl);
         if ($url === '') {
@@ -46,7 +47,7 @@ class KabataanSetPasswordMail extends Mailable
         $payload = [
             'setPasswordUrl' => $url,
             'recipientName' => $name,
-            'logoPath' => null,
+            'logoPath' => is_file($logoPath) ? $logoPath : null,
             'logoUrl' => $logoUrl,
         ];
 

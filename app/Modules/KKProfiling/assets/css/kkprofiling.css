@@ -632,6 +632,18 @@
     font-size: 12px;
 }
 
+/* Mobile browsers give <select> extra intrinsic height; pin it to the name inputs' box. */
+#kkpSuffix {
+    height: 20px;
+    min-height: 20px;
+    flex: 0 0 20px;
+    line-height: 16px;
+    padding-top: 2px;
+    padding-bottom: 1px;
+    box-sizing: border-box;
+    margin: 0;
+}
+
 .kkp-name-max-hint {
     position: static;
     display: block;

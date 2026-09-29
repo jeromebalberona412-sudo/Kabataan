@@ -9,6 +9,15 @@
 <body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#111827;-webkit-text-size-adjust:100%;">
 @php
     $logoSrc = $logoUrl ?? null;
+    // Inline (CID) so the logo shows even when the sender host is a LAN IP Gmail cannot fetch.
+    // $message only exists during a real send, not in previews/render().
+    if (isset($message) && ! empty($logoPath) && is_file($logoPath)) {
+        try {
+            $logoSrc = $message->embed($logoPath);
+        } catch (\Throwable) {
+            $logoSrc = $logoUrl ?? null;
+        }
+    }
 @endphp
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f4f6;width:100%;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
         <tr>
@@ -58,7 +67,7 @@
                     <tr>
                         <td style="padding:0 24px 28px 24px;">
                             <p style="margin:0 0 10px 0;font-size:13px;line-height:1.6;color:#64748b;">
-                                This link expires in 7 days. If you did not ask for a Kabataan account, you can ignore this email.
+                                This link expires in 24 hours. If you did not ask for a Kabataan account, you can ignore this email.
                             </p>
                         </td>
                     </tr>

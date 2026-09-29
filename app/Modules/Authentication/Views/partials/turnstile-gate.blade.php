@@ -4,9 +4,17 @@
 @endphp
 
 @if($turnstileService->isEnabled())
+    <style id="turnstile-gate-critical">
+        #turnstile-modal:not(.turnstile-modal-visible){display:none!important;visibility:hidden!important;pointer-events:none!important;}
+        #turnstile-modal.turnstile-modal-visible{display:flex!important;visibility:visible!important;pointer-events:auto!important;position:fixed;inset:0;z-index:10050;align-items:center;justify-content:center;padding:1rem;box-sizing:border-box;}
+        .turnstile-modal-icon{width:40px;height:40px;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+        .turnstile-modal-icon svg{width:22px!important;height:22px!important;max-width:22px!important;max-height:22px!important;display:block;}
+        .turnstile-close-btn svg{width:18px!important;height:18px!important;max-width:18px!important;max-height:18px!important;display:block;}
+    </style>
+
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 
-    <div id="turnstile-modal" class="turnstile-modal" role="dialog" aria-modal="true" aria-label="Human verification">
+    <div id="turnstile-modal" class="turnstile-modal" role="dialog" aria-modal="true" aria-label="Human verification" hidden>
         <div id="turnstile-modal-backdrop" class="turnstile-modal-backdrop"></div>
         <div class="turnstile-modal-card">
             <div class="turnstile-modal-header">

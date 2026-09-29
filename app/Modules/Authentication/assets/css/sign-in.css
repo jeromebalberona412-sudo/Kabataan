@@ -651,14 +651,44 @@ a.youth-submit-btn:visited {
     color: #ffffff;
 }
 
+.youth-signin-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 0.5rem;
+}
+
+.youth-signin-actions .youth-submit-btn {
+    font-family: inherit;
+    margin-top: 0;
+    min-height: 44px;
+    padding: 0.6rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.98rem;
+    transition: background var(--transition-base), box-shadow var(--transition-base), transform 0.12s ease;
+}
+
+.youth-signin-actions .youth-submit-btn:not(:disabled):active {
+    transform: translateY(1px);
+}
+
+.youth-signin-actions .youth-submit-btn:focus-visible,
+.youth-guest-btn:focus-visible {
+    outline: 3px solid rgba(26, 111, 212, 0.35);
+    outline-offset: 2px;
+}
+
 .youth-guest-divider {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin: 14px 0 10px;
-    color: var(--youth-gray-600);
-    font-size: 0.85rem;
-    font-weight: 600;
+    gap: 10px;
+    margin: 8px 0;
+    color: var(--youth-gray-500, #64748b);
+    font-size: 0.75rem;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
 }
 
 .youth-guest-divider::before,
@@ -666,32 +696,67 @@ a.youth-submit-btn:visited {
     content: "";
     flex: 1;
     height: 1px;
-    background: var(--youth-gray-200);
+    background: #cbd5e1;
 }
 
 .youth-guest-btn {
     width: 100%;
-    min-height: 48px;
-    padding: 0.875rem 1.5rem;
-    font-size: 1rem;
+    min-height: 44px;
+    padding: 0.6rem 1.25rem;
+    gap: 0.5rem;
+    font-size: 0.98rem;
     font-weight: 700;
     color: var(--youth-blue);
-    background: #fff;
-    border: 2px solid var(--youth-blue);
-    border-radius: 12px;
+    background: #f5f9ff;
+    border: 1.5px solid rgba(4, 80, 168, 0.35);
+    border-radius: 10px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     letter-spacing: 0.02em;
+    transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base), transform 0.12s ease;
+}
+
+.youth-guest-btn__icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
 }
 
 .youth-guest-btn:hover,
 .youth-guest-btn:focus-visible {
-    background: var(--youth-blue);
+    background: #e8f1ff;
     border-color: var(--youth-blue);
-    color: #ffffff;
+    color: var(--youth-blue-dark, #033b7c);
+}
+
+.youth-guest-btn:active {
+    transform: translateY(1px);
+}
+
+/* Main sign-in page: scroll when the card is taller than the viewport
+   (alerts, rejection box, short laptop screens) instead of clipping it. */
+@media (min-width: 1025px) {
+    body.youth-signin-page--main {
+        height: 100vh;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+
+    body.youth-signin-page--main .youth-signin-container {
+        flex: 1 0 auto;
+        height: auto;
+        min-height: 100vh;
+        overflow: visible;
+    }
+
+    body.youth-signin-page--main .youth-signin-section {
+        overflow: visible;
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
 }
 
 .youth-login-secondary-actions {

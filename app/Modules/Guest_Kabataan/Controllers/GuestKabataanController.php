@@ -14,6 +14,8 @@ use Illuminate\View\View;
 
 class GuestKabataanController
 {
+    private const ALREADY_EMAIL_MESSAGE = 'This KK Profiling already has an email. Sign in using that email instead.';
+
     public function __construct(
         private GuestKabataanService $guest,
         private GuestKabataanClaimService $claims,
@@ -91,7 +93,7 @@ class GuestKabataanController
             return response()->json([
                 'success' => false,
                 'not_found' => true,
-                'message' => 'Walang ganitong KK Profiling data. Pakisuri ang impormasyong inilagay mo.',
+                'message' => 'Walang nahanap na KK Profiling para sa taong '.now()->year.' na tumutugma sa impormasyong inilagay mo. Ang KK Profiling lamang ngayong taon ang maaaring gamitin. Pakisuri ang mga field, o mag-sign up para sa KK Profiling ngayong taon.',
             ]);
         }
 
@@ -99,8 +101,7 @@ class GuestKabataanController
             return response()->json([
                 'success' => false,
                 'already_account' => true,
-                'message' => 'This KK Profiling already has an account. Please sign in.',
-                'sign_in_url' => route('sign-in'),
+                'message' => self::ALREADY_EMAIL_MESSAGE,
             ]);
         }
 
@@ -137,8 +138,7 @@ class GuestKabataanController
             return response()->json([
                 'success' => false,
                 'already_account' => true,
-                'message' => 'This KK Profiling already has an account. Please sign in.',
-                'sign_in_url' => route('sign-in'),
+                'message' => self::ALREADY_EMAIL_MESSAGE,
             ]);
         }
 

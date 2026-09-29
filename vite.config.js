@@ -11,6 +11,7 @@ export default defineConfig({
 
                 // Guest Kabataan
                 'app/Modules/Guest_Kabataan/assets/css/guest_kabataan.css',
+                'app/Modules/Guest_Kabataan/assets/css/guest_kabataan_security_questions.css',
                 'app/Modules/Guest_Kabataan/assets/js/guest_kabataan.js',
 
                 // Authentication

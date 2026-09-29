@@ -5,8 +5,6 @@ namespace App\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Validator;
-use Propaganistas\LaravelDisposableEmail\Facades\DisposableDomains;
-use Throwable;
 
 /**
  * RFC format + DNS domain checks via Laravel (egulias/email-validator),
@@ -32,7 +30,7 @@ class ValidEmailAddress implements ValidationRule
 
     public const MSG_REQUIRED = 'Email is required.';
 
-    public const MSG_DISPOSABLE = 'Temporary or disposable email addresses are not allowed. Please use a valid permanent email address.';
+    public const MSG_DISPOSABLE = 'Temporary or disposable email addresses are not allowed. Please use a permanent email address.';
 
     /** Minimum characters before @. */
     public const LOCAL_MIN_LENGTH = 6;
@@ -156,17 +154,12 @@ class ValidEmailAddress implements ValidationRule
         }
     }
 
+    /** The domain list is owned by propaganistas/laravel-disposable-email (`php artisan disposable:update`). */
     private function isDisposableAddress(string $email): bool
     {
-        try {
-            return ! DisposableDomains::isNotDisposable($email);
-        } catch (Throwable) {
-            $check = Validator::make(
-                ['email' => $email],
-                ['email' => ['indisposable']]
-            );
-
-            return $check->fails();
-        }
+        return Validator::make(
+            ['email' => $email],
+            ['email' => ['indisposable']]
+        )->fails();
     }
 }

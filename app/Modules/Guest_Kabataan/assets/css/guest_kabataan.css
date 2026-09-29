@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     --guest-blue: #0039a8;
     --guest-blue-dark: #002c82;
     --guest-text: #0f172a;
@@ -213,6 +213,33 @@ body.guest-kabataan-body {
     margin-top: 0;
 }
 
+.guest-kabataan-btn.guest-kabataan-btn--resend {
+    min-height: 46px;
+    background: linear-gradient(135deg, #0450a8 0%, #0b6bd6 100%);
+    box-shadow: 0 6px 16px rgba(4, 80, 168, 0.28);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.guest-kabataan-btn.guest-kabataan-btn--resend:not(:disabled):hover {
+    filter: brightness(1.06);
+    box-shadow: 0 8px 20px rgba(4, 80, 168, 0.34);
+}
+
+.guest-kabataan-btn.guest-kabataan-btn--resend:not(:disabled):active {
+    transform: translateY(1px);
+}
+
+.guest-kabataan-btn.guest-kabataan-btn--resend:focus-visible {
+    outline: 3px solid rgba(11, 107, 214, 0.4);
+    outline-offset: 2px;
+}
+
+.guest-kabataan-btn.guest-kabataan-btn--resend:disabled {
+    background: #94a3b8;
+    box-shadow: none;
+    opacity: 1;
+}
+
 .guest-kabataan-resend-timer {
     margin: 0;
     color: var(--guest-muted);
@@ -227,27 +254,36 @@ body.guest-kabataan-body {
 }
 
 .guest-kabataan-btn.is-busy {
-    gap: 8px;
+    cursor: progress;
 }
 
-.guest-kabataan-btn.is-busy::before {
+.guest-kabataan-btn.is-busy:disabled {
+    opacity: 0.9;
+}
+
+/* Fixed-width dots so the button label does not jump while animating. */
+.guest-kabataan-btn__dots {
+    display: inline-block;
+    width: 1.2em;
+    text-align: left;
+}
+
+.guest-kabataan-btn__dots::after {
     content: "";
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(255, 255, 255, 0.45);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: guest-kabataan-spin 0.7s linear infinite;
+    animation: guest-kabataan-dots 1.2s steps(4, end) infinite;
 }
 
-.guest-kabataan-btn--ghost.is-busy::before {
-    border-color: rgba(15, 23, 42, 0.2);
-    border-top-color: var(--guest-blue);
+@keyframes guest-kabataan-dots {
+    0% { content: ""; }
+    25% { content: "."; }
+    50% { content: ".."; }
+    75%, 100% { content: "..."; }
 }
 
-@keyframes guest-kabataan-spin {
-    to {
-        transform: rotate(360deg);
+@media (prefers-reduced-motion: reduce) {
+    .guest-kabataan-btn__dots::after {
+        animation: none;
+        content: "...";
     }
 }
 
@@ -694,6 +730,39 @@ body.guest-kabataan-body {
     width: min(680px, 100%);
 }
 
+.guest-kabataan-modal .guest-kabataan-notice {
+    width: min(420px, 100%);
+    padding: 24px 20px 18px;
+    text-align: center;
+}
+
+.guest-kabataan-notice__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin-bottom: 10px;
+    border-radius: 50%;
+    background: #eff6ff;
+    color: #0450a8;
+}
+
+.guest-kabataan-notice__icon svg { width: 26px; height: 26px; }
+.guest-kabataan-notice h2 { margin: 0 0 8px; font-size: 1.15rem; color: #0f172a; }
+.guest-kabataan-notice p { margin: 0 0 18px; color: #334155; line-height: 1.5; }
+
+.guest-kabataan-notice .guest-kabataan-modal__actions--confirm {
+    width: 100%;
+    margin: 0;
+}
+
+.guest-kabataan-notice .guest-kabataan-modal__actions--confirm .guest-kabataan-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+}
+
 .guest-kabataan-modal__close {
     position: sticky;
     top: 0;
@@ -764,30 +833,38 @@ body.guest-kabataan-body {
     border-color: #b91c1c;
 }
 
-.guest-kabataan-secq {
-    margin: 16px 0;
-    padding: 12px;
-    border: 1px solid var(--guest-line);
-    border-radius: 12px;
-}
-
-.guest-kabataan-secq__item {
-    padding: 8px 0;
-    border-top: 1px solid var(--guest-line);
-}
-
-.guest-kabataan-secq__pick {
+.guest-kabataan-add-email {
     display: flex;
-    gap: 8px;
-    align-items: flex-start;
-    font-weight: 700;
-}
-
-.guest-kabataan-secq__body label {
-    display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin-top: 14px;
+    padding: 12px 14px;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    background: #eff6ff;
+}
+
+.guest-kabataan-add-email p {
+    flex: 1 1 240px;
+    margin: 0;
+    color: #1e3a8a;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.guest-kabataan-add-email__btn {
+    flex: 0 0 auto;
     gap: 8px;
-    min-height: 36px;
+    white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+    .guest-kabataan-add-email__btn {
+        flex: 1 1 100%;
+    }
 }
 
 .guest-kabataan-email-shown {
