@@ -36,9 +36,19 @@
                 <form id="guestKabataanEmailSend" novalidate>
                     <p class="guest-kabataan-error" id="guestKabataanEmailError" role="alert" hidden></p>
                     <label class="guest-kabataan-email-label">Email address
-                        <input type="email" name="email" maxlength="64" autocomplete="email" required value="{{ $email }}">
+                        <input
+                            type="email"
+                            name="email"
+                            maxlength="64"
+                            autocomplete="off"
+                            spellcheck="false"
+                            placeholder="Enter your permanent email address"
+                            required
+                            value=""
+                        >
                         <span class="guest-kabataan-field-error" id="guestKabataanEmailFieldError" hidden></span>
                     </label>
+                    <p class="guest-kabataan-email-hint">Use your own permanent email. Temporary or disposable email addresses (like 10minutemail or tempmail) are not accepted.</p>
                     <button type="submit" class="guest-kabataan-btn">Send set-password link</button>
                 </form>
             </section>

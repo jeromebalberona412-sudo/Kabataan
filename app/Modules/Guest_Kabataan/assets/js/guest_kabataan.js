@@ -1066,6 +1066,53 @@ function bindGuestActivation() {
     const resendTimer = document.getElementById('guestKabataanResendTimer');
     let resendTick = null;
 
+    // Fast client-side pre-check only. The authoritative check is the server-side
+    // ValidEmailAddress rule (propaganistas/laravel-disposable-email domain list),
+    // which runs on blur and on submit no matter what the browser sends.
+    const DISPOSABLE_DOMAINS = new Set([
+        '0-mail.com', '10minutemail.com', '10minutemail.net', '20minutemail.com', '33mail.com',
+        'anonbox.net', 'anonymbox.com', 'boun.cr', 'burnermail.io', 'cool.fr.nf',
+        'correotemporal.org', 'discard.email', 'discardmail.com', 'discardmail.de', 'dispostable.com',
+        'dropmail.me', 'e4ward.com', 'email-fake.com', 'emailondeck.com', 'emailsensei.com',
+        'emailtemporanea.com', 'emailtemporanea.net', 'emailtemporar.ro', 'emailthe.net', 'emailwarden.com',
+        'fakeinbox.com', 'fakemail.net', 'fakemailgenerator.com', 'fastmailbox.net', 'filzmail.com',
+        'getairmail.com', 'getnada.com', 'grr.la', 'guerrillamail.biz', 'guerrillamail.com',
+        'guerrillamail.de', 'guerrillamail.info', 'guerrillamail.net', 'guerrillamail.org', 'harakirimail.com',
+        'inboxbear.com', 'inboxkitten.com', 'jetable.org', 'mail-temporaire.fr', 'mail7.io',
+        'mailcatch.com', 'maildrop.cc', 'mailinator.com', 'mailnesia.com', 'mailsac.com',
+        'mailtemp.info', 'meltmail.com', 'mintemail.com', 'moakt.com', 'mohmal.com',
+        'mytemp.email', 'mytrashmail.com', 'nowmymail.com', 'nwytg.net', 'one-time.email',
+        'owlymail.com', 'pookmail.com', 'receivemail.org', 'sharklasers.com', 'spam4.me',
+        'spambog.com', 'spamgourmet.com', 'spamslicer.com', 'temp-mail.io', 'temp-mail.org',
+        'tempail.com', 'tempemail.net', 'tempemail.org', 'tempinbox.com', 'tempmail.dev',
+        'tempmail.net', 'tempmail.plus', 'tempmail2.com', 'tempmailaddress.com', 'tempmailer.com',
+        'tempomail.fr', 'temporarily.de', 'temporary-mail.net', 'temporaryemail.net', 'temporaryinbox.com',
+        'thankyou2010.com', 'throwawaymail.com', 'trash-mail.com', 'trash2009.com', 'trashmail.com',
+        'trashmail.de', 'trashmail.net', 'trashmailer.com', 'tmpmail.net', 'tmpmail.org',
+        'wegwerf-emails.de', 'wegwerfadresse.de', 'wegwerfmail.de', 'wegwerfmail.net', 'yopmail.com',
+        'yopmail.fr', 'yopmail.net', 'zetmail.com',
+    ]);
+
+    function isDisposableEmail(email) {
+        const at = String(email || '').toLowerCase().lastIndexOf('@');
+        if (at < 0) {
+            return false;
+        }
+        const domain = String(email).toLowerCase().slice(at + 1).trim();
+        if (!domain || !domain.includes('.')) {
+            return false;
+        }
+        // Walk parent domains, mirroring the server rule, but never below two labels.
+        const labels = domain.split('.');
+        while (labels.length >= 2) {
+            if (DISPOSABLE_DOMAINS.has(labels.join('.'))) {
+                return true;
+            }
+            labels.shift();
+        }
+        return false;
+    }
+
     function emailLooksComplete(email) {
         const at = email.indexOf('@');
         if (at < 1 || (email.match(/@/g) || []).length !== 1) {
@@ -1129,6 +1176,9 @@ function bindGuestActivation() {
         ) {
             return 'Please enter a valid email address.';
         }
+        if (isDisposableEmail(email)) {
+            return 'Temporary or disposable email addresses are not allowed. Please use a permanent email address.';
+        }
         return '';
     }
 
@@ -1147,6 +1197,12 @@ function bindGuestActivation() {
     }
 
     const emailInput = form?.querySelector('[name="email"]');
+    // Always start from a blank field: a previously submitted email must never
+    // reappear from browser autofill, back/forward cache, or form restoration.
+    if (emailInput) {
+        emailInput.value = '';
+        emailInput.setAttribute('autocomplete', 'off');
+    }
     emailInput?.addEventListener('input', () => {
         const start = emailInput.selectionStart;
         const end = emailInput.selectionEnd;

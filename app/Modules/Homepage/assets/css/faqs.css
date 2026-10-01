@@ -70,6 +70,44 @@
     font-size: 0.95rem;
 }
 
+.homepage-body .faq-lang-toggle {
+    display: inline-flex;
+    gap: 4px;
+    margin: 14px auto 0;
+    padding: 4px;
+    background: #eef3f9;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    border-radius: 999px;
+}
+
+.homepage-body .faq-lang-btn {
+    min-width: 92px;
+    padding: 8px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: #475569;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.homepage-body .faq-lang-btn:hover {
+    color: #0b2a5b;
+}
+
+.homepage-body .faq-lang-btn.is-active {
+    background: #0450a8;
+    color: #ffffff;
+    box-shadow: 0 6px 14px rgba(4, 80, 168, 0.22);
+}
+
+.homepage-body .faq-lang-btn:focus-visible {
+    outline: 2px solid #0450a8;
+    outline-offset: 2px;
+}
+
 .homepage-body .faq-list,
 .homepage-body #faqList {
     display: grid;

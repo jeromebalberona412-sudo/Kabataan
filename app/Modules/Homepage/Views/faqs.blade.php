@@ -1,6 +1,7 @@
 <div
     class="faq-page kabataan-section"
     id="faq"
+    data-faq-language="en"
     data-faqs="@json($faqs ?? [])"
 >
     <div class="kabataan-shell">
@@ -9,6 +10,11 @@
             <h2 id="faqHeading">Frequently Asked Questions</h2>
             <p>Answers about SK OnePortal — registration, sign-in, KK Profiling, and who can use Kabataan.</p>
             <p class="hp-card-tagalog faq-heading-tagalog">Mga sagot tungkol sa SK OnePortal — registration, sign-in, KK Profiling, at kung sino ang maaaring gumamit ng Kabataan.</p>
+
+            <div class="faq-lang-toggle" role="group" aria-label="Choose FAQ language">
+                <button type="button" class="faq-lang-btn is-active" data-faq-lang="en" aria-pressed="true">English</button>
+                <button type="button" class="faq-lang-btn" data-faq-lang="tl" aria-pressed="false">Tagalog</button>
+            </div>
         </div>
 
         <div class="faq-search-bar">

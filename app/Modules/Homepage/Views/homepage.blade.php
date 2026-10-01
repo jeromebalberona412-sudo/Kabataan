@@ -91,12 +91,15 @@
             <div class="container kabataan-shell kabataan-hero-grid">
                 <div class="kabataan-hero-copy">
                     <span class="kabataan-eyebrow">SK OnePortal · Santa Cruz, Laguna</span>
-                    <h1>Mas Madali ang Pakikilahok ng Kabataan</h1>
+                    <h1>Your SK. Your Community. Your Voice.</h1>
                     <p class="kabataan-hero-text">
-                        SKOnePortal connects the Kabataan with their Sangguniang Kabataan through accessible digital services, programs, activities, and youth profiling.
+                        Dito ka updated. Dito ka involved. Dito ka kasama.
                     </p>
                     <p class="hp-hero-support">
-                        Complete your KK Profiling, discover SK programs and activities, register online, and access available services—all in one convenient portal.
+                        Explore SK programs, activities, announcements, services, and opportunities made for the Kabataan of Santa Cruz, Laguna. Complete your KK Profiling, discover what&rsquo;s happening in your community, and take part in shaping a more active and connected youth community.
+                    </p>
+                    <p class="hp-hero-tagline">
+                        Stay updated. Get involved. Be part of the movement.
                     </p>
                     <div class="kabataan-hero-actions">
                         <a href="{{ $primaryCta['href'] }}" class="kabataan-button kabataan-button-primary">{{ $primaryCta['label'] }}</a>

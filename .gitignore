@@ -24,3 +24,6 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 python/
+
+# Kilo AI development rules (local only)
+.kilocode/

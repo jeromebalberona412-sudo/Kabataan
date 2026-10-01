@@ -804,6 +804,46 @@ body.kkp-setpw-page .youth-signin-card {
     font-weight: 600;
 }
 
+/* Set-password heading + helper copy.
+   Scoped to this page so the shared sign-in card typography is untouched. */
+.kkp-setpw-page .kkp-setpw-title {
+    font-size: clamp(1.15rem, 1rem + 1.1vw, 1.4rem);
+    font-weight: 800;
+    color: var(--youth-gray-900, #0f172a);
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    margin: 0 0 0.4rem;
+    white-space: normal;
+    text-align: center;
+}
+
+.kkp-setpw-page .kkp-setpw-subtitle {
+    max-width: 30rem;
+    margin: 0 auto;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.55;
+    letter-spacing: normal;
+    text-align: center;
+    color: var(--youth-gray-700, #475569);
+}
+
+.kkp-setpw-page .kkp-setpw-subtitle strong {
+    font-weight: 700;
+    color: var(--youth-gray-900, #0f172a);
+}
+
+@media (max-width: 480px) {
+    .kkp-setpw-page .kkp-setpw-title {
+        font-size: 1.15rem;
+    }
+
+    .kkp-setpw-page .kkp-setpw-subtitle {
+        font-size: 0.85rem;
+        line-height: 1.5;
+    }
+}
+
 .kkp-setpw-field-error[hidden] {
     display: none !important;
 }
