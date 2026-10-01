@@ -49,8 +49,8 @@
         <div class="youth-signin-section">
             <div class="youth-signin-card kkp-setpw-card">
                 <div class="card-header">
-                    <h2 class="card-title">Set Your Password</h2>
-                    <p class="card-subtitle">
+                    <h2 class="card-title kkp-setpw-title">Set Your Password</h2>
+                    <p class="kkp-setpw-subtitle">
                         @if(!empty($emailVerified))
                             Your email has been verified. Create a secure password for your
                             <strong>{{ $barangay }}</strong> KK Profiling account.

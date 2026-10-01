@@ -8,6 +8,15 @@
     line-height: 1.55;
 }
 
+.hp-hero-tagline {
+    margin: 0 0 1.5rem;
+    max-width: 36rem;
+    color: var(--brand-mid, #0450a8);
+    font-size: 1.02rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
 .hp-hero-panel .kabataan-hero-panel-lead {
     color: var(--text-primary);
 }

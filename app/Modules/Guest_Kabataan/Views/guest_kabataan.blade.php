@@ -27,10 +27,25 @@
     ])
 
     <main class="guest-kabataan-main" id="guestKabataanHome" data-identity-url="{{ route('guest_kabataan.claim.identity') }}" data-claim-url="{{ route('guest_kabataan.claim') }}" data-lock-url="{{ route('guest_kabataan.claim-lock') }}" data-locked="{{ ! empty($lockStatus['locked']) ? '1' : '0' }}" data-remaining="{{ (int) ($lockStatus['remaining_seconds'] ?? 0) }}">
+        <section class="guest-kabataan-selected" aria-label="Selected barangay">
+            <span class="guest-kabataan-selected__logo" aria-hidden="true">
+                @if (! empty($barangay->logo_url))
+                    <img src="{{ $barangay->logo_url }}" alt="" loading="lazy" onerror="this.hidden=true;this.nextElementSibling.hidden=false;">
+                @endif
+                <span @if (! empty($barangay->logo_url)) hidden @endif>{{ strtoupper(mb_substr($barangay->name, 0, 1)) }}</span>
+            </span>
+            <span class="guest-kabataan-selected__copy">
+                <span class="guest-kabataan-selected__label">Selected barangay</span>
+                <strong class="guest-kabataan-selected__name" data-guest-selected-barangay>{{ $barangay->name }}</strong>
+                <span class="guest-kabataan-selected__place">{{ $barangay->municipality ?: 'Santa Cruz' }}, {{ $barangay->province ?: 'Laguna' }}</span>
+            </span>
+            <a href="{{ route('guest_kabataan.barangays') }}" class="guest-kabataan-btn guest-kabataan-btn--ghost guest-kabataan-selected__change">Change barangay</a>
+        </section>
+
         <section class="guest-kabataan-intro">
             <p class="guest-kabataan-kicker">Barangay {{ $barangay->name }}</p>
             <h1>Open programs</h1>
-            <p>These are the programs currently open in this barangay. Scholarship and sports programs use Apply. Other programs use Answer survey.</p>
+            <p>These are the programs currently open in {{ $barangay->name }}. Scholarship and sports programs use Apply. Other programs use Answer survey.</p>
             <div class="guest-kabataan-add-email">
                 <p>Already answered KK Profiling without an email? Add one so you can sign in.</p>
                 <button type="button" class="guest-kabataan-btn guest-kabataan-add-email__btn" data-guest-add-email>

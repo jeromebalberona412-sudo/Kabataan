@@ -2530,6 +2530,44 @@ function showEmailVerification(email) {
         setFieldError(confirmInput, confirmPasswordError, '');
     }
 
+    // Real-time password validation.
+    // "required" only becomes an error once the field has been interacted with, so
+    // the message disappears as soon as the user starts typing.
+    let passwordTouched = false;
+    let confirmTouched = false;
+    let submitAttempted = false;
+
+    function updatePasswordValidation() {
+        if (!passwordInput) {
+            return;
+        }
+
+        const value = passwordInput.value || '';
+
+        if (!value) {
+            setFieldError(
+                passwordInput,
+                passwordError,
+                (submitAttempted || passwordTouched) ? 'Password is required.' : '',
+            );
+            return;
+        }
+
+        const checks = validatePasswordStrength(value);
+        const allPassed = Object.values(checks).every(Boolean);
+
+        if (allPassed) {
+            setFieldError(passwordInput, passwordError, '');
+            return;
+        }
+
+        setFieldError(
+            passwordInput,
+            passwordError,
+            submitAttempted ? 'Password must satisfy all requirements.' : '',
+        );
+    }
+
     function updateConfirmMatch() {
         if (!passwordInput || !confirmInput) {
             return;
@@ -2539,7 +2577,11 @@ function showEmailVerification(email) {
         const confirmation = confirmInput.value || '';
 
         if (!confirmation) {
-            setFieldError(confirmInput, confirmPasswordError, '');
+            setFieldError(
+                confirmInput,
+                confirmPasswordError,
+                (submitAttempted || confirmTouched) ? 'Please confirm your password.' : '',
+            );
             return;
         }
 
@@ -2554,12 +2596,23 @@ function showEmailVerification(email) {
     if (passwordInput) {
         passwordInput.addEventListener('input', () => {
             updatePasswordRules();
+            updatePasswordValidation();
             updateConfirmMatch();
+        });
+
+        passwordInput.addEventListener('blur', () => {
+            passwordTouched = true;
+            updatePasswordValidation();
         });
     }
 
     if (confirmInput) {
         confirmInput.addEventListener('input', updateConfirmMatch);
+
+        confirmInput.addEventListener('blur', () => {
+            confirmTouched = true;
+            updateConfirmMatch();
+        });
     }
 
     form.addEventListener('submit', async (event) => {
@@ -2569,6 +2622,7 @@ function showEmailVerification(email) {
             return;
         }
 
+        submitAttempted = true;
         clearErrors();
 
         const password = passwordInput?.value || '';

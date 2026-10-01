@@ -195,6 +195,13 @@ body.guest-kabataan-body {
     margin-top: 16px;
 }
 
+.guest-kabataan-email-hint {
+    margin: 8px 0 0;
+    color: var(--guest-muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
 .guest-kabataan-activate .guest-kabataan-btn {
     width: 100%;
     margin-top: 14px;
@@ -307,6 +314,110 @@ body.guest-kabataan-body {
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+}
+
+/* Selected barangay banner (guest home) */
+.guest-kabataan-selected {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 0 20px;
+    padding: 14px 18px;
+    border: 1px solid var(--guest-line);
+    border-left: 4px solid var(--guest-blue);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+}
+
+.guest-kabataan-selected__logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--guest-blue);
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.guest-kabataan-selected__logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.guest-kabataan-selected__copy {
+    display: grid;
+    gap: 1px;
+    flex: 1;
+    min-width: 0;
+}
+
+.guest-kabataan-selected__label {
+    color: var(--guest-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.guest-kabataan-selected__name {
+    color: var(--guest-text);
+    font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+    font-weight: 800;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.guest-kabataan-selected__place {
+    color: var(--guest-muted);
+    font-size: 13px;
+}
+
+.guest-kabataan-selected__change {
+    width: auto;
+    margin: 0;
+    flex-shrink: 0;
+    padding: 9px 16px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+    .guest-kabataan-selected {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 13px 14px;
+        border-radius: 14px;
+    }
+
+    .guest-kabataan-selected__logo {
+        width: 42px;
+        height: 42px;
+        font-size: 1rem;
+    }
+
+    .guest-kabataan-selected__change {
+        width: 100%;
+        padding: 11px 16px;
+    }
+}
+
+@media (max-width: 380px) {
+    .guest-kabataan-selected__logo {
+        width: 38px;
+        height: 38px;
+        font-size: 0.95rem;
+    }
+
+    .guest-kabataan-selected__name {
+        font-size: 1rem;
+    }
 }
 
 .guest-kabataan-search {

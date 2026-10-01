@@ -5,6 +5,7 @@ namespace App\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\Validator;
+use Propaganistas\LaravelDisposableEmail\DisposableDomains;
 
 /**
  * RFC format + DNS domain checks via Laravel (egulias/email-validator),
@@ -138,6 +139,16 @@ class ValidEmailAddress implements ValidationRule
             return;
         }
 
+        // Disposable / temporary domains are rejected before the DNS check.
+        // The list lookup is local and deterministic, while email:dns is a slow
+        // network call that would otherwise report many throwaway providers as a
+        // generic "invalid email" before we ever reach the disposable check.
+        if ($this->isDisposableAddress($email)) {
+            $fail(self::MSG_DISPOSABLE);
+
+            return;
+        }
+
         $dns = Validator::make(
             ['email' => $email],
             ['email' => ['email:dns']]
@@ -145,21 +156,29 @@ class ValidEmailAddress implements ValidationRule
 
         if ($dns->fails()) {
             $fail(self::MSG_DOMAIN);
-
-            return;
-        }
-
-        if ($this->isDisposableAddress($email)) {
-            $fail(self::MSG_DISPOSABLE);
         }
     }
 
-    /** The domain list is owned by propaganistas/laravel-disposable-email (`php artisan disposable:update`). */
+    /**
+     * Delegates to propaganistas/laravel-disposable-email, which owns the domain
+     * list (`php artisan disposable:update`).
+     *
+     * Matching covers the exact domain, its subdomains (include_subdomains), and
+     * the resolved MX target hosts, so throwaway services that hide behind a
+     * subdomain or a mail exchanger are still caught.
+     */
     private function isDisposableAddress(string $email): bool
     {
-        return Validator::make(
-            ['email' => $email],
-            ['email' => ['indisposable']]
-        )->fails();
+        try {
+            return app(DisposableDomains::class)->isDisposable($email, true);
+        } catch (\Throwable) {
+            // Never let a list/storage problem let disposable addresses through
+            // silently: fall back to the validator rule, which is the same
+            // package resolved a different way.
+            return Validator::make(
+                ['email' => $email],
+                ['email' => ['indisposable']]
+            )->fails();
+        }
     }
 }
