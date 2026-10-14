@@ -28,6 +28,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
     let kkFieldLabels = {};
     let currentStep = 1;
     let uploadedDocuments = {};
+    let idReuseChoices = {};
     let currentPreviewDocument = null;
     let draftSavedAt = null;
 
@@ -135,6 +136,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
     function saveDraft() {
         const payload = {
             system_field_answers: getSystemFieldAnswers(),
+            id_reuse_choices: idReuseChoices,
             step: currentStep,
             savedAt: new Date().toISOString(),
         };
@@ -325,15 +327,24 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
     function renderFileCard(documentMeta) {
         const questionId = escapeHtml(documentMeta.question_id);
-        const statusText = documentMeta.status === 'uploaded' ? 'Uploaded Successfully' : (documentMeta.status || 'Uploaded');
-        const sizeText = documentMeta.size_display || formatFileSize(documentMeta.size);
+        const reused = Boolean(documentMeta.reused || documentMeta.reuse);
+        const statusText = reused
+            ? 'Using previously uploaded ID'
+            : (documentMeta.status === 'uploaded' ? 'Uploaded Successfully' : (documentMeta.status || 'Uploaded'));
+        const sizeText = reused ? 'KK Profiling' : (documentMeta.size_display || formatFileSize(documentMeta.size));
+        const isImage = global.ProgramIdReuse?.isImageMeta?.(documentMeta);
+        const badge = reused || isImage ? 'ID' : 'PDF';
+        const previewSrc = documentMeta.sides?.[0]?.preview_url || (isImage ? documentMeta.preview_url : '');
+        const icon = previewSrc
+            ? `<img src="${escapeHtml(previewSrc)}" alt="" class="gf-file-card-thumb">`
+            : `<svg class="gf-file-card-icon-svg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
 
         return `
             <div class="gf-file-uploaded-card">
                 <button type="button" class="gf-file-card" data-preview-document="${questionId}">
                     <span class="gf-file-card-icon-wrap" aria-hidden="true">
-                        <svg class="gf-file-card-icon-svg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        <span class="gf-file-card-badge">PDF</span>
+                        ${icon}
+                        <span class="gf-file-card-badge">${badge}</span>
                     </span>
                     <span class="gf-file-card-body">
                         <span class="gf-file-card-name">${escapeHtml(documentMeta.original_name)}</span>
@@ -350,19 +361,27 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
     function renderQuestionField(question, index) {
         const required = question.required ? '<span class="gf-required">*</span>' : '';
-        const requiredAttr = question.required ? 'required' : '';
         const label = escapeHtml(question.label || `Requirement ${index + 1}`);
         const questionId = escapeHtml(question.id);
+        const reusable = global.ProgramIdReuse?.reusableForQuestion?.(program, question.id);
+        const settings = global.ProgramIdReuse?.fileSettings?.(question) || {
+            accept: 'application/pdf,.pdf',
+            hint: 'Accepted: PDF only, max 5 MB',
+            dropText: 'Drag and drop PDF files here or click to browse',
+        };
+        const reuseHtml = reusable ? global.ProgramIdReuse.renderReuseBlock(question, reusable) : '';
+        const hideUpload = Boolean(reusable);
 
         return `
             <div class="gf-question gf-question-file" data-file-question-id="${question.id}">
                 <label class="gf-question-label">${label} ${required}</label>
-                <div class="gf-file-upload" data-file-upload="${question.id}">
-                    <input type="file" class="gf-file-input" accept="application/pdf,.pdf" data-question-id="${questionId}" data-question-label="${label}" ${requiredAttr}>
+                ${reuseHtml}
+                <div class="gf-file-upload" data-file-upload="${question.id}" ${hideUpload ? 'hidden' : ''}>
+                    <input type="file" class="gf-file-input" accept="${settings.accept}" data-question-id="${questionId}" data-question-label="${label}">
                     <div class="gf-file-drop-zone" data-drop-zone="${questionId}">
                         <svg class="gf-file-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <p class="gf-file-text">Drag and drop PDF files here or click to browse</p>
-                        <p class="gf-file-hint">Accepted: PDF only, max 5 MB</p>
+                        <p class="gf-file-text">${escapeHtml(settings.dropText)}</p>
+                        <p class="gf-file-hint">${escapeHtml(settings.hint)}</p>
                     </div>
                     <div class="gf-file-progress" data-file-progress="${questionId}" hidden>
                         <div class="gf-file-progress-bar" data-file-progress-bar="${questionId}"></div>
@@ -389,7 +408,44 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         `).join('');
 
         setupFileUploads();
+        bindIdReuse();
         Object.values(uploadedDocuments).forEach((doc) => renderDocumentCard(doc.question_id, doc));
+        Object.entries(idReuseChoices).forEach(([questionId, choice]) => {
+            global.ProgramIdReuse?.restoreChoice?.(shell, questionId, choice);
+        });
+    }
+
+    function bindIdReuse() {
+        getFileQuestions().forEach((question) => {
+            const reusable = global.ProgramIdReuse?.reusableForQuestion?.(program, question.id);
+            if (!reusable) return;
+            const card = shell?.querySelector(`[data-file-question-id="${question.id}"]`);
+            global.ProgramIdReuse.bind(card, question, reusable, {
+                onReuse: (questionId, payload) => {
+                    idReuseChoices[questionId] = 'reuse';
+                    uploadedDocuments[questionId] = {
+                        question_id: questionId,
+                        reuse: true,
+                        reused: true,
+                        source: 'kk_profiling',
+                        original_name: payload.document_type_label,
+                        document_type: payload.document_type,
+                        sides: payload.sides || [],
+                        preview_url: payload.sides?.[0]?.preview_url || '',
+                    };
+                    renderDocumentCard(questionId, uploadedDocuments[questionId]);
+                    saveDraft();
+                },
+                onNew: (questionId) => {
+                    idReuseChoices[questionId] = 'new';
+                    if (uploadedDocuments[questionId]?.reuse || uploadedDocuments[questionId]?.reused) {
+                        delete uploadedDocuments[questionId];
+                        showUploadArea(questionId);
+                    }
+                    saveDraft();
+                },
+            });
+        });
     }
 
     function renderDocumentCard(questionId, documentMeta) {
@@ -428,13 +484,30 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         }
     }
 
-    async function uploadPdfFile(questionId, file, questionLabel) {
-        if (file.size > MAX_FILE_BYTES) {
-            setUploadState(questionId, 'error', 'PDF file must not exceed 5 MB.');
-            return;
+    function questionById(questionId) {
+        return getFileQuestions().find((question) => String(question.id) === String(questionId));
+    }
+
+    function validateSelectedFile(question, file) {
+        const settings = global.ProgramIdReuse?.fileSettings?.(question) || { fileType: 'pdf', maxMb: 5 };
+        const maxBytes = settings.maxMb * 1024 * 1024;
+        if (file.size > maxBytes) {
+            return `File must not exceed ${settings.maxMb} MB.`;
         }
-        if (file.type !== ACCEPTED_MIME && !file.name.toLowerCase().endsWith('.pdf')) {
-            setUploadState(questionId, 'error', 'Only PDF files are allowed.');
+        const name = file.name.toLowerCase();
+        const isPdf = file.type === ACCEPTED_MIME || name.endsWith('.pdf');
+        const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png)$/.test(name);
+        if (settings.fileType === 'pdf' && !isPdf) return 'Only PDF files are allowed.';
+        if (settings.fileType === 'image' && !isImage) return 'Only JPG and PNG images are allowed.';
+        if (settings.fileType === 'pdf_or_image' && !isPdf && !isImage) return 'Only PDF, JPG, or PNG files are allowed.';
+        return '';
+    }
+
+    async function uploadPdfFile(questionId, file, questionLabel) {
+        const question = questionById(questionId);
+        const errorMessage = validateSelectedFile(question, file);
+        if (errorMessage) {
+            setUploadState(questionId, 'error', errorMessage);
             return;
         }
 
@@ -461,7 +534,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
             setUploadState(questionId, 'success');
             saveDraft();
         } catch (error) {
-            setUploadState(questionId, 'error', error.message || 'Unable to upload PDF.');
+            setUploadState(questionId, 'error', error.message || 'Unable to upload the document.');
         }
     }
 
@@ -507,7 +580,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
                 const questionId = button.getAttribute('data-replace-document');
                 if (!questionId) return;
                 delete uploadedDocuments[questionId];
+                if (idReuseChoices[questionId] === 'reuse') {
+                    idReuseChoices[questionId] = 'new';
+                    global.ProgramIdReuse?.restoreChoice?.(shell, questionId, 'new');
+                }
                 showUploadArea(questionId);
+                saveDraft();
             });
         });
     }
@@ -519,9 +597,24 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         if (!modal || !pages) return;
 
         currentPreviewDocument = documentMeta;
-        if (title) title.textContent = documentMeta.original_name || 'PDF Preview';
+        if (title) title.textContent = documentMeta.original_name || 'Document Preview';
         modal.hidden = false;
         document.body.style.overflow = 'hidden';
+
+        const imageUrls = [];
+        if (Array.isArray(documentMeta.sides)) {
+            documentMeta.sides.forEach((side) => {
+                if (side.preview_url) imageUrls.push(side.preview_url);
+            });
+        }
+        if (imageUrls.length === 0 && global.ProgramIdReuse?.isImageMeta?.(documentMeta) && documentMeta.preview_url) {
+            imageUrls.push(documentMeta.preview_url);
+        }
+        if (imageUrls.length) {
+            pages.innerHTML = imageUrls.map((url) => `<img src="${escapeHtml(url)}" alt="" class="gf-pdf-page gf-id-reuse-img">`).join('');
+            return;
+        }
+
         pages.innerHTML = '<p class="gf-pdf-loading">Loading PDF preview...</p>';
 
         try {
@@ -571,10 +664,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
             if (!question.required) return;
             if (!uploadedDocuments[question.id]) {
                 ok = false;
+                const reusable = global.ProgramIdReuse?.reusableForQuestion?.(program, question.id);
                 const error = shell?.querySelector(`[data-file-error="${question.id}"]`);
                 if (error) {
                     error.hidden = false;
-                    error.textContent = 'This field is required.';
+                    error.textContent = reusable
+                        ? 'Please reuse your previously uploaded ID or upload a new ID.'
+                        : 'This field is required.';
                 }
             }
         });
@@ -669,9 +765,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
                     <div class="gf-review-doc">
                         <div class="gf-review-doc-header">
                             <span class="gf-review-doc-title">${escapeHtml(q.label || 'Document')}</span>
-                            <span class="gf-review-doc-status ${doc ? '' : 'is-missing'}">${doc ? 'Uploaded' : 'Missing'}</span>
+                            <span class="gf-review-doc-status ${doc ? '' : 'is-missing'}">${doc ? (doc.reuse || doc.reused ? 'Using previous ID' : 'Uploaded') : 'Missing'}</span>
                         </div>
-                        ${doc ? `<button type="button" class="sch-wizard-preview-link" data-preview-document="${escapeHtml(q.id)}">Preview document</button>` : ''}
+                        ${doc ? `<button type="button" class="sch-wizard-preview-link" data-preview-document="${escapeHtml(q.id)}">${doc.reuse || doc.reused ? 'Preview ID' : 'Preview document'}</button>` : ''}
                     </div>`;
             }).join('')
             : '<p class="sch-preview-empty-section">No document uploads required.</p>';
@@ -920,6 +1016,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         global.ScholarshipSystemFields?.setProgramContext?.(program);
 
         const draft = loadDraft();
+        if (draft?.id_reuse_choices && typeof draft.id_reuse_choices === 'object') {
+            idReuseChoices = { ...draft.id_reuse_choices };
+        }
         if (draft?.savedAt) draftSavedAt = draft.savedAt;
         if (draft?.step && draft.step >= 1) {
             currentStep = Math.min(TOTAL_STEPS, draft.step);

@@ -11,12 +11,11 @@
     const slug = root.dataset.barangaySlug || '';
     const barangayName = root.dataset.barangayName || '';
     const verificationSentOnLoad = root.dataset.verificationSent === '1';
+    const supportingDocumentsRequired = root.dataset.supportingDocumentsRequired === '1';
 
     const apiBase = `/api/kkprofiling/${slug}/wizard`;
 
-    // Gemini / Groq AI ID verification on Step 2 — keep false so detect-id / OCR UI stay unused.
-    // Set to true to re-enable the existing AI scan flow below.
-    const STEP2_AI_ID_VERIFICATION_ENABLED = false;
+    const STEP2_AI_ID_VERIFICATION_ENABLED = true;
 
     const STEP_META = {
         1: {
@@ -25,7 +24,9 @@
         },
         2: {
             title: 'Supporting Documents',
-            desc: 'Optional: upload a clear ID photo now, or skip and continue. Wrong or unclear ID uploads may lead to rejection.',
+            desc: supportingDocumentsRequired
+                ? 'A valid ID is required for this profiling schedule. Upload both sides to continue.'
+                : 'Optional: upload a clear ID photo now, or skip and continue.',
         },
         3: {
             title: 'Check Your Email',
@@ -152,9 +153,9 @@
     let ocrStatusTypeTimer = null;
     let ocrLoadingPhaseIndex = 0;
     const OCR_LOADING_PHASES = [
-        { title: 'Checking your ID…', sub: 'Reading the photo' },
-        { title: 'Verifying with AI…', sub: 'Name and address check' },
-        { title: 'Almost done…', sub: 'Finalizing result' },
+        { title: 'Uploading and validating the ID…', sub: 'Please wait while we check your photos' },
+        { title: 'Comparing with Step 1…', sub: 'Matching name and details from your form' },
+        { title: 'Almost done…', sub: 'Finalizing ID validation' },
     ];
     const docErrorEl = document.getElementById('kkpWizardDocError');
     const selfieUploadPanel = document.getElementById('kkpSelfieUploadPanel');
@@ -172,6 +173,7 @@
     let restoredDocumentSides = { documentType: '', front: false, back: false };
     /** Prevents double-submit on Save/Upload & Continue and email resend. */
     let wizardNavBusy = false;
+    let wizardTurnstilePending = false;
     let emailVerifyBusy = false;
     /** Cache distinct front/back check so Upload & Continue is one pass when images are already OK. */
     let lastDistinctPairKey = '';
@@ -245,10 +247,95 @@
         }
     }
 
+    function formatFieldComparisonMessage(payload) {
+        const rows = Array.isArray(payload?.field_comparisons) ? payload.field_comparisons : [];
+        if (rows.length === 0) {
+            return '';
+        }
+
+        const blocks = rows
+            .filter((row) => row && (row.label || row.step1 || row.id))
+            .map((row) => {
+                const label = String(row.label || '').trim();
+                const step1 = String(row.step1 || '').trim();
+                const id = String(row.id || '').trim();
+                return [label, step1 ? `Step 1: ${step1}` : '', id ? `ID: ${id}` : '']
+                    .filter(Boolean)
+                    .join('\n');
+            })
+            .filter(Boolean);
+
+        if (blocks.length === 0) {
+            return '';
+        }
+
+        return `These ID details do not match your Step 1 form:\n\n${blocks.join('\n\n')}`;
+    }
+
+    function renderFieldComparisons(payload) {
+        if (!ocrFieldsEl) {
+            return false;
+        }
+
+        const rows = Array.isArray(payload?.field_comparisons) ? payload.field_comparisons : [];
+        ocrFieldsEl.innerHTML = '';
+
+        const visibleRows = rows.filter((row) => row && (row.label || row.step1 || row.id));
+        if (visibleRows.length === 0) {
+            ocrFieldsEl.hidden = true;
+            return false;
+        }
+
+        visibleRows.forEach((row) => {
+            const item = document.createElement('div');
+            item.className = 'kkp-ocr-compare-item';
+
+            const label = document.createElement('p');
+            label.className = 'kkp-ocr-compare-label';
+            label.textContent = String(row.label || 'Field').trim() || 'Field';
+            item.appendChild(label);
+
+            const grid = document.createElement('div');
+            grid.className = 'kkp-ocr-compare-grid';
+
+            const stepCell = document.createElement('div');
+            stepCell.className = 'kkp-ocr-compare-cell';
+            const stepCaption = document.createElement('span');
+            stepCaption.textContent = 'Step 1';
+            const stepValue = document.createElement('strong');
+            stepValue.textContent = String(row.step1 || '—').trim() || '—';
+            stepCell.appendChild(stepCaption);
+            stepCell.appendChild(stepValue);
+
+            const idCell = document.createElement('div');
+            idCell.className = 'kkp-ocr-compare-cell kkp-ocr-compare-cell--id';
+            const idCaption = document.createElement('span');
+            idCaption.textContent = 'ID';
+            const idValue = document.createElement('strong');
+            idValue.textContent = String(row.id || '—').trim() || '—';
+            idCell.appendChild(idCaption);
+            idCell.appendChild(idValue);
+
+            grid.appendChild(stepCell);
+            grid.appendChild(idCell);
+            item.appendChild(grid);
+            ocrFieldsEl.appendChild(item);
+        });
+
+        ocrFieldsEl.hidden = false;
+        ocrFieldsEl.removeAttribute('hidden');
+        return true;
+    }
+
     function formatOcrMismatchMessage(payload, selectedDocumentType) {
         const selectedLabel = DOC_TYPE_LABELS[selectedDocumentType] || selectedDocumentType;
         const detectedType = payload?.detected_id_type || payload?.id_type;
         const detectedLabel = formatIdTypeLabel(detectedType) || 'a different ID type';
+        const comparisonMessage = formatFieldComparisonMessage(payload);
+
+        if (comparisonMessage) {
+            return comparisonMessage;
+        }
 
         if (payload?.message) {
             return sanitizeVerificationMessage(payload.message);
@@ -342,28 +429,50 @@
             ocrLoadingSubEl.textContent = phase?.sub || '';
         }
 
-        document.querySelectorAll('.kkp-id-verify-overlay:not([hidden])').forEach((overlay) => {
-            const title = overlay.querySelector('.kkp-id-verify-overlay-title');
-            const sub = overlay.querySelector('.kkp-id-verify-overlay-sub');
+        const overlays = [
+            ...document.querySelectorAll('.kkp-id-verify-overlay:not([hidden])'),
+            document.getElementById('kkpIdVerifyScreen'),
+        ].filter(Boolean);
+
+        overlays.forEach((overlay) => {
+            if (overlay.hidden) {
+                return;
+            }
+            const title = overlay.querySelector('.kkp-id-verify-overlay-title, .kkp-wizard-ocr-loading-title');
+            const sub = overlay.querySelector('.kkp-id-verify-overlay-sub, .kkp-wizard-ocr-loading-sub');
             if (title) {
-                title.textContent = phase?.title || 'Verifying ID…';
+                title.textContent = phase?.title || 'Uploading and validating the ID…';
             }
             if (sub) {
-                sub.textContent = phase?.sub || 'Checking photo and details';
+                sub.textContent = phase?.sub || 'Please wait while we check your photos';
             }
         });
     }
 
     function setIdVerifyOverlayVisible(visible) {
+        const screen = document.getElementById('kkpIdVerifyScreen');
+        if (screen) {
+            screen.hidden = !visible;
+            screen.setAttribute('aria-hidden', visible ? 'false' : 'true');
+            if (visible) {
+                screen.removeAttribute('hidden');
+            } else {
+                screen.setAttribute('hidden', 'hidden');
+            }
+        }
+
         const activePanel = document.querySelector('.kkp-wizard-upload-panel:not([hidden])');
         document.querySelectorAll('.kkp-id-verify-overlay').forEach((overlay) => {
             const inActivePanel = Boolean(activePanel && activePanel.contains(overlay));
-            if (visible && inActivePanel) {
+            const showLocal = visible && inActivePanel && !screen;
+            if (showLocal) {
                 overlay.hidden = false;
                 overlay.removeAttribute('hidden');
+                overlay.setAttribute('aria-hidden', 'false');
             } else {
                 overlay.hidden = true;
                 overlay.setAttribute('hidden', 'hidden');
+                overlay.setAttribute('aria-hidden', 'true');
             }
         });
     }
@@ -452,7 +561,7 @@
             return;
         }
 
-        ocrPanel.classList.remove('is-error', 'is-loading', 'is-success');
+        ocrPanel.classList.remove('is-error', 'is-loading', 'is-success', 'is-warning');
 
         if (state === 'loading') {
             ocrPanel.classList.add('is-loading');
@@ -463,6 +572,8 @@
             ocrPanel.hidden = false;
             if (state === 'error') {
                 ocrPanel.classList.add('is-error');
+            } else if (state === 'warning') {
+                ocrPanel.classList.add('is-warning');
             } else if (state === 'success') {
                 ocrPanel.classList.add('is-success');
             }
@@ -472,6 +583,11 @@
 
     function isOcrAnalysisInProgress() {
         if (ocrScanInFlight) {
+            return true;
+        }
+
+        const screen = document.getElementById('kkpIdVerifyScreen');
+        if (screen && !screen.hidden) {
             return true;
         }
 
@@ -653,12 +769,15 @@
         }
 
         ocrPanel.hidden = false;
+        ocrPanel.removeAttribute('aria-hidden');
         ocrStatusEl.hidden = false;
 
         const finishSoftContinueHint = () => {
             if (ocrNoteEl) {
                 ocrNoteEl.hidden = false;
-                ocrNoteEl.textContent = 'Supporting ID upload is optional. You can continue to the next step anytime.';
+                ocrNoteEl.textContent = supportingDocumentsRequired
+                    ? 'A valid ID is required for this profiling schedule.'
+                    : 'Supporting ID upload is optional. You can continue to the next step anytime.';
             }
             updateNavButtons(currentStep);
         };
@@ -669,15 +788,36 @@
             }
             setOcrPanelState('error');
             streamOcrStatus(message);
-            // Avoid duplicate red + blue panels with the same text.
-            if (showUploadError) {
-                hideDocUploadError();
-            } else {
-                hideDocUploadError();
-            }
+            hideDocUploadError();
             showOcrRetryActions(true);
             lastOcrBlockingError = null;
             finishSoftContinueHint();
+        };
+
+        const showComparisonState = (payload) => {
+            if (ocrTitleEl) {
+                ocrTitleEl.textContent = 'ID details compared with Step 1';
+            }
+            setOcrPanelState('warning');
+            stopStatusTypewriter();
+            hideDocUploadError();
+            showOcrRetryActions(true);
+            lastOcrBlockingError = null;
+
+            const rendered = renderFieldComparisons(payload);
+            if (ocrStatusEl) {
+                ocrStatusEl.hidden = false;
+                ocrStatusEl.textContent = rendered
+                    ? 'These ID details do not match your Step 1 form. Correct the Step 1 values or upload an ID that matches.'
+                    : (formatFieldComparisonMessage(payload)
+                        || sanitizeVerificationMessage(payload?.message)
+                        || 'These ID details do not match your Step 1 form.');
+            }
+            if (ocrNoteEl) {
+                ocrNoteEl.hidden = false;
+                ocrNoteEl.textContent = 'You cannot continue to Step 3 until the highlighted fields match.';
+            }
+            updateNavButtons(currentStep);
         };
 
         // CASE C/D/E — service unavailable / timeout / quota / auth
@@ -711,32 +851,28 @@
             return;
         }
 
-        // Validation failures: wrong ID type, name mismatch, or not an ID — show the real message.
-        if (payload?.validation_error || detected === false) {
-            const mismatchMessage = formatOcrMismatchMessage(payload, selectedType)
+        const comparisonMessage = formatFieldComparisonMessage(payload);
+        const looksLikeTypeMismatch = Boolean(
+            payload?.expected_id_type
+            && payload?.detected_id_type
+            && payload.expected_id_type !== payload.detected_id_type
+            && payload.detected_id_type !== 'Unknown'
+        );
+
+        // Hard failures only: wrong ID type or not an ID. Field mismatches are notices.
+        if ((payload?.validation_error || detected === false) && (looksLikeTypeMismatch || detected === false || !comparisonMessage)) {
+            const mismatchMessage = formatOcrMismatchMessage({
+                ...payload,
+                field_comparisons: looksLikeTypeMismatch || detected === false ? [] : payload?.field_comparisons,
+            }, selectedType)
                 || sanitizeVerificationMessage(payload?.message)
                 || 'The uploaded ID could not be verified. Please check your photos and try again.';
-            const looksLikeTypeMismatch = Boolean(
-                payload?.expected_id_type
-                && payload?.detected_id_type
-                && payload.expected_id_type !== payload.detected_id_type
-            );
-            const looksLikeNameMismatch = /name mismatch|step 1 profile|does not match your step 1/i.test(
-                String(mismatchMessage || ''),
-            );
-            const looksLikeBirthdayMismatch = /birthday on the id does not match/i.test(String(mismatchMessage || ''));
-            const looksLikeSexMismatch = /sex on the id does not match/i.test(String(mismatchMessage || ''));
-            const looksLikeAddressMismatch = /address on the id does not match/i.test(String(mismatchMessage || ''));
-            const title = looksLikeNameMismatch
-                ? 'Name does not match'
-                : (looksLikeBirthdayMismatch
-                    ? 'Birthday does not match'
-                    : (looksLikeSexMismatch
-                        ? 'Sex does not match'
-                        : (looksLikeAddressMismatch
-                            ? 'Address does not match'
-                            : (looksLikeTypeMismatch ? 'Wrong ID type' : 'ID verification'))));
-            showErrorState(title, mismatchMessage);
+            showErrorState(looksLikeTypeMismatch ? 'Wrong ID type' : 'ID verification', mismatchMessage);
+            return;
+        }
+
+        if (comparisonMessage) {
+            showComparisonState(payload);
             return;
         }
 
@@ -755,7 +891,7 @@
             // Success is silent — no "ID verified / matches profiling" panel.
             if (ocrPanel) {
                 ocrPanel.hidden = true;
-                ocrPanel.classList.remove('is-error', 'is-loading', 'is-success');
+                ocrPanel.classList.remove('is-error', 'is-loading', 'is-success', 'is-warning');
             }
             if (ocrStatusEl) {
                 ocrStatusEl.textContent = '';
@@ -1264,14 +1400,31 @@
         }
     }
 
-    // Alias for existing call sites.
-    async function scanPhilippineIdIfReady() {
-        return scanIdIfReady();
+    function hasStep1IdMismatch(payload = lastOcrPayload) {
+        return Array.isArray(payload?.field_comparisons) && payload.field_comparisons.length > 0;
+    }
+
+    function revealStep1IdComparison(payload = lastOcrPayload) {
+        if (!payload) {
+            return;
+        }
+
+        lastOcrPayload = payload;
+        renderOcrFields(payload);
+        ocrPanel?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        updateNavButtons(currentStep);
     }
 
     function hasBlockingOcrError() {
-        // Only hard-block optional Step 2 for same front/back (or other invalid_upload) errors.
-        if (!lastOcrPayload || !lastOcrPayload.validation_error) {
+        if (!lastOcrPayload) {
+            return false;
+        }
+
+        if (hasStep1IdMismatch(lastOcrPayload)) {
+            return true;
+        }
+
+        if (!lastOcrPayload.validation_error) {
             return false;
         }
 
@@ -1280,11 +1433,16 @@
 
         return status === 'invalid_upload'
             || status === 'invalid_image'
+            || Boolean(lastOcrPayload.expected_id_type && lastOcrPayload.detected_id_type
+                && lastOcrPayload.expected_id_type !== lastOcrPayload.detected_id_type)
             || message.includes('front and back must be different');
     }
 
     function ocrResultIsAcceptableForContinue() {
-        // Optional step: always allow continue to Step 3.
+        if (hasStep1IdMismatch() || hasBlockingOcrError()) {
+            return false;
+        }
+
         return true;
     }
 
@@ -1835,9 +1993,6 @@
         invalidateDistinctPairCache();
         clearOcrUiState({ hidePanel: !hasCompleteDocumentUpload() });
 
-        if (hasCompleteDocumentUpload()) {
-            scanPhilippineIdIfReady();
-        }
     }
 
     function setCaptureBadge(inputId, captured) {
@@ -1992,20 +2147,8 @@
         updateNavButtons(currentStep);
 
         if (!skipScan) {
-            // New image uploaded — clear previous AI result before rescanning.
-            if (!hasCompleteDocumentUpload()) {
-                clearOcrUiState({ hidePanel: true });
-                if (ocrStatusEl && ocrPanel && hasPartialDocumentUpload()) {
-                    ocrPanel.hidden = false;
-                    ocrStatusEl.textContent = 'Front or back captured. Add the other side to verify your ID.';
-                    setOcrPanelState('ok');
-                }
-            } else {
-                lastOcrPayload = null;
-                lastOcrBlockingError = null;
-                hideDocUploadError();
-                scanIdIfReady();
-            }
+            // Wait for Upload & Continue before sending either image for validation.
+            clearOcrUiState({ hidePanel: true });
         }
     }
 
@@ -2083,7 +2226,6 @@
             }
         }
 
-        scanIdIfReady();
     }
     syncDocumentUploadPanels.lastType = '';
 
@@ -2143,9 +2285,6 @@
 
         selfieInput?.addEventListener('change', () => {
             updateFilePreview(selfieInput);
-            if (hasCompleteDocumentUpload() && PHILIPPINE_OCR_DOC_TYPES.includes(getSelectedDocumentType())) {
-                scanPhilippineIdIfReady();
-            }
         });
         bindDropzone(previewConfig.kkpSelfie?.dropzone, selfieInput);
 
@@ -2711,8 +2850,7 @@
                 address: step2.id_verification.detected_address,
                 id_number: step2.id_verification.id_number,
                 success: step2.id_verification.success,
-                validation_error: Boolean(step2.id_verification.validation_error)
-                    || !step2.id_verification.success,
+                validation_error: Boolean(step2.id_verification.validation_error),
                 verification_status: step2.id_verification.verification_status || 'success',
                 document_detected: step2.id_verification.document_detected ?? null,
                 message: step2.id_verification.message || null,
@@ -2721,6 +2859,9 @@
                 birthdate_match: step2.id_verification.birthdate_match ?? null,
                 sex_match: step2.id_verification.sex_match ?? null,
                 address_match: step2.id_verification.address_match ?? null,
+                field_comparisons: Array.isArray(step2.id_verification.field_comparisons)
+                    ? step2.id_verification.field_comparisons
+                    : [],
                 from_cache: true,
             };
             lastOcrPayload = restored;
@@ -2850,7 +2991,8 @@
         const hasSelectedFiles = hasPartialDocumentUpload();
         const analyzing = step === 2 && isOcrAnalysisInProgress();
         const sameSideBlocked = step === 2 && hasSelectedFiles && hasBlockingOcrError();
-        const navLocked = wizardNavBusy || analyzing || sameSideBlocked;
+        const requiredDocumentMissing = step === 2 && supportingDocumentsRequired && !hasCompleteDocumentUpload();
+        const navLocked = wizardNavBusy || wizardTurnstilePending || analyzing || sameSideBlocked || requiredDocumentMissing;
 
         if (navBar) {
             navBar.hidden = false;
@@ -2860,11 +3002,13 @@
 
         if (backBtn) {
             backBtn.hidden = !canGoBack;
-            backBtn.disabled = !canGoBack || wizardNavBusy || analyzing;
+            backBtn.disabled = !canGoBack || wizardNavBusy || wizardTurnstilePending || analyzing;
             backBtn.style.display = canGoBack ? '' : 'none';
             backBtn.title = analyzing
                 ? 'Please wait while your ID is being verified.'
-                : (wizardNavBusy ? 'Please wait…' : '');
+                : (wizardTurnstilePending
+                    ? 'Complete the security check to continue.'
+                    : (wizardNavBusy ? 'Please wait…' : ''));
         }
 
         if (nextBtn) {
@@ -2873,24 +3017,36 @@
             nextBtn.setAttribute('aria-disabled', navLocked ? 'true' : 'false');
             nextBtn.title = analyzing
                 ? 'Please wait while your ID is being verified.'
-                : (wizardNavBusy
+                : wizardTurnstilePending
+                    ? 'Complete the Cloudflare security check first.'
+                    : wizardNavBusy
                     ? 'Please wait…'
-                    : (sameSideBlocked
-                        ? 'Front and back must be different photos.'
-                        : ''));
+                    : (step === 2 && hasSelectedFiles && hasStep1IdMismatch())
+                        ? 'Your ID details do not match Step 1. Upload the correct ID or go back and update Step 1.'
+                        : sameSideBlocked
+                            ? 'Front and back must be different photos.'
+                            : requiredDocumentMissing
+                                ? 'Upload both sides of a valid ID to continue.'
+                                : '';
         }
 
         if (nextLabelEl) {
-            if (wizardNavBusy && step === 2) {
+            if (wizardTurnstilePending) {
+                nextLabelEl.textContent = step === 1
+                    ? (step1EmailFilled() ? 'Save & Continue' : 'Submit KK Profiling')
+                    : (hasSelectedFiles ? 'Upload & Continue' : (supportingDocumentsRequired ? 'ID Required' : 'Skip & Continue'));
+            } else if (wizardNavBusy && step === 2) {
                 nextLabelEl.textContent = hasSelectedFiles ? 'Uploading…' : 'Continuing…';
             } else if (wizardNavBusy && step === 1) {
                 nextLabelEl.textContent = step1EmailFilled() ? 'Saving…' : 'Submitting…';
             } else if (analyzing) {
-                nextLabelEl.textContent = 'Verifying ID…';
+                nextLabelEl.textContent = 'Checking ID…';
             } else if (step === 1) {
                 nextLabelEl.textContent = step1EmailFilled() ? 'Save & Continue' : 'Submit KK Profiling';
             } else if (step === 2) {
-                nextLabelEl.textContent = hasSelectedFiles ? 'Upload & Continue' : 'Skip & Continue';
+                nextLabelEl.textContent = hasSelectedFiles
+                    ? 'Upload & Continue'
+                    : (supportingDocumentsRequired ? 'ID Required' : 'Skip & Continue');
             } else {
                 nextLabelEl.textContent = 'Continue';
             }
@@ -2903,6 +3059,9 @@
 
     function setWizardNavBusy(busy) {
         wizardNavBusy = Boolean(busy);
+        if (!busy) {
+            stopOcrLoadingAnimation();
+        }
         updateNavButtons(currentStep);
     }
 
@@ -2952,16 +3111,10 @@
                 && identityFp !== lastStep1IdentityFingerprint;
             lastStep1IdentityFingerprint = identityFp;
 
-            if (hasCompleteDocumentUpload() && OCR_SCAN_DOC_TYPES.includes(getSelectedDocumentType())) {
-                if (identityChanged || !isReusableClientOcrPayload(lastOcrPayload)) {
-                    if (identityChanged) {
-                        lastOcrScanFingerprint = null;
-                        lastOcrPayload = null;
-                    }
-                    scanIdIfReady({ force: identityChanged });
-                } else {
-                    renderOcrFields(lastOcrPayload);
-                }
+            if (identityChanged) {
+                clearOcrUiState({ hidePanel: true });
+            } else if (hasCompleteDocumentUpload() && isReusableClientOcrPayload(lastOcrPayload)) {
+                renderOcrFields(lastOcrPayload);
             }
         }
 
@@ -2979,12 +3132,23 @@
 
     function applyServerErrors(errors) {
         if (!errors || typeof errors !== 'object') {
-            return;
+            return 0;
         }
 
+        let displayedErrors = 0;
         Object.entries(errors).forEach(([field, messages]) => {
             const message = Array.isArray(messages) ? messages[0] : messages;
-            const input = form?.querySelector(`[name="${field}"]`);
+
+            if (field === 'profiling_acknowledgment') {
+                if (typeof window.kkpSetProfilingAckError === 'function') {
+                    window.kkpSetProfilingAckError(message);
+                }
+                displayedErrors += 1;
+                return;
+            }
+
+            const input = form?.elements?.[field]
+                || form?.querySelector(`[name="${field}"]`);
 
             if (input) {
                 input.classList.add('kkp-input-err');
@@ -2992,8 +3156,11 @@
                 err.className = 'kkp-field-error';
                 err.textContent = message;
                 input.parentNode?.insertBefore(err, input.nextSibling);
+                displayedErrors += 1;
             }
         });
+
+        return displayedErrors;
     }
 
     async function postJson(url, body) {
@@ -3057,7 +3224,7 @@
     }
 
     async function saveStep1() {
-        if (!form || wizardNavBusy) {
+        if (!form || wizardNavBusy || wizardTurnstilePending) {
             return false;
         }
 
@@ -3083,27 +3250,38 @@
 
             const formData = new FormData(form);
             formData.append('respondent_number', root.dataset.respondentNumber || '');
-            const turnstileToken = typeof window.kkpConsumeTurnstileToken === 'function'
-                ? window.kkpConsumeTurnstileToken()
-                : '';
-            if (turnstileToken) {
-                formData.append('cf-turnstile-response', turnstileToken);
+            appendProfilingAcknowledgment(formData);
+
+            const response = await postFormData(`${apiBase}/step-1`, formData);
+            if (!response?.success || Number(response.step) !== 2) {
+                throw new Error(response?.message || 'Step 1 could not be saved. Please try again.');
             }
 
-            await postFormData(`${apiBase}/step-1`, formData);
             // Clear stale Step 2 OCR so setStep(2) rechecks against the updated Step 1 identity.
             lastOcrScanFingerprint = null;
             lastOcrPayload = null;
             await setStep(2);
             return true;
         } catch (error) {
-            applyServerErrors(error.errors);
-            if (!error.errors || Object.keys(error.errors).length === 0) {
-                alert(error.message);
+            const displayedErrors = applyServerErrors(error.errors);
+            if (displayedErrors === 0) {
+                const serverMessage = Object.values(error.errors || {}).flat().find((message) => typeof message === 'string');
+                alert(serverMessage || error.message || 'Step 1 could not be saved. Please try again.');
             }
             return false;
         } finally {
             setWizardNavBusy(false);
+        }
+    }
+
+    async function challengeWizardTurnstile() {
+        wizardTurnstilePending = true;
+        updateNavButtons(currentStep);
+        try {
+            return await getStep2TurnstileToken();
+        } finally {
+            wizardTurnstilePending = false;
+            updateNavButtons(currentStep);
         }
     }
 
@@ -3121,7 +3299,7 @@
     }
 
     async function saveStep2() {
-        if (wizardNavBusy) {
+        if (wizardNavBusy || wizardTurnstilePending) {
             return false;
         }
 
@@ -3133,19 +3311,32 @@
             showDocUploadError('Please upload both front and back images of your selected ID, or remove the files to skip this step.');
             return false;
         }
+        if (supportingDocumentsRequired && !hasFiles && !hasCompleteDocumentUpload()) {
+            showDocUploadError('This barangay requires a valid ID. Upload both sides of your ID to continue.');
+            return false;
+        }
 
-        setWizardNavBusy(true);
+        if (hasFiles && hasStep1IdMismatch()) {
+            revealStep1IdComparison();
+            return false;
+        }
 
         let turnstileToken = '';
         try {
-            turnstileToken = await getStep2TurnstileToken();
+            turnstileToken = await challengeWizardTurnstile();
         } catch (error) {
-            setWizardNavBusy(false);
+            updateNavButtons(currentStep);
             if (error?.message === 'Verification cancelled.') {
                 return false;
             }
             showDocUploadError(error?.message || 'Security verification failed. Please try again.');
             return false;
+        }
+
+        setWizardNavBusy(true);
+
+        if (hasFiles) {
+            startOcrLoadingAnimation();
         }
 
         if (!hasFiles) {
@@ -3220,6 +3411,7 @@
             && hasRestoredDocumentSide('back')
             && isReusableClientOcrPayload(lastOcrPayload)
             && !lastOcrPayload?.validation_error
+            && !hasStep1IdMismatch(lastOcrPayload)
         ) {
             try {
                 const formData = new FormData();
@@ -3234,6 +3426,9 @@
                 if (response?.ocr) {
                     lastOcrPayload = response.ocr;
                     renderOcrFields(response.ocr);
+                    if (hasStep1IdMismatch(response.ocr) || hasBlockingOcrError()) {
+                        return false;
+                    }
                 }
 
                 if (response?.form_suggestions) {
@@ -3268,6 +3463,13 @@
                     showDuplicateRegistrationModal();
                     updateNavButtons(currentStep);
                     return false;
+                }
+
+                if (error.payload?.ocr) {
+                    revealStep1IdComparison(error.payload.ocr);
+                    if (hasStep1IdMismatch(error.payload.ocr)) {
+                        return false;
+                    }
                 }
 
                 const message = friendlyUploadFailureMessage(
@@ -3370,7 +3572,9 @@
             if (response?.ocr) {
                 lastOcrPayload = response.ocr;
                 renderOcrFields(response.ocr);
-                // Soft notice only — never block Step 3 for invalid ID on this optional step.
+                if (hasStep1IdMismatch(response.ocr) || hasBlockingOcrError()) {
+                    return false;
+                }
             }
 
             if (response?.form_suggestions) {
@@ -3405,6 +3609,13 @@
                 showDuplicateRegistrationModal();
                 updateNavButtons(currentStep);
                 return false;
+            }
+
+            if (error.payload?.ocr) {
+                revealStep1IdComparison(error.payload.ocr);
+                if (hasStep1IdMismatch(error.payload.ocr)) {
+                    return false;
+                }
             }
 
             const message = friendlyUploadFailureMessage(
@@ -3654,7 +3865,7 @@
     }
 
     async function confirmSubmitWithoutEmail(securityAnswers) {
-        if (!form || wizardNavBusy) {
+        if (!form || wizardNavBusy || wizardTurnstilePending) {
             return;
         }
 
@@ -3669,35 +3880,46 @@
         }
 
         setNoEmailModalOpen(false);
-        setWizardNavBusy(true);
         let retryMessage = null;
         let shouldRetry = false;
+        let turnstileToken = '';
 
         try {
-            let turnstileToken = '';
-            try {
-                turnstileToken = await getStep2TurnstileToken();
-            } catch (error) {
-                shouldRetry = true;
-                if (error?.message !== 'Verification cancelled.') {
-                    alert(error?.message || 'Security verification failed. Please try again.');
+            turnstileToken = await challengeWizardTurnstile();
+        } catch (error) {
+            shouldRetry = true;
+            updateNavButtons(currentStep);
+            if (error?.message !== 'Verification cancelled.') {
+                alert(error?.message || 'Security verification failed. Please try again.');
+            }
+        }
+
+        if (shouldRetry) {
+            if (typeof window.kkpReopenSecurityQuestions === 'function') {
+                const answers = await window.kkpReopenSecurityQuestions(retryMessage || '');
+                if (answers) {
+                    confirmSubmitWithoutEmail(answers);
                 }
             }
+            return;
+        }
 
-            if (!shouldRetry) {
-                syncHiddenCheckboxFields();
-                const formData = new FormData(form);
-                formData.set('email', '');
-                formData.append('respondent_number', root.dataset.respondentNumber || '');
-                appendSecurityAnswers(formData, securityAnswers);
-                if (turnstileToken) {
-                    formData.append('cf-turnstile-response', turnstileToken);
-                }
+        setWizardNavBusy(true);
 
-                await postFormData(`${apiBase}/submit-without-email`, formData);
-                showRegistrationCompleteState(false, { withoutEmail: true });
-                return;
+        try {
+            syncHiddenCheckboxFields();
+            const formData = new FormData(form);
+            formData.set('email', '');
+            formData.append('respondent_number', root.dataset.respondentNumber || '');
+            appendProfilingAcknowledgment(formData);
+            appendSecurityAnswers(formData, securityAnswers);
+            if (turnstileToken) {
+                formData.append('cf-turnstile-response', turnstileToken);
             }
+
+            await postFormData(`${apiBase}/submit-without-email`, formData);
+            showRegistrationCompleteState(false, { withoutEmail: true });
+            return;
         } catch (error) {
             applyServerErrors(error.errors);
             const securityMessage = error.errors?.security_questions?.[0] || '';
@@ -3824,13 +4046,18 @@
     }
 
     async function handleNext() {
-        if (wizardNavBusy) {
+        if (wizardNavBusy || wizardTurnstilePending) {
             return;
         }
 
         if (currentStep === 2 && isOcrAnalysisInProgress()) {
             showDocUploadError('Please wait — your ID is still being verified.');
             ocrPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+        }
+
+        if (currentStep === 2 && hasStep1IdMismatch()) {
+            revealStep1IdComparison();
             return;
         }
 
@@ -3889,6 +4116,9 @@
     if (nextBtn) {
         nextBtn.addEventListener('click', handleNext);
     }
+    window.addEventListener('kkp:wizard-submit', () => {
+        void handleNext();
+    });
 
     const step1EmailInput = form?.querySelector('input[name="email"]');
     if (step1EmailInput) {
@@ -3906,7 +4136,9 @@
         backBtn.addEventListener('click', handleBack);
     }
 
-    let serverHasDraft = true;
+    let serverHasDraft = false;
+    let serverHasStep1 = false;
+    let serverStep2Completed = false;
 
     async function restoreDraftState() {
         try {
@@ -3928,9 +4160,12 @@
             }
 
             if (!draft) {
-                serverHasDraft = false;
                 return;
             }
+
+            serverHasDraft = true;
+            serverHasStep1 = Boolean(draft.has_step1);
+            serverStep2Completed = Boolean(draft.has_completed_step2);
 
             if (draft.email && displayEmail) {
                 displayEmail.textContent = draft.email;
@@ -3953,7 +4188,7 @@
                 restoreStep2Documents(draft.step2);
             }
         } catch (error) {
-            // Non-blocking
+            serverHasDraft = false;
         }
     }
 
@@ -4143,6 +4378,15 @@
             if (clearDraftCancelBtn) {
                 clearDraftCancelBtn.disabled = false;
             }
+        }
+    }
+
+    function appendProfilingAcknowledgment(formData) {
+        const ack = document.getElementById('kkpProfilingAcknowledgment');
+        if (ack?.checked) {
+            formData.set('profiling_acknowledgment', ack.value || '1');
+        } else {
+            formData.delete('profiling_acknowledgment');
         }
     }
 
@@ -4452,7 +4696,7 @@
         await restoreDraftState();
         suppressStep1Autosave = false;
 
-        if (!serverHasDraft && initialStep <= 1) {
+        if (!serverHasDraft) {
             await setStep(1, { skipAutoSend: true, skipRemotePersist: true });
             persistWizardStepLocally(1);
             return;
@@ -4460,7 +4704,11 @@
 
         const serverEmailError = root.dataset.emailError;
 
-        if (serverEmailError) {
+        if (
+            serverEmailError
+            && serverStep2Completed
+            && (!supportingDocumentsRequired || hasCompleteDocumentUpload())
+        ) {
             if (verificationSentOnLoad) {
                 verificationSent = true;
                 root.dataset.verificationSent = '1';
@@ -4475,7 +4723,11 @@
         // Prefer the highest trusted step among local storage, draft, and blade initial step.
         const draftStep = restoredStep || initialStep;
         const localStep = storedStep || draftStep;
-        const targetStep = Math.max(1, Math.min(3, Math.max(draftStep, localStep)));
+        const requestedStep = Math.max(1, Math.min(3, Math.max(draftStep, localStep)));
+        const canOpenStep3 = serverStep2Completed
+            && (!supportingDocumentsRequired || hasCompleteDocumentUpload());
+        const highestAllowedStep = canOpenStep3 ? 3 : (serverHasStep1 ? 2 : 1);
+        const targetStep = Math.min(requestedStep, highestAllowedStep);
         const skipAutoSendOnStep3 = targetStep === 3 && (verificationSent || verificationSentOnLoad);
 
         await setStep(targetStep, {

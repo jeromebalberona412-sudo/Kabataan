@@ -23,6 +23,7 @@
         'app/Modules/Dashboard/assets/css/dashboard.css',
         'app/Modules/Programs/assets/js/scholarship-system-fields.js',
         'app/Modules/Programs/assets/js/scholarship_application_preview.js',
+        'app/Modules/Programs/assets/js/program-id-reuse.js',
         'app/Modules/Programs/assets/js/scholarship_apply_wizard.js',
         'app/Modules/Programs/assets/js/scholarship_landing.js',
     ])

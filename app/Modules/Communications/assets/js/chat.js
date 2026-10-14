@@ -1918,7 +1918,11 @@ import './communication.js';
             renderConversations('');
         }
         clearHeaderUnreadForConversation(id);
-        Comms.api(Comms.route(routes.read, id), { method: 'POST', body: '{}' }).catch(function () {});
+        Comms.api(Comms.route(routes.read, id), { method: 'POST', body: '{}' }).then(function (data) {
+            if (data && typeof data.unread_count === 'number' && window.CommsRealtime && typeof window.CommsRealtime.updateHeaderBadge === 'function') {
+                window.CommsRealtime.updateHeaderBadge(data.unread_count);
+            }
+        }).catch(function () {});
 
         var convPromise = Comms.api(Comms.route(routes.showConversation, id));
         var msgPromise = Comms.api(Comms.route(routes.messages, id));

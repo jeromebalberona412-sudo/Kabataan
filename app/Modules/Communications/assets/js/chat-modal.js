@@ -2520,6 +2520,12 @@ function markHeaderConversationRead(conversationId) {
             'X-CSRF-TOKEN': getCommsCsrfToken()
         },
         credentials: 'same-origin'
+    }).then(function (response) {
+        return response.ok ? response.json() : null;
+    }).then(function (data) {
+        if (data && typeof data.unread_count === 'number' && window.CommsRealtime && typeof window.CommsRealtime.updateHeaderBadge === 'function') {
+            window.CommsRealtime.updateHeaderBadge(data.unread_count);
+        }
     }).catch(function () { /* ignore */ });
 }
 

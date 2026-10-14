@@ -70,6 +70,8 @@
 
 
 
+
+
                     {{-- -- I. PROFILE -- --}}
 
                     <div class="kkp-section-heading">
@@ -291,9 +293,9 @@
 
                             <div class="kkp-inline-pair">
 
-                                <label class="kkp-inline-label">Contact #: <span class="kkp-required">*</span></label>
+                                <label class="kkp-inline-label">Contact #: <span class="kkp-optional-label">(Optional)</span></label>
 
-                                <input type="tel" name="contact_number" id="kkpContactNumber" class="kkp-uline kkp-uline-med" placeholder="09XXXXXXXXX" inputmode="numeric" pattern="09[0-9]{9}" maxlength="11" autocomplete="tel" required>
+                                <input type="tel" name="contact_number" id="kkpContactNumber" class="kkp-uline kkp-uline-med" placeholder="09XXXXXXXXX" inputmode="numeric" pattern="09[0-9]{9}" maxlength="11" autocomplete="tel">
 
                             </div>
 
@@ -659,6 +661,12 @@
 
 
 
+                    @if (empty($hideProfilingAcknowledgment))
+                        @include('kkprofiling::partials.kk-profiling-acknowledgment', [
+                            'acknowledgmentClass' => 'kkp-acknowledgment-wrapper',
+                        ])
+                    @endif
+
                     {{-- -- SUBMIT -- --}}
 
                     <div class="kkp-submit-wrapper">
@@ -674,4 +682,3 @@
                         </button>
 
                     </div>
-

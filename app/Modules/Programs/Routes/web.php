@@ -11,6 +11,7 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::post('/api/kabataan/programs/applications', [ProgramController::class, 'submitApplication'])->name('kabataan.programs.applications.store');
     Route::post('/api/kabataan/programs/applications/{id}/cancel', [ProgramController::class, 'cancelApplication'])->name('kabataan.programs.applications.cancel');
     Route::post('/api/kabataan/programs/documents/upload', [ProgramController::class, 'uploadDocument'])->name('kabataan.programs.documents.upload');
+    Route::get('/api/kabataan/programs/kk-id/{side}', [ProgramController::class, 'showKkId'])->name('kabataan.programs.kk-id.show');
     Route::get('/api/kabataan/programs/documents/{scheduleProgramId}/{questionId}', [ProgramController::class, 'showDocument'])->name('kabataan.programs.documents.show');
 
     Route::get('/api/kabataan/programs/surveys/{id}', [ProgramController::class, 'showSurvey'])->name('kabataan.programs.surveys.show')->whereNumber('id');

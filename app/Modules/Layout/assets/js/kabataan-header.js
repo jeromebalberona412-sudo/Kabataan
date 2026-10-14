@@ -460,8 +460,8 @@ import '../../../Communications/assets/js/chat-modal.js';
             });
         }
 
-        const unreadTotal = items.reduce(function (sum, c) { return sum + Number(c.unread_count || 0); }, 0);
-        if (pill) {
+        if (!(window.CommsRealtime && typeof window.CommsRealtime.updateHeaderBadge === 'function') && pill) {
+            const unreadTotal = items.reduce(function (sum, c) { return sum + Number(c.unread_count || 0); }, 0);
             pill.style.display = unreadTotal > 0 ? '' : 'none';
             pill.textContent = unreadTotal > 99 ? '99+' : String(unreadTotal);
         }
@@ -632,7 +632,9 @@ import '../../../Communications/assets/js/chat-modal.js';
         }).catch(function () {});
     }
 
-    setInterval(refreshUnreadBadge, 30000);
+    if (!(window.CommsRealtime && typeof window.CommsRealtime.refreshUnread === 'function')) {
+        setInterval(refreshUnreadBadge, 30000);
+    }
 })();
 
 (function wireKabataanPageInteractionRestore() {

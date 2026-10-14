@@ -20,6 +20,7 @@
         'app/Modules/Authentication/assets/css/turnstile-gate.css',
         'app/Modules/Authentication/assets/js/turnstile-gate.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
+        'app/Modules/KKProfiling/assets/js/kkprofiling-terms.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling-security-questions.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling-wizard.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling-id-camera.js',
@@ -66,6 +67,7 @@
                 data-barangay-name="{{ $barangay }}"
                 data-respondent-number="{{ $respondentNumber ?? '' }}"
                 data-initial-step="{{ $kkpInitialStep }}"
+                data-supporting-documents-required="{{ !empty($supportingDocumentsRequired) ? '1' : '0' }}"
                 data-verification-sent="{{ ($verificationSent ?? false) ? '1' : '0' }}"
                 data-registration-complete="{{ ($registrationComplete ?? false) ? '1' : '0' }}"
                 data-auto-approved="{{ ($registrationAutoApproved ?? false) ? '1' : '0' }}"
@@ -101,13 +103,14 @@
                                             'submitLabel' => 'Submit KK Profiling',
                                             'barangayLogoUrl' => $barangayLogoUrl ?? null,
                                             'barangayZones' => $barangayZones ?? collect(),
+                                            'hideProfilingAcknowledgment' => true,
                                         ])
                                     </form>
                                 </div>
                             </div>
                         </section>
 
-                        {{-- STEP 2: Supporting Documents (optional) — normal responsive layout --}}
+                        {{-- STEP 2: Supporting Documents — normal responsive layout --}}
                         @include('kkprofiling::partials.wizard.step-documents', ['kkpInitialStep' => $kkpInitialStep])
 
                         {{-- STEP 3: Email Verification + Account Setup --}}
@@ -118,11 +121,15 @@
                     </div>
                 </div>
 
-                <div class="kkp-wizard-nav" id="kkpWizardNav">
+                <div class="kkp-wizard-nav {{ ($kkpInitialStep ?? 1) === 1 ? 'kkp-wizard-nav--step1' : '' }}" id="kkpWizardNav">
                     <button type="button" class="kkp-wizard-btn kkp-wizard-btn-secondary" id="kkpWizardBackBtn" hidden>
                         <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                         Back
                     </button>
+                    @include('kkprofiling::partials.kk-profiling-acknowledgment', [
+                        'acknowledgmentFormId' => 'kkProfilingForm',
+                        'acknowledgmentClass' => 'kkp-wizard-acknowledgment',
+                    ])
                     <div class="kkp-wizard-nav-actions">
                         <button type="button" class="kkp-wizard-btn kkp-wizard-btn-primary" id="kkpWizardNextBtn">
                             <span id="kkpWizardNextLabel">Submit KK Profiling</span>
@@ -135,12 +142,33 @@
         </div>
     </main>
 
+    @include('kkprofiling::partials.kk-profiling-terms-modal')
     @include('kkprofiling::partials.kk-profiling-no-email-modal')
     @include('kkprofiling::partials.kk-profiling-security-questions')
     @include('kkprofiling::partials.kk-profiling-signature-modals')
     @include('kkprofiling::partials.kk-profiling-clear-draft-modal')
     @include('kkprofiling::partials.kk-profiling-long-name-modal')
     @include('kkprofiling::partials.kk-profiling-duplicate-modal')
+
+    <div
+        class="kkp-id-verify-screen"
+        id="kkpIdVerifyScreen"
+        hidden
+        aria-hidden="true"
+        role="alertdialog"
+        aria-live="assertive"
+        aria-labelledby="kkpIdVerifyScreenTitle"
+        aria-describedby="kkpIdVerifyScreenSub"
+    >
+        <div class="kkp-id-verify-screen-card">
+            <span class="kkp-wizard-ocr-spinner" aria-hidden="true"></span>
+            <p class="kkp-id-verify-overlay-title kkp-wizard-ocr-loading-title" id="kkpIdVerifyScreenTitle">Uploading and validating the ID…</p>
+            <p class="kkp-id-verify-overlay-sub kkp-wizard-ocr-loading-sub" id="kkpIdVerifyScreenSub">Please wait while we check your photos</p>
+            <div class="kkp-wizard-ocr-progress" aria-hidden="true">
+                <span class="kkp-wizard-ocr-progress-bar"></span>
+            </div>
+        </div>
+    </div>
 
     <div class="kkp-reg-success-overlay" id="kkpRegSuccessModal" @if(empty($registrationComplete ?? false)) hidden @endif aria-hidden="{{ ($registrationComplete ?? false) ? 'false' : 'true' }}">
         <div class="kkp-reg-success-modal" role="dialog" aria-labelledby="kkpRegSuccessTitle" aria-modal="true">

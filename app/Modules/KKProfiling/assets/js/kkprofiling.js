@@ -1543,8 +1543,16 @@ window.validateKkProfilingForm = async function (options = {}) {
         || document.getElementById('kkProfilingUpdateForm')?.dataset?.emailLocked === '1';
 
     // ── Clear previous errors ──
-    document.querySelectorAll('.kkp-field-error').forEach(el => el.remove());
+    document.querySelectorAll('.kkp-field-error').forEach((el) => {
+        if (el.id === 'kkpProfilingAcknowledgmentError') {
+            el.hidden = true;
+            el.textContent = '';
+            return;
+        }
+        el.remove();
+    });
     document.querySelectorAll('.kkp-input-err').forEach(el => el.classList.remove('kkp-input-err'));
+    document.getElementById('kkpProfilingAcknowledgmentWrap')?.classList.remove('is-invalid');
 
     const errors = [];
 
@@ -1729,7 +1737,7 @@ window.validateKkProfilingForm = async function (options = {}) {
 
     // ── 8. Contact # ──
     const contact = document.querySelector('input[name="contact_number"]');
-    const contactErr = kkpValidateContact(contact?.value || '', true);
+    const contactErr = kkpValidateContact(contact?.value || '', false);
     if (contactErr) {
         errors.push(contactErr);
         fieldError(contact, contactErr);
@@ -1839,11 +1847,30 @@ window.validateKkProfilingForm = async function (options = {}) {
         }
     }
 
+    // ── Validate profiling acknowledgment checkbox ──
+    const acknowledgmentCheckbox = document.getElementById('kkpProfilingAcknowledgment')
+        || document.querySelector('input[name="profiling_acknowledgment"]');
+    if (acknowledgmentCheckbox && !acknowledgmentCheckbox.checked) {
+        const ackMessage = window.kkpProfilingAckMessage
+            || 'You must agree to the KK Profiling Terms and Conditions before submitting.';
+        errors.push(ackMessage);
+        if (typeof window.kkpSetProfilingAckError === 'function') {
+            window.kkpSetProfilingAckError(ackMessage);
+        } else {
+            fieldError(acknowledgmentCheckbox, ackMessage);
+        }
+    } else if (typeof window.kkpClearProfilingAckError === 'function') {
+        window.kkpClearProfilingAckError();
+    }
+
     // ── If errors, scroll to first error and stop ──
     if (errors.length > 0) {
-        const firstErr = document.querySelector('.kkp-field-error, .kkp-demo-block-error, #kkpSignatureStatus.is-invalid');
+        const firstErr = Array.from(document.querySelectorAll('.kkp-field-error, .kkp-demo-block-error, #kkpSignatureStatus.is-invalid'))
+            .find((el) => !el.hidden && (el.textContent || '').trim() !== '');
         if (firstErr) {
             firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            acknowledgmentCheckbox?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         return false;
     }
@@ -1901,11 +1928,12 @@ window.handleFormSubmit = async function (event) {
     const form = document.getElementById('kkProfilingForm');
     const isWizardMode = form?.dataset?.wizardMode === '1';
 
-    if (!await window.validateKkProfilingForm()) {
+    if (isWizardMode) {
+        window.dispatchEvent(new CustomEvent('kkp:wizard-submit'));
         return false;
     }
 
-    if (isWizardMode) {
+    if (!await window.validateKkProfilingForm()) {
         return false;
     }
 

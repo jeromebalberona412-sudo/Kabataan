@@ -8,13 +8,15 @@ use App\Modules\Programs\Services\KabataanProgramEvaluationService;
 use App\Modules\Programs\Services\KabataanProgramService;
 use App\Modules\Programs\Services\KabataanProgramSurveyService;
 use App\Modules\Programs\Services\ProgramDocumentService;
+use App\Modules\Programs\Services\ProgramIdReuseService;
+use App\Support\SupportingDocumentTypes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class ProgramController extends Controller
 {
@@ -23,6 +25,7 @@ class ProgramController extends Controller
         private readonly ProgramDocumentService $documentService,
         private readonly KabataanProgramSurveyService $surveyService,
         private readonly KabataanProgramEvaluationService $evaluationService,
+        private readonly ProgramIdReuseService $idReuseService,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -72,29 +75,66 @@ class ProgramController extends Controller
         $validated = $request->validate([
             'schedule_program_id' => ['required', 'integer'],
             'question_id' => ['required', 'string', 'max:100'],
-            'file' => ['required', 'file', 'mimes:pdf', 'mimetypes:application/pdf', 'max:'.ProgramDocumentService::MAX_FILE_SIZE_KB],
+            'file' => ['required', 'file', 'max:10240'],
         ]);
 
         $user = Auth::user();
+        $program = $this->programService->getScheduleProgramForUser((int) $validated['schedule_program_id'], $user);
+        if ($program === null) {
+            return response()->json(['message' => 'Program not found.'], 404);
+        }
+
+        $question = collect($program['custom_questions'] ?? [])
+            ->first(fn ($item) => is_array($item) && (string) ($item['id'] ?? '') === (string) $validated['question_id']);
+
+        if (! is_array($question) || ($question['type'] ?? '') !== 'file') {
+            throw ValidationException::withMessages([
+                'question_id' => ['This program does not accept a file for the selected requirement.'],
+            ]);
+        }
+
+        $fileType = (string) ($question['file_type'] ?? 'pdf');
+        $maxSizeMb = max(1, min(10, (int) ($question['max_size_mb'] ?? 5)));
+        $maxSizeKb = $maxSizeMb * 1024;
+
+        $this->documentService->assertValidUpload($request->file('file'), $fileType, $maxSizeKb);
+
         $document = $this->documentService->uploadDraft(
             $user,
             (int) $validated['schedule_program_id'],
             $validated['question_id'],
             $request->file('file'),
+            $fileType,
+            $maxSizeKb,
         );
 
         return response()->json([
-            'message' => 'PDF uploaded successfully.',
+            'message' => 'Document uploaded successfully.',
             'document' => $document,
         ]);
     }
 
-    public function showDocument(Request $request, int $scheduleProgramId, string $questionId): StreamedResponse
+    public function showDocument(Request $request, int $scheduleProgramId, string $questionId): Response
     {
         $user = Auth::user();
         $download = $request->boolean('download');
 
         return $this->documentService->resolveDocumentForUser($user, $scheduleProgramId, $questionId, $download);
+    }
+
+    public function showKkId(Request $request, string $side): Response
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            abort(401);
+        }
+
+        $side = strtolower($side);
+        if (! in_array($side, SupportingDocumentTypes::sides(), true)) {
+            abort(404);
+        }
+
+        return $this->idReuseService->streamOwnedId($user, $side, $request->boolean('download'));
     }
 
     public function cancelApplication(Request $request, int $id): JsonResponse

@@ -159,6 +159,7 @@ class PhilippineIdDetectionService
         $requireNameSignal = (bool) config('ocr.require_name_signal_for_success', true);
 
         $validationError = (bool) ($payload['validation_error'] ?? false);
+        $fieldComparisons = null;
         $documentDetectedRaw = $payload['document_detected'] ?? null;
         $documentDetectedNormalized = $this->normalizeDocumentDetectedValue($documentDetectedRaw);
         $verificationStatus = strtolower((string) ($payload['verification_status'] ?? ''));
@@ -200,50 +201,21 @@ class PhilippineIdDetectionService
                 }
             }
         } elseif ($documentDetectedNormalized === true && $hasFormName && $requireNameSignal) {
-            // Compare overlapping Step 1 ↔ ID fields only when both sides have data.
-            if ($detectedName === '') {
-                $success = false;
-                $needsReview = false;
-                $validationError = true;
-                $message = 'We could not read the name on this ID. Please upload a clearer front photo of your own ID that matches your Step 1 name ("'.$formFullName.'").';
-            } elseif (! $nameMatch) {
-                $success = false;
-                $needsReview = false;
-                $validationError = true;
-                $idLabel = $detectedName !== '' ? $detectedName : 'the name on the ID';
-                $message = 'Name mismatch. Your Step 1 profile is "'.$formFullName.'" but the ID shows "'.$idLabel.'". Please upload your own ID or correct your profiling details.';
-            } elseif ($hasFormBirthday && $hasDetectedBirthday && ! $birthdateMatch) {
-                $success = false;
-                $needsReview = false;
-                $validationError = true;
-                $message = 'Birthday on the ID does not match your Step 1 birthday. Please upload your own ID or correct your profiling details.';
-            } elseif ($sexMatch === false) {
-                $success = false;
-                $needsReview = false;
-                $validationError = true;
-                $message = 'Sex on the ID does not match your Step 1 sex. Please upload your own ID or correct your profiling details.';
-            } elseif ($addressMatch === false) {
-                $success = false;
-                $needsReview = false;
-                $validationError = true;
-                $message = 'Address on the ID does not match Santa Cruz, Laguna (or your Step 1 barangay/purok). Please upload your own local ID or correct your profiling details.';
-            } else {
-                $acceptFloor = max(0.40, $minConfidence - 0.05);
-                $hasIdText = $rawText !== '' && $this->ocrService->looksLikeSupportingIdText($rawText);
-                $identityOk = $nameMatch && ($hasIdText || $confidence >= $acceptFloor || $detectedName !== '');
+            $fieldComparisons = $this->buildFieldComparisons($payload, $registrationFields, $form);
+            $acceptFloor = max(0.40, $minConfidence - 0.05);
+            $hasIdText = $rawText !== '' && $this->ocrService->looksLikeSupportingIdText($rawText);
+            $identityOk = $hasIdText || $confidence >= $acceptFloor || $detectedName !== '';
 
-                if ($identityOk) {
-                    $confidence = max($confidence, ($birthdateMatch || $sexMatch === true || $addressMatch === true) ? 0.78 : 0.72);
-                    $success = true;
-                    $needsReview = $confidence < 0.8;
-                    // Keep success quiet in the UI — mismatches carry the messages.
-                    $message = null;
-                } else {
-                    $success = false;
-                    $needsReview = false;
-                    $validationError = true;
-                    $message = 'We could not confidently match your Step 1 name ("'.$formFullName.'") to this ID. Please upload a clearer front and back photo of your own ID.';
-                }
+            if ($identityOk) {
+                $confidence = max($confidence, ($birthdateMatch || $sexMatch === true || $addressMatch === true) ? 0.78 : 0.72);
+                $success = true;
+                $needsReview = $confidence < 0.8 || $fieldComparisons !== [];
+                $message = $this->formatFieldComparisonMessage($fieldComparisons);
+            } else {
+                $success = true;
+                $needsReview = true;
+                $validationError = false;
+                $message = $this->formatFieldComparisonMessage($fieldComparisons);
             }
         } elseif (
             $documentDetectedNormalized === true
@@ -273,6 +245,21 @@ class PhilippineIdDetectionService
             ? 'yes'
             : ($documentDetectedNormalized === false ? 'no' : null);
 
+        $fieldComparisons = is_array($fieldComparisons)
+            ? $fieldComparisons
+            : ($documentDetectedNormalized === true
+                ? $this->buildFieldComparisons($payload, $registrationFields, $form)
+                : []);
+        if ($fieldComparisons !== []) {
+            $validationError = true;
+            $success = false;
+            $needsReview = true;
+            $comparisonMessage = $this->formatFieldComparisonMessage($fieldComparisons);
+            if ($comparisonMessage) {
+                $message = $comparisonMessage;
+            }
+        }
+
         return [
             'success' => $success,
             'source' => 'philippine_id_ocr_v1',
@@ -289,6 +276,7 @@ class PhilippineIdDetectionService
             'birthdate_match' => $birthdateMatch,
             'sex_match' => $sexMatch,
             'address_match' => $addressMatch,
+            'field_comparisons' => $fieldComparisons,
             'form_suggestions' => $formSuggestions,
             'needs_review' => $validationError ? false : ($needsReview || ! $success),
             'verification_status' => $verificationStatus !== '' ? $verificationStatus : 'success',
@@ -657,6 +645,166 @@ class PhilippineIdDetectionService
             return Carbon::parse($registered)->isSameDay(Carbon::parse($detected));
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+    /**
+     * Compare only fields that exist on both Step 1 and the ID.
+     * Missing ID values are skipped — they are not mismatches.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $registrationFields
+     * @param  array{first?: string, middle?: string, last?: string}  $form
+     * @return list<array{label: string, step1: string, id: string}>
+     */
+    private function buildFieldComparisons(array $payload, array $registrationFields, array $form): array
+    {
+        $parsed = $this->nameMatcher->parseOcrName(
+            trim((string) ($payload['full_name'] ?? '')),
+            $form,
+        );
+        $idFirst = $this->normalizeCompareValue(
+            (string) ($payload['given_name'] ?? ($parsed['first'] ?? ''))
+        );
+        $idMiddle = $this->normalizeCompareValue(
+            (string) ($payload['middle_name'] ?? ($parsed['middle'] ?? ''))
+        );
+        $idLast = $this->normalizeCompareValue(
+            (string) ($payload['surname'] ?? ($parsed['last'] ?? ''))
+        );
+
+        $comparisons = [];
+        $this->pushFieldComparison($comparisons, 'First Name', (string) ($form['first'] ?? ''), $idFirst);
+        $this->pushFieldComparison($comparisons, 'Middle Name', (string) ($form['middle'] ?? ''), $idMiddle);
+        $this->pushFieldComparison($comparisons, 'Surname', (string) ($form['last'] ?? ''), $idLast);
+
+        $formBirthday = trim((string) ($registrationFields['birthday'] ?? ''));
+        $idBirthday = trim((string) ($payload['birthdate'] ?? ($payload['date_of_birth'] ?? '')));
+        if ($formBirthday !== '' && $idBirthday !== '' && ! $this->datesMatch($formBirthday, $idBirthday)) {
+            $comparisons[] = [
+                'label' => 'Birthday',
+                'step1' => $this->displayDate($formBirthday),
+                'id' => $this->displayDate($idBirthday),
+            ];
+        }
+
+        $formAge = trim((string) ($registrationFields['age'] ?? ''));
+        $idAge = $this->ageFromBirthday($idBirthday);
+        if ($formAge !== '' && $idAge !== '' && (int) $formAge !== (int) $idAge) {
+            $comparisons[] = [
+                'label' => 'Age',
+                'step1' => $formAge,
+                'id' => $idAge,
+            ];
+        }
+
+        $formSex = $this->normalizeSexValue($registrationFields['sex'] ?? null);
+        $idSex = $this->normalizeSexValue($payload['sex'] ?? ($payload['detected_sex'] ?? null));
+        if ($formSex !== null && $idSex !== null && $formSex !== $idSex) {
+            $comparisons[] = [
+                'label' => 'Sex',
+                'step1' => $formSex,
+                'id' => $idSex,
+            ];
+        }
+
+        $formBarangay = trim((string) (
+            $registrationFields['_barangay_name']
+            ?? $registrationFields['barangay']
+            ?? $registrationFields['barangay_name']
+            ?? ''
+        ));
+        $idAddress = trim((string) ($payload['address'] ?? ''));
+        if ($formBarangay !== '' && $idAddress !== '' && $this->resolveAddressMatch($registrationFields, $idAddress, '') === false) {
+            $comparisons[] = [
+                'label' => 'Address',
+                'step1' => $formBarangay,
+                'id' => $idAddress,
+            ];
+        }
+
+        return $comparisons;
+    }
+
+    /**
+     * @param  list<array{label: string, step1: string, id: string}>  $comparisons
+     */
+    private function pushFieldComparison(array &$comparisons, string $label, string $step1, string $id): void
+    {
+        $step1 = $this->normalizeCompareValue($step1);
+        $id = $this->normalizeCompareValue($id);
+        if ($step1 === '' || $id === '' || $this->compareValuesMatch($step1, $id)) {
+            return;
+        }
+
+        $comparisons[] = [
+            'label' => $label,
+            'step1' => $step1,
+            'id' => $id,
+        ];
+    }
+
+    private function normalizeCompareValue(string $value): string
+    {
+        $value = strtoupper(trim($value));
+        $value = preg_replace('/[^A-Z0-9\s]/', ' ', $value) ?? $value;
+
+        return preg_replace('/\s+/', ' ', trim($value)) ?? '';
+    }
+
+    private function compareValuesMatch(string $a, string $b): bool
+    {
+        if ($a === $b) {
+            return true;
+        }
+
+        $tokensA = preg_split('/\s+/', $a) ?: [];
+        $tokensB = preg_split('/\s+/', $b) ?: [];
+        $shorter = count($tokensA) <= count($tokensB) ? $tokensA : $tokensB;
+        $longer = count($tokensA) <= count($tokensB) ? $tokensB : $tokensA;
+
+        return $shorter !== [] && array_diff($shorter, $longer) === [];
+    }
+
+    /**
+     * @param  list<array{label: string, step1: string, id: string}>  $comparisons
+     */
+    private function formatFieldComparisonMessage(array $comparisons): ?string
+    {
+        if ($comparisons === []) {
+            return null;
+        }
+
+        $lines = ['These ID details do not match your Step 1 form:', ''];
+        foreach ($comparisons as $row) {
+            $lines[] = $row['label'];
+            $lines[] = 'Step 1: '.$row['step1'];
+            $lines[] = 'ID: '.$row['id'];
+            $lines[] = '';
+        }
+
+        return trim(implode("\n", $lines));
+    }
+
+    private function displayDate(string $value): string
+    {
+        try {
+            return Carbon::parse($value)->format('Y-m-d');
+        } catch (\Throwable) {
+            return strtoupper(trim($value));
+        }
+    }
+
+    private function ageFromBirthday(string $birthday): string
+    {
+        if (trim($birthday) === '') {
+            return '';
+        }
+
+        try {
+            return (string) Carbon::parse($birthday)->age;
+        } catch (\Throwable) {
+            return '';
         }
     }
 

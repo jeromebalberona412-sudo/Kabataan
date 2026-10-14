@@ -56,6 +56,9 @@ class ConversationController extends Controller
         Gate::authorize('view', $conversation);
         $this->conversations->markRead($conversation, Auth::user());
 
-        return response()->json(['ok' => true]);
+        return response()->json([
+            'ok' => true,
+            'unread_count' => $this->conversations->unreadTotalForUser(Auth::user()),
+        ]);
     }
 }

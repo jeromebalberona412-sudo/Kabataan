@@ -2,20 +2,23 @@
 
 namespace App\Modules\KKProfiling\Controllers;
 
-use App\Mail\KabataanSetPasswordMail;
 use App\Http\Controllers\Controller;
+use App\Mail\KabataanSetPasswordMail;
 use App\Models\Barangay;
 use App\Models\KabataanRegistration;
 use App\Models\User;
-use App\Rules\PhilippineMobileNumber;
 use App\Rules\ParticipantSignatureImage;
+use App\Rules\PhilippineMobileNumber;
 use App\Rules\ValidEmailAddress;
 use App\Services\BarangayZoneService;
 use App\Services\DuplicateKabataanRegistrationService;
 use App\Services\IdImageQualityService;
 use App\Services\IdVerificationAiService;
-use App\Services\KkProfilingIdentityValidator;
+use App\Services\InvalidEmailService;
 use App\Services\KabataanSecurityQuestionService;
+use App\Services\KkProfilingIdentityValidator;
+use App\Services\KkProfilingScheduleService;
+use App\Services\KkProfilingValidationMessages;
 use App\Services\KkRegistrationDraftService;
 use App\Services\OCRService;
 use App\Services\PhilippineIdDetectionService;
@@ -23,13 +26,13 @@ use App\Services\PhilippineIdPipelineService;
 use App\Services\PhoneNumberService;
 use App\Services\RegistrationEvaluationService;
 use App\Services\SupportingDocumentVerificationRecorder;
-use App\Services\InvalidEmailService;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
 use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 use App\Support\YouthClassificationInput;
 use Carbon\Carbon;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -57,16 +60,15 @@ class KKProfilingWizardController extends Controller
         protected IdImageQualityService $idImageQuality,
         protected OCRService $ocrService,
         protected IdVerificationAiService $idVerificationAi,
+        protected KkProfilingScheduleService $profilingScheduleService,
     ) {}
 
     /**
      * Step 2 Gemini / Groq AI ID verification switch.
-     * Keep false so AI is unused but the existing code paths remain available.
-     * Set to true to re-enable Gemini/Groq verification on Supporting Documents.
      */
     private function step2AiIdVerificationEnabled(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -139,6 +141,12 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
+        if ($this->profilingScheduleService->supportingDocumentsRequired((int) $barangayRecord->id)) {
+            throw ValidationException::withMessages([
+                'registration' => ['This barangay requires a valid ID in Step 2. Enter an email address to continue and upload your ID.'],
+            ]);
+        }
+
         $payload = $this->normalizeStep1Payload($request, $validated);
         $securityAnswers = app(KabataanSecurityQuestionService::class)->prepare($request->input('security_questions'));
         $registration = DB::transaction(function () use ($barangayRecord, $payload, $request, $securityAnswers) {
@@ -199,13 +207,15 @@ class KKProfilingWizardController extends Controller
         $barangayRecord = $this->resolveBarangay($barangay);
         $wizard = $this->requireWizard();
 
-        if (empty($wizard['step1_data'])) {
+        if (empty($wizard['step1_data']) || (int) ($wizard['current_step'] ?? 1) < 2) {
             throw ValidationException::withMessages([
                 'document_type' => ['Please complete Step 1 (KK Profiling Form) before continuing.'],
             ]);
         }
 
         $skipDocuments = $request->boolean('skip_documents');
+        $supportingDocumentsRequired = $this->profilingScheduleService
+            ->supportingDocumentsRequired((int) $barangayRecord->id);
         $fileRule = ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:10240'];
         $ocrPayload = null;
         $formSuggestions = null;
@@ -246,6 +256,22 @@ class KKProfilingWizardController extends Controller
 
         $typesWithUpload = array_keys($uploadsByType);
         $hasAnyUpload = $typesWithUpload !== [];
+
+        if ($supportingDocumentsRequired && $skipDocuments) {
+            throw ValidationException::withMessages([
+                'document_type' => ['This barangay requires a valid ID. Upload both sides of your ID to continue.'],
+            ]);
+        }
+
+        if (
+            $supportingDocumentsRequired
+            && ! $hasAnyUpload
+            && ! $request->boolean('use_stored_documents')
+        ) {
+            throw ValidationException::withMessages([
+                'document_type' => ['This barangay requires a valid ID. Upload both sides of your ID to continue.'],
+            ]);
+        }
 
         if ($skipDocuments && $hasAnyUpload) {
             throw ValidationException::withMessages([
@@ -336,8 +362,7 @@ class KKProfilingWizardController extends Controller
                 $registrationFields['_province'] = 'Laguna';
                 $registrationFields['_region'] = 'Region IV-A';
 
-                // Gemini / Groq AI ID verification is disabled for Step 2.
-                // Existing AI call is kept below for later re-enable via step2AiIdVerificationEnabled().
+                // Keep upload-only handling available when AI verification is disabled.
                 if (! $this->step2AiIdVerificationEnabled()) {
                     $ocrPayload = $this->step2AiDisabledVerificationPayload((string) $documentType);
                     $formSuggestions = null;
@@ -441,6 +466,7 @@ class KKProfilingWizardController extends Controller
             }
         }
 
+        $wizard['step2_data']['supporting_documents_required'] = $supportingDocumentsRequired;
         $wizard = $this->draftService->advanceToStep3($wizard);
 
         $email = strtolower(trim($wizard['email'] ?? $wizard['step1_data']['email'] ?? ''));
@@ -510,6 +536,8 @@ class KKProfilingWizardController extends Controller
                 'draft' => ['Your registration session does not match this barangay. Please restart registration.'],
             ]);
         }
+
+        $this->assertStep2Complete($wizard, (int) $barangayRecord->id);
 
         if (empty($wizard['email_verified_at'])) {
             $email = strtolower(trim($wizard['email'] ?? $wizard['step1_data']['email'] ?? ''));
@@ -998,23 +1026,17 @@ class KKProfilingWizardController extends Controller
 
         $targetStep = (int) $validated['step'];
 
-        if ($targetStep === 3 && empty($wizard['step1_data'])) {
+        if (
+            $targetStep >= 2
+            && (empty($wizard['step1_data']) || (int) ($wizard['current_step'] ?? 1) < 2)
+        ) {
             throw ValidationException::withMessages([
                 'step' => ['Please complete Step 1 before continuing.'],
             ]);
         }
 
-        // Allow restoring Step 3 UI after mobile/desktop toggles even if the
-        // verification email has not been resent yet in this browser session.
-        if (
-            $targetStep === 3
-            && empty($wizard['verification_sent_at'])
-            && empty($wizard['step2_data'])
-            && empty($wizard['email'])
-        ) {
-            throw ValidationException::withMessages([
-                'step' => ['Please complete Step 2 before opening email verification.'],
-            ]);
+        if ($targetStep === 3) {
+            $this->assertStep2Complete($wizard, (int) $barangayRecord->id);
         }
 
         $wizard = $this->draftService->setWizardStep($wizard, $targetStep);
@@ -1023,6 +1045,29 @@ class KKProfilingWizardController extends Controller
             'success' => true,
             'step' => $targetStep,
             'draft' => $this->draftService->wizardStatusPayload($wizard),
+        ]);
+    }
+
+    private function assertStep2Complete(array $wizard, int $barangayId): void
+    {
+        if (! $this->draftService->hasCompletedStep2($wizard)) {
+            throw ValidationException::withMessages([
+                'step' => ['Please continue through Step 2 before opening email verification.'],
+            ]);
+        }
+
+        if (! $this->profilingScheduleService->supportingDocumentsRequired($barangayId)) {
+            return;
+        }
+
+        foreach (SupportingDocumentTypes::allowed() as $documentType) {
+            if ($this->draftService->hasStoredDocumentPair($wizard, $documentType)) {
+                return;
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'step' => ['This barangay requires a valid ID. Upload both sides in Step 2 before continuing.'],
         ]);
     }
 
@@ -1145,7 +1190,7 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        // Gemini / Groq AI detect-id is disabled — keep the AI implementation below unused.
+        // Keep the upload-only response available when AI verification is disabled.
         if (! $this->step2AiIdVerificationEnabled()) {
             $stub = $this->step2AiDisabledVerificationPayload($documentType);
             $this->draftService->storeIdVerification($wizard, $stub);
@@ -1235,6 +1280,9 @@ class KKProfilingWizardController extends Controller
                     'birthdate_match' => $verification['birthdate_match'] ?? null,
                     'sex_match' => $verification['sex_match'] ?? null,
                     'address_match' => $verification['address_match'] ?? null,
+                    'field_comparisons' => is_array($verification['field_comparisons'] ?? null)
+                        ? $verification['field_comparisons']
+                        : [],
                     'pair_hash' => $pairHash,
                     'from_cache' => true,
                     'source' => $verification['source'] ?? 'wizard_cache',
@@ -1395,6 +1443,9 @@ class KKProfilingWizardController extends Controller
             'birthdate_match' => $verification['birthdate_match'] ?? null,
             'sex_match' => $verification['sex_match'] ?? null,
             'address_match' => $verification['address_match'] ?? null,
+            'field_comparisons' => is_array($verification['field_comparisons'] ?? null)
+                ? $verification['field_comparisons']
+                : [],
             'face_match' => $payload['face_match'] ?? false,
             'face_verification' => $payload['face_verification'] ?? null,
             'text_length' => (int) ($payload['text_length'] ?? 0),
@@ -1540,7 +1591,7 @@ class KKProfilingWizardController extends Controller
         array $registrationFields,
         ?string $selfieRealPath = null,
     ): array {
-        // Gemini / Groq AI path kept below but unused while Step 2 AI is disabled.
+        // Keep the upload-only response available when AI verification is disabled.
         if (! $this->step2AiIdVerificationEnabled()) {
             return [$this->step2AiDisabledVerificationPayload($documentType), null];
         }
@@ -1677,8 +1728,47 @@ class KKProfilingWizardController extends Controller
      */
     private function assertStep2DocumentAllowedToProceed(string $documentType, array $payload): void
     {
-        // Supporting ID upload is optional for continuing to Step 3.
-        // Invalid / weak detections are stored for SK review but must not block Next.
+        $comparisons = is_array($payload['field_comparisons'] ?? null) ? $payload['field_comparisons'] : [];
+        if ($comparisons !== []) {
+            $detail = trim((string) ($payload['message'] ?? ''));
+            $message = $detail !== ''
+                ? $detail
+                : 'Your ID details do not match your Step 1 form. Please review the comparison, then upload the correct ID or go back and update Step 1.';
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => $message,
+                'errors' => [
+                    'document_type' => [$message],
+                ],
+                'ocr' => array_merge($payload, [
+                    'success' => false,
+                    'validation_error' => true,
+                    'message' => $message,
+                    'field_comparisons' => $comparisons,
+                ]),
+            ], 422));
+        }
+
+        if (($payload['validation_error'] ?? false) === true) {
+            $message = trim((string) ($payload['message'] ?? ''));
+            if ($message === '') {
+                $message = 'The uploaded ID could not be verified. Please upload a clear front and back photo of the selected ID.';
+            }
+
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => $message,
+                'errors' => [
+                    'document_type' => [$message],
+                ],
+                'ocr' => array_merge($payload, [
+                    'success' => false,
+                    'validation_error' => true,
+                    'message' => $message,
+                ]),
+            ], 422));
+        }
+
         if ($this->step2DocumentLooksValid($documentType, $payload)) {
             return;
         }
@@ -2010,6 +2100,9 @@ class KKProfilingWizardController extends Controller
             'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
             'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
             'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+            'contact_number' => trim((string) $request->input('contact_number', '')) === '09'
+                ? null
+                : $request->input('contact_number'),
         ]);
 
         if ($request->input('middle_name') === '') {
@@ -2029,7 +2122,7 @@ class KKProfilingWizardController extends Controller
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
             'email' => ValidEmailAddress::optionalRules(),
-            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
+            'contact_number' => ['nullable', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -2041,6 +2134,7 @@ class KKProfilingWizardController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
+            'profiling_acknowledgment' => ['required', 'accepted'],
             'signature_name' => [
                 'required',
                 'string',
@@ -2049,13 +2143,14 @@ class KKProfilingWizardController extends Controller
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
-            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
             'last_name.min' => 'Minimum 2 characters required.',
             'first_name.min' => 'Minimum 2 characters required.',
             'middle_name.min' => 'Minimum 2 characters required.',
             'last_name.max' => '150 maximum characters only.',
             'first_name.max' => '150 maximum characters only.',
             'middle_name.max' => '150 maximum characters only.',
+            'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
+            'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
             'signature_name.max' => config('signature.messages.name_max'),
@@ -2105,7 +2200,7 @@ class KKProfilingWizardController extends Controller
         }
 
         $localContact = app(PhoneNumberService::class)->toLocalMobile($validated['contact_number'] ?? null);
-        if ($localContact === null) {
+        if (! empty($validated['contact_number']) && $localContact === null) {
             throw ValidationException::withMessages([
                 'contact_number' => [PhoneNumberService::MSG_INVALID],
             ]);
@@ -2136,6 +2231,7 @@ class KKProfilingWizardController extends Controller
             : null;
         $validated['group_chat'] = null;
         $validated['signature_name'] = $request->input('signature_name');
+        unset($validated['profiling_acknowledgment']);
 
         return $validated;
     }
@@ -2191,12 +2287,14 @@ class KKProfilingWizardController extends Controller
 
             if (is_array($value) && $value === []) {
                 $partial[$key] = null;
+
                 continue;
             }
 
             // Persist clears: empty string/null must overwrite prior draft values
             if ($value === null || $value === '') {
                 $partial[$key] = null;
+
                 continue;
             }
 

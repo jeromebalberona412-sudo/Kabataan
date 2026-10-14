@@ -24,6 +24,43 @@ class KkProfilingScheduleService
         return (int) now($this->timezone())->format('Y');
     }
 
+    public function supportingDocumentsRequired(int $barangayId): bool
+    {
+        if (
+            ! Schema::hasTable('kk_profiling_schedules')
+            || ! Schema::hasColumn('kk_profiling_schedules', 'supporting_documents_required')
+        ) {
+            return false;
+        }
+
+        $today = now($this->timezone())->toDateString();
+
+        return Cache::remember(
+            "kk_profiling_schedule.documents_required.{$barangayId}.{$today}",
+            self::CACHE_TTL,
+            function () use ($barangayId, $today) {
+                $query = DB::table('kk_profiling_schedules')
+                    ->where('barangay_id', $barangayId)
+                    ->where('status', 'Ongoing')
+                    ->where('date_start', '<=', $today)
+                    ->where('date_expiry', '>=', $today);
+
+                if (Schema::hasColumn('kk_profiling_schedules', 'profiling_year')) {
+                    $query->orderByDesc('profiling_year');
+                }
+
+                $schedule = $query->orderByDesc('date_start')->first();
+                $required = $schedule?->supporting_documents_required;
+
+                return match (true) {
+                    $required === true, $required === 1, $required === '1' => true,
+                    is_string($required) && in_array(strtolower(trim($required)), ['t', 'true', 'yes', 'on'], true) => true,
+                    default => false,
+                };
+            }
+        );
+    }
+
     /**
      * Ongoing barangay schedule that forces existing kabataan accounts to update.
      */

@@ -575,6 +575,96 @@
     display: none;
 }
 
+.gf-id-reuse {
+    margin-bottom: 12px;
+    padding: 14px 16px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.gf-id-reuse-question {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #202124;
+    margin-bottom: 12px;
+}
+
+.gf-id-reuse-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.gf-id-reuse-thumb {
+    margin: 0;
+    width: 112px;
+}
+
+.gf-id-reuse-img {
+    width: 112px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #dadce0;
+    background: #fff;
+}
+
+.gf-id-reuse-thumb figcaption {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #5f6368;
+    text-align: center;
+}
+
+.gf-id-reuse-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gf-id-reuse-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 14px;
+    color: #202124;
+    cursor: pointer;
+}
+
+.gf-id-reuse-option input {
+    margin-top: 3px;
+}
+
+.gf-id-reuse-status {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #137333;
+}
+
+.gf-file-card-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+@media (max-width: 414px) {
+    .gf-id-reuse-thumbs {
+        gap: 8px;
+    }
+
+    .gf-id-reuse-thumb,
+    .gf-id-reuse-img {
+        width: 96px;
+    }
+
+    .gf-id-reuse-img {
+        height: 64px;
+    }
+}
+
 .gf-pdf-modal {
     position: fixed;
     inset: 0;

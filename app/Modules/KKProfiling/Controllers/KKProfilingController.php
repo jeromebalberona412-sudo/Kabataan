@@ -18,6 +18,7 @@ use App\Services\KabataanNotificationService;
 use App\Services\KabataanPhotoService;
 use App\Services\KabataanProfilingHistoryService;
 use App\Services\KkProfilingScheduleService;
+use App\Services\KkProfilingValidationMessages;
 use App\Services\KkRegistrationDraftService;
 use App\Services\KkSurveyResponseService;
 use App\Services\PhoneNumberService;
@@ -184,6 +185,8 @@ class KKProfilingController extends Controller
             return redirect()->route('kkprofiling.signup')
                 ->withErrors(['schedule' => $message]);
         }
+        $supportingDocumentsRequired = app(KkProfilingScheduleService::class)
+            ->supportingDocumentsRequired((int) $barangayRecord->id);
         // ──────────────────────────────────────────────────────────────────
 
         $respondentNumber = '';
@@ -213,6 +216,7 @@ class KKProfilingController extends Controller
             'respondentDisplay' => self::formatRespondentDisplay($respondentNumber),
             'barangayLogoUrl' => self::getBarangayLogoUrl($barangayRecord->id),
             'barangayZones' => $this->barangayZoneService->activeZonesForBarangay((int) $barangayRecord->id),
+            'supportingDocumentsRequired' => $supportingDocumentsRequired,
             'wizardInitialStep' => $wizardInitialStep,
             'verificationSent' => $verificationSent,
             'registrationComplete' => false,
@@ -278,6 +282,9 @@ class KKProfilingController extends Controller
             'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
             'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
             'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+            'contact_number' => trim((string) $request->input('contact_number', '')) === '09'
+                ? null
+                : $request->input('contact_number'),
         ]);
 
         if ($request->input('middle_name') === '') {
@@ -295,7 +302,7 @@ class KKProfilingController extends Controller
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
             'email' => ValidEmailAddress::profilingRules(),
-            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber((int) $registration->id)],
+            'contact_number' => ['nullable', 'string', 'max:30', new PhilippineMobileNumber((int) $registration->id)],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -307,6 +314,7 @@ class KKProfilingController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
+            'profiling_acknowledgment' => ['required', 'accepted'],
             'signature_name' => [
                 'required',
                 'string',
@@ -315,7 +323,8 @@ class KKProfilingController extends Controller
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
-            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
+            'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
+            'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
             'signature_name.max' => config('signature.messages.name_max'),
@@ -323,7 +332,7 @@ class KKProfilingController extends Controller
         ] + ValidEmailAddress::profilingMessages());
 
         $localContact = app(PhoneNumberService::class)->toLocalMobile($validated['contact_number'] ?? null);
-        if ($localContact === null) {
+        if (! empty($validated['contact_number']) && $localContact === null) {
             return $this->updateErrorResponse($request, [
                 'contact_number' => PhoneNumberService::MSG_INVALID,
             ]);
@@ -377,7 +386,7 @@ class KKProfilingController extends Controller
 
         $existingForm = $registration->form_data ?? [];
         // Respondent # is assigned only after a successful update completes.
-        unset($validated['respondent_number']);
+        unset($validated['respondent_number'], $validated['profiling_acknowledgment']);
 
         $originalEmail = strtolower(trim((string) $registration->email));
         $validated['email'] = $originalEmail;
@@ -621,6 +630,9 @@ class KKProfilingController extends Controller
             'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
             'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
             'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+            'contact_number' => trim((string) $request->input('contact_number', '')) === '09'
+                ? null
+                : $request->input('contact_number'),
         ]);
 
         if ($request->input('middle_name') === '') {
@@ -638,7 +650,7 @@ class KKProfilingController extends Controller
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
             'email' => ValidEmailAddress::profilingRules(),
-            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
+            'contact_number' => ['nullable', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -650,6 +662,7 @@ class KKProfilingController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
+            'profiling_acknowledgment' => ['required', 'accepted'],
             'signature_name' => [
                 'required',
                 'string',
@@ -658,7 +671,8 @@ class KKProfilingController extends Controller
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
-            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
+            'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
+            'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
             'signature_name.max' => config('signature.messages.name_max'),
@@ -666,7 +680,7 @@ class KKProfilingController extends Controller
         ] + ValidEmailAddress::profilingMessages());
 
         $localContact = app(PhoneNumberService::class)->toLocalMobile($validated['contact_number'] ?? null);
-        if ($localContact === null) {
+        if (! empty($validated['contact_number']) && $localContact === null) {
             return $this->submitErrorResponse($request, [
                 'contact_number' => PhoneNumberService::MSG_INVALID,
             ]);
@@ -714,7 +728,7 @@ class KKProfilingController extends Controller
             ]);
         }
 
-        unset($validated['respondent_number']);
+        unset($validated['respondent_number'], $validated['profiling_acknowledgment']);
         $scheduleService = app(KkProfilingScheduleService::class);
         $activeSchedule = $scheduleService->activeUpdateSchedule((int) $barangayRecord->id);
         if ($activeSchedule !== null) {

@@ -19,6 +19,7 @@
         'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
         'app/Modules/KKProfiling/assets/css/kk-profiling-update.css',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
+        'app/Modules/KKProfiling/assets/js/kkprofiling-terms.js',
         'app/Modules/KKProfiling/assets/js/kk-profiling-update.js',
     ])
 </head>
@@ -84,6 +85,7 @@
         </div>
     </main>
 
+    @include('kkprofiling::partials.kk-profiling-terms-modal')
     @include('kkprofiling::partials.kk-profiling-signature-modals')
     @include('kkprofiling::partials.kk-profiling-long-name-modal')
     @include('kkprofiling::partials.kk-profiling-clear-draft-modal', [

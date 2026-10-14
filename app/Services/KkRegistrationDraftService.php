@@ -268,6 +268,23 @@ class KkRegistrationDraftService
         return ! empty($sides['front']['path']) && ! empty($sides['back']['path']);
     }
 
+    public function hasCompletedStep2(array $wizard): bool
+    {
+        $step2 = is_array($wizard['step2_data'] ?? null) ? $wizard['step2_data'] : [];
+
+        if (array_key_exists('supporting_documents_required', $step2)) {
+            return true;
+        }
+
+        foreach (SupportingDocumentTypes::allowed() as $documentType) {
+            if ($this->hasStoredDocumentPair($wizard, $documentType)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function skipStep2(array $wizard): array
     {
         if (empty($wizard['step1_data'])) {
@@ -591,6 +608,7 @@ class KkRegistrationDraftService
         }
 
         $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
+        $formData['supporting_documents_required'] = (bool) ($wizard['step2_data']['supporting_documents_required'] ?? false);
         if ($claimId > 0) {
             $formData['guest_account_claimed'] = true;
         }
@@ -937,13 +955,19 @@ class KkRegistrationDraftService
             return null;
         }
 
+        $currentStep = $this->mapCurrentStepForClient((int) ($wizard['current_step'] ?? 1));
+        if ($currentStep >= 3 && ! $this->hasCompletedStep2($wizard)) {
+            $currentStep = ! empty($wizard['step1_data']) ? 2 : 1;
+        }
+
         return [
             'token' => $wizard['token'],
-            'current_step' => $this->mapCurrentStepForClient((int) ($wizard['current_step'] ?? 1)),
+            'current_step' => $currentStep,
             'email' => $wizard['email'] ?? null,
             'email_verified' => ! empty($wizard['email_verified_at']),
             'verification_sent' => ! empty($wizard['verification_sent_at']),
             'has_step1' => ! empty($wizard['step1_data']),
+            'has_completed_step2' => $this->hasCompletedStep2($wizard),
             'has_documents' => ! empty($wizard['step2_data']['documents']),
             'step1' => $wizard['step1_data'] ?? null,
             'step2' => $this->step2StatusPayload($wizard),
@@ -1143,7 +1167,10 @@ class KkRegistrationDraftService
 
         unset($wizard['step3_data']);
 
-        if ((int) ($wizard['current_step'] ?? 1) >= 3 && empty($wizard['verification_sent_at'])) {
+        if (
+            (int) ($wizard['current_step'] ?? 1) >= 3
+            && ! $this->hasCompletedStep2($wizard)
+        ) {
             $wizard['current_step'] = 2;
         }
 

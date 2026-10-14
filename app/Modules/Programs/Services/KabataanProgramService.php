@@ -14,6 +14,7 @@ use App\Modules\Profile\Services\ProfileImageService;
 use App\Services\ScholarshipSystemFieldsService;
 use App\Services\SkOfficialsNotificationDispatcher;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
@@ -23,6 +24,7 @@ class KabataanProgramService
 
     public function __construct(
         private readonly ProgramDocumentService $documentService,
+        private readonly ProgramIdReuseService $idReuseService,
         private readonly KabataanProgramSurveyService $surveyService,
         private readonly KabataanProgramEvaluationService $evaluationService,
         private readonly ScholarshipSystemFieldsService $scholarshipSystemFields,
@@ -37,6 +39,12 @@ class KabataanProgramService
         'High School Level',
         'High School Grad',
         'College Level',
+    ];
+
+    /** @var array<string, list<string>> */
+    private const SCHOLARSHIP_TARGET_EDUCATION_LEVELS = [
+        'senior_high' => ['High School Level', 'High School Grad'],
+        'college' => ['College Level', 'High School Grad'],
     ];
 
     /** @var list<string> */
@@ -244,6 +252,7 @@ class KabataanProgramService
             $program->custom_questions ?? [],
             $application,
         );
+        $formatted['reusable_id_documents'] = $this->idReuseService->payloadForProgram($user, $program);
 
         $eligibility = $this->evaluateEligibility($user, $program);
         $periodOpen = $this->isSchedulePeriodOpen($program);
@@ -464,7 +473,7 @@ class KabataanProgramService
 
         try {
             $application->update([
-                'required_documents' => $this->documentService->finalizeDraftDocuments($user, $application, $answers),
+                'required_documents' => $this->finalizeApplicationDocuments($user, $application, $answers, $questions),
             ]);
         } catch (\Throwable $exception) {
             if (! $isResubmit) {
@@ -676,12 +685,12 @@ class KabataanProgramService
             if ($submission !== null) {
                 if (! empty($submission['start'])) {
                     $scholarshipDetails['submission_period']['start_display'] = $this->formatDate(
-                        \Carbon\Carbon::parse((string) $submission['start'])
+                        Carbon::parse((string) $submission['start'])
                     );
                 }
                 if (! empty($submission['end'])) {
                     $scholarshipDetails['submission_period']['end_display'] = $this->formatDate(
-                        \Carbon\Carbon::parse((string) $submission['end'])
+                        Carbon::parse((string) $submission['end'])
                     );
                 }
             }
@@ -692,12 +701,12 @@ class KabataanProgramService
             if ($verification !== null) {
                 if (! empty($verification['start'])) {
                     $scholarshipDetails['verification_period']['start_display'] = $this->formatDate(
-                        \Carbon\Carbon::parse((string) $verification['start'])
+                        Carbon::parse((string) $verification['start'])
                     );
                 }
                 if (! empty($verification['end'])) {
                     $scholarshipDetails['verification_period']['end_display'] = $this->formatDate(
-                        \Carbon\Carbon::parse((string) $verification['end'])
+                        Carbon::parse((string) $verification['end'])
                     );
                 }
             }
@@ -882,7 +891,7 @@ class KabataanProgramService
 
     /**
      * @param  list<array<string, mixed>>  $answers
-     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $questions
+     * @param  Collection<int, array<string, mixed>>  $questions
      * @return list<array<string, mixed>>
      */
     private function buildCustomAnswersPayload(array $answers, $questions): array
@@ -973,19 +982,28 @@ class KabataanProgramService
             array_map(fn ($value) => trim((string) $value), (array) ($criteria['youth_age_groups'] ?? []))
         ));
 
-        $allowedEducationLevels = array_values(array_intersect(
-            self::SCHOLARSHIP_EDUCATION_LEVELS,
-            array_map(fn ($value) => trim((string) $value), (array) ($criteria['education_levels'] ?? []))
-        ));
+        $allowedEducationLevels = $targetLevels !== []
+            ? array_values(array_unique(array_merge(
+                ...array_map(
+                    fn (string $level): array => self::SCHOLARSHIP_TARGET_EDUCATION_LEVELS[$level] ?? [],
+                    $targetLevels,
+                )
+            )))
+            : array_values(array_intersect(
+                self::SCHOLARSHIP_EDUCATION_LEVELS,
+                array_map(fn ($value) => trim((string) $value), (array) ($criteria['education_levels'] ?? []))
+            ));
 
-        if ($allowedEducationLevels !== [] && ! in_array($education, $allowedEducationLevels, true)) {
+        if (($targetLevels !== [] && ! in_array($education, $allowedEducationLevels, true))
+            || ($targetLevels === [] && $allowedEducationLevels !== [] && ! in_array($education, $allowedEducationLevels, true))
+        ) {
             $message = 'Your educational background does not meet this scholarship program\'s eligibility requirements.';
             if (in_array('senior_high', $targetLevels, true) && in_array('college', $targetLevels, true)) {
-                $message = 'This scholarship is open to In School Youth with High School Level, High School Grad, or College Level educational background only.';
+                $message = 'This scholarship accepts High School Level, High School Grad, or College Level educational backgrounds only.';
             } elseif (in_array('senior_high', $targetLevels, true)) {
-                $message = 'This scholarship is open to In School Youth with High School Level or High School Grad educational background only.';
+                $message = 'This Senior High scholarship accepts High School Level or High School Grad educational backgrounds only.';
             } elseif (in_array('college', $targetLevels, true)) {
-                $message = 'This scholarship is open to In School Youth with College Level educational background only.';
+                $message = 'This College scholarship accepts College Level or High School Grad educational backgrounds only.';
             }
 
             return [
@@ -1355,11 +1373,12 @@ class KabataanProgramService
             $value = $answer['answer'] ?? null;
 
             if (($question['type'] ?? '') === 'file') {
-                $hasFile = is_array($value) && ! empty($value['path']);
-                if (! $hasFile) {
+                $hasUpload = is_array($value) && ! empty($value['path']) && ! $this->idReuseService->answerRequestsReuse($value);
+                $hasReuse = $this->idReuseService->answerRequestsReuse($value);
+                if (! $hasUpload && ! $hasReuse) {
                     $label = $question['label'] ?? 'A required document';
                     throw ValidationException::withMessages([
-                        "answers.{$questionId}" => ["{$label} is required."],
+                        "answers.{$questionId}" => ["Please upload the required ID or reuse an eligible previously uploaded ID for {$label}."],
                     ]);
                 }
 
@@ -1434,7 +1453,18 @@ class KabataanProgramService
             $meta = is_array($decoded) ? $decoded : null;
         }
 
-        if ($meta === null || empty($meta['path'])) {
+        if ($meta === null) {
+            return null;
+        }
+
+        if ($this->idReuseService->answerRequestsReuse($meta)) {
+            return [
+                'reuse' => true,
+                'source' => ProgramIdReuseService::SOURCE,
+            ];
+        }
+
+        if (empty($meta['path'])) {
             return null;
         }
 
@@ -1446,6 +1476,47 @@ class KabataanProgramService
             'mime' => $meta['mime'] ?? 'application/pdf',
             'uploaded_at' => $meta['uploaded_at'] ?? null,
         ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $answers
+     * @param  Collection<int, array<string, mixed>>  $questions
+     * @return array<string, array<string, mixed>>
+     */
+    private function finalizeApplicationDocuments(
+        User $user,
+        ProgramApplication $application,
+        array $answers,
+        $questions,
+    ): array {
+        $uploadAnswers = [];
+        $documents = [];
+
+        foreach ($answers as $answer) {
+            if (($answer['question_type'] ?? '') !== 'file') {
+                continue;
+            }
+
+            $questionId = (string) ($answer['question_id'] ?? '');
+            $question = $questions->first(fn ($item) => is_array($item) && (string) ($item['id'] ?? '') === $questionId);
+            if (! is_array($question)) {
+                continue;
+            }
+
+            $fileMeta = is_array($answer['answer'] ?? null) ? $answer['answer'] : null;
+            if ($this->idReuseService->answerRequestsReuse($fileMeta)) {
+                $documents[$questionId] = $this->idReuseService->finalizeReuse($user, $question, $fileMeta);
+                continue;
+            }
+
+            $uploadAnswers[] = $answer;
+        }
+
+        $uploaded = $uploadAnswers === []
+            ? []
+            : $this->documentService->finalizeDraftDocuments($user, $application, $uploadAnswers);
+
+        return $documents + $uploaded;
     }
 
     /**

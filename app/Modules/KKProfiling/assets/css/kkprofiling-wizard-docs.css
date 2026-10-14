@@ -550,6 +550,71 @@ body.kkp-id-preview-open {
     display: none !important;
 }
 
+.kkp-ocr-compare-item {
+    margin: 0;
+    padding: 0.7rem 0.75rem;
+    border: 1px solid #fcd34d;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.kkp-ocr-compare-label {
+    margin: 0 0 0.45rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #92400e;
+}
+
+.kkp-ocr-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.kkp-ocr-compare-cell {
+    min-width: 0;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.kkp-ocr-compare-cell span {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.kkp-ocr-compare-cell strong {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #0f172a;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.kkp-ocr-compare-cell--id {
+    background: #fef2f2;
+}
+
+.kkp-ocr-compare-cell--id span {
+    color: #b91c1c;
+}
+
+.kkp-ocr-compare-cell--id strong {
+    color: #991b1b;
+}
+
+@media (max-width: 480px) {
+    .kkp-ocr-compare-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .kkp-wizard-ocr-detect-row {
     display: flex;
     align-items: baseline;
@@ -593,6 +658,21 @@ body.kkp-id-preview-open {
 .kkp-wizard-ocr-panel.is-error {
     border-color: #fecaca;
     background: #fff7f7;
+}
+
+.kkp-wizard-ocr-panel.is-warning {
+    border-color: #fde68a;
+    background: #fffbeb;
+}
+
+.kkp-wizard-ocr-panel.is-warning .kkp-wizard-ocr-title {
+    color: #92400e;
+}
+
+.kkp-wizard-ocr-panel.is-warning .kkp-wizard-ocr-status {
+    color: #78350f;
+    text-align: left;
+    white-space: pre-wrap;
 }
 
 .kkp-wizard-ocr-panel.is-loading {
@@ -1070,6 +1150,55 @@ body.kkp-id-preview-open {
     margin: 0;
     font-size: 0.82rem;
     color: #64748b;
+}
+
+.kkp-id-verify-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 4500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(3px);
+}
+
+.kkp-id-verify-screen[hidden] {
+    display: none !important;
+}
+
+.kkp-id-verify-screen-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.65rem;
+    width: min(100%, 20rem);
+    padding: 1.45rem 1.2rem 1.3rem;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.32);
+    text-align: center;
+}
+
+.kkp-id-verify-screen-card .kkp-wizard-ocr-spinner {
+    width: 2.6rem;
+    height: 2.6rem;
+}
+
+.kkp-id-verify-screen-card .kkp-id-verify-overlay-title {
+    font-size: 1.02rem;
+}
+
+@media (max-width: 480px) {
+    .kkp-id-verify-screen {
+        padding: 1rem;
+    }
+
+    .kkp-id-verify-screen-card {
+        width: min(100%, 17.5rem);
+        padding: 1.2rem 1rem 1.1rem;
+    }
 }
 
 /* While verifying, keep the bottom OCR panel for results only (not the loading block). */

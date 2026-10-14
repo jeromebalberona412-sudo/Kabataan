@@ -1,4 +1,4 @@
-{{-- Step 2: Optional supporting documents upload --}}
+{{-- Step 2: Supporting documents upload --}}
 <section class="kkp-wizard-panel" id="kkpWizardStep2" data-wizard-step="2" @if(($kkpInitialStep ?? 1) !== 2) hidden @endif>
     <div class="kkp-wizard-panel-card kkp-wizard-panel-card--docs">
         <div class="kkp-wizard-panel-head">
@@ -11,9 +11,13 @@
                 </svg>
             </div>
             <div>
-                <h2 class="kkp-wizard-panel-title">Supporting Documents <span class="kkp-wizard-optional">Optional</span></h2>
+                <h2 class="kkp-wizard-panel-title">Supporting Documents <span class="kkp-wizard-optional">{{ !empty($supportingDocumentsRequired) ? 'Required' : 'Optional' }}</span></h2>
                 <p class="kkp-wizard-panel-desc">
-                    You may upload your School ID, PhilSys / National ID, Voter's ID, PhilHealth ID, or other valid proof of identity now, or skip this step and continue to email verification.
+                    @if (!empty($supportingDocumentsRequired))
+                        Upload both sides of your School ID, PhilSys / National ID, Voter's ID, PhilHealth ID, or another valid ID to continue.
+                    @else
+                        You may upload a valid ID now, or skip this optional step and continue to email verification.
+                    @endif
                 </p>
             </div>
         </div>
@@ -217,12 +221,12 @@
                 </div>
                 @endforeach
             </div>
-            {{-- Gemini/Groq AI verify overlay kept in markup but always hidden while AI is disabled --}}
-            <div class="kkp-id-verify-overlay" hidden aria-hidden="true" data-ai-verify-disabled="1">
+            {{-- Verification overlay is shown only after the user continues with both images. --}}
+            <div class="kkp-id-verify-overlay" hidden aria-hidden="true">
                 <div class="kkp-id-verify-overlay-card">
                     <span class="kkp-wizard-ocr-spinner" aria-hidden="true"></span>
-                    <p class="kkp-id-verify-overlay-title">Verifying ID…</p>
-                    <p class="kkp-id-verify-overlay-sub">Checking photo and details</p>
+                    <p class="kkp-id-verify-overlay-title">Uploading and validating the ID…</p>
+                    <p class="kkp-id-verify-overlay-sub">Please wait while we check your photos</p>
                     <div class="kkp-wizard-ocr-progress" aria-hidden="true">
                         <span class="kkp-wizard-ocr-progress-bar"></span>
                     </div>
@@ -296,8 +300,7 @@
 
         <div class="kkp-wizard-doc-error-panel" id="kkpWizardDocError" role="alert" hidden></div>
 
-        {{-- Gemini/Groq AI OCR results panel kept but unused/hidden while AI ID verification is disabled --}}
-        <div class="kkp-wizard-ocr-panel" id="kkpWizardOcrPanel" hidden aria-hidden="true" data-ai-verify-disabled="1">
+        <div class="kkp-wizard-ocr-panel" id="kkpWizardOcrPanel" hidden aria-hidden="true">
             <p class="kkp-wizard-ocr-title" id="kkpWizardOcrTitle">ID verification</p>
             <div class="kkp-wizard-ocr-loading" id="kkpWizardOcrLoading" hidden>
                 <span class="kkp-wizard-ocr-spinner" aria-hidden="true"></span>
@@ -312,7 +315,11 @@
             <p class="kkp-wizard-ocr-status" id="kkpWizardOcrStatus">Upload front and back of your ID.</p>
             <dl class="kkp-wizard-ocr-fields" id="kkpWizardOcrFields" hidden></dl>
             <p class="kkp-wizard-ocr-note" id="kkpWizardOcrNote" hidden>
-                Supporting ID upload is optional. You can continue to the next step anytime.
+                @if (!empty($supportingDocumentsRequired))
+                    A valid ID is required for this profiling schedule.
+                @else
+                    Supporting ID upload is optional. You can continue to the next step anytime.
+                @endif
             </p>
             <div class="kkp-wizard-ocr-retry" id="kkpWizardOcrRetry" hidden>
                 <button type="button" class="kkp-id-capture-btn kkp-id-capture-btn--camera" id="kkpOcrRetakeFront" data-side="front">Retake Front</button>

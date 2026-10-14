@@ -329,6 +329,12 @@
         align-items: flex-end;
     }
 
+    #kkpTermsModal.kkp-info-overlay {
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 1rem;
+    }
+
     /* Clear All Data stays centered on small phones */
     #kkpClearDraftModal.kkp-info-overlay {
         align-items: center;
