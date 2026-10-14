@@ -29,9 +29,9 @@ it('keeps a name that fits the stored limit and rejects a longer one', function 
     expect($unicode->fails())->toBeFalse();
 
     expect(fn () => KabataanRegistrationNameLimits::assertStored([
-        'first_name' => str_repeat('A', 100),
-        'last_name' => str_repeat('B', 100),
-        'middle_name' => str_repeat('C', 101),
+        'first_name' => str_repeat('A', 150),
+        'last_name' => str_repeat('B', 150),
+        'middle_name' => str_repeat('C', 151),
     ]))->toThrow(ValidationException::class);
 });
 

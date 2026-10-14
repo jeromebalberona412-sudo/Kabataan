@@ -92,7 +92,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}" autocomplete="off">
+                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required  autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Last Name <span class="kkp-required">*</span></label>
@@ -102,7 +102,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}" autocomplete="off">
+                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required  autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">First Name <span class="kkp-required">*</span></label>
@@ -112,7 +112,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" " maxlength="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}" autocomplete="off">
+                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" "  autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Middle Name</label>

@@ -71,7 +71,7 @@ class KabataanRegistrationNameLimits
      */
     public static function assertStored(array $names): array
     {
-        $max = min(self::APPLICATION_MAX, self::max());
+        $max = self::APPLICATION_MAX;
         $stored = [
             'last_name' => self::normalize($names['last_name'] ?? ''),
             'first_name' => self::normalize($names['first_name'] ?? ''),
@@ -83,7 +83,7 @@ class KabataanRegistrationNameLimits
         foreach (['last_name', 'first_name', 'middle_name'] as $field) {
             $value = (string) ($stored[$field] ?? '');
             if ($value !== '' && mb_strlen($value) > $max) {
-                $errors[$field] = [$max.' maximum characters only.'];
+                $errors[$field] = [self::message()];
             }
         }
 

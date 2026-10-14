@@ -17,7 +17,7 @@ import {
     }
 
     var AUDIO_RING_TIMEOUT_MS = 30000;
-    var VIDEO_RING_TIMEOUT_MS = 45000;
+    var VIDEO_RING_TIMEOUT_MS = 30000;
     var CONNECTION_TIMEOUT_MS = 30000;
     var CALL_START_DELAY_MS = 0;
 
@@ -451,7 +451,7 @@ import {
             case 'missed':
                 return {
                     title: 'Call ended',
-                    reason: role === 'caller' ? 'No answer. The call was not picked up.' : 'Missed call. You did not answer in time.'
+                    reason: 'Call ended. No pickup.'
                 };
             case 'rejected':
                 return {

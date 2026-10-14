@@ -38,6 +38,7 @@ const KKP_EMAIL_LOCAL_MAX = 30;
 /** Live typing: letters/.- , one space between words, no leading/pure multi-space. */
 function kkpSanitizeNameInput(value) {
     return String(value || '')
+        .normalize('NFC')
         .toLocaleUpperCase('en-PH')
         .replace(/[^\p{L}.'\-\s]/gu, '')
         .replace(/^\s+/, '')
