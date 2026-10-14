@@ -29,7 +29,7 @@ const KKP_EMAIL_LOCAL_MAX = 30;
 function kkpSanitizeNameInput(value) {
     return String(value || '')
         .toUpperCase()
-        .replace(/[^A-Z.\-\s]/g, '')
+        .replace(/[^A-Z.'\-\s]/g, '')
         .replace(/^\s+/, '')
         .replace(/\s{2,}/g, ' ');
 }
@@ -57,8 +57,8 @@ function kkpValidateNamePart(value, options = {}) {
         return KKP_NAME_MAX_MSG;
     }
 
-    if (!/^[A-Za-z.\-\s]+$/.test(v)) {
-        return 'Letters, spaces, periods, and hyphens only.';
+    if (!/^[A-Za-z.'\-\s]+$/.test(v)) {
+        return 'Letters, spaces, periods, hyphens, and apostrophes only.';
     }
 
     return null;
@@ -118,21 +118,9 @@ function kkpSyncNameMaxIndicator(el) {
     col.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
 
     const len = (el.value || '').length;
-    if (len < KKP_NAME_MAX_CHARS) {
+    if (len <= KKP_NAME_MAX_CHARS) {
         return;
     }
-
-    // Avoid duplicating the same text if validation already shows it as a field error.
-    const existingErr = col.querySelector('.kkp-field-error');
-    if (existingErr && existingErr.textContent === KKP_NAME_MAX_MSG) {
-        return;
-    }
-
-    const hint = document.createElement('span');
-    hint.className = 'kkp-field-hint kkp-name-max-hint';
-    hint.setAttribute('role', 'status');
-    hint.textContent = KKP_NAME_MAX_MSG;
-    col.appendChild(hint);
 }
 
 function kkpFitInputTextToWidth(el, options = {}) {
@@ -940,7 +928,35 @@ function kkpValidateContact(value, requireEmpty) {
     const lastNameInput = document.getElementById('kkpLastName');
 
     // ── Email existence check (backend) — disabled in wizard mode (checked at Step 4 only) ──
+    window.kkpShowEmailTakenModal = function () {
+        const modal = document.getElementById('kkpEmailTakenModal');
+        if (!modal || modal.dataset.open === '1') {
+            return;
+        }
+        modal.dataset.open = '1';
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        document.getElementById('kkpEmailTakenOkBtn')?.focus();
+    };
+
+    window.kkpHideEmailTakenModal = function () {
+        const modal = document.getElementById('kkpEmailTakenModal');
+        if (!modal) {
+            return;
+        }
+        modal.dataset.open = '0';
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+    };
+
     const emailInput = document.querySelector('input[name="email"]');
+    emailInput?.addEventListener('input', () => {
+        emailInput.dataset.emailExists = '0';
+        delete emailInput.dataset.emailAvailable;
+        window.kkpHideEmailTakenModal();
+    });
+    document.getElementById('kkpEmailTakenOkBtn')?.addEventListener('click', () => window.kkpHideEmailTakenModal());
+    document.getElementById('kkpEmailTakenBackdrop')?.addEventListener('click', () => window.kkpHideEmailTakenModal());
     const isWizardForm = document.getElementById('kkProfilingForm')?.dataset?.wizardMode === '1';
     let emailCheckTimer = null;
 
@@ -1854,6 +1870,9 @@ window.validateKkProfilingForm = async function (options = {}) {
         const ackMessage = window.kkpProfilingAckMessage
             || 'You must agree to the KK Profiling Terms and Conditions before submitting.';
         errors.push(ackMessage);
+        if (typeof window.kkpOpenTermsModal === 'function') {
+            window.kkpOpenTermsModal();
+        }
         if (typeof window.kkpSetProfilingAckError === 'function') {
             window.kkpSetProfilingAckError(ackMessage);
         } else {
@@ -1883,7 +1902,9 @@ window.validateKkProfilingForm = async function (options = {}) {
     const originalEmail = (window.__KK_PROFILING_ORIGINAL_EMAIL || emailField?.dataset?.originalEmail || '').trim().toLowerCase();
     const emailUnchanged = originalEmail && (emailField?.value || '').trim().toLowerCase() === originalEmail;
 
-    if (!skipEmailExistenceCheck && !isWizardSubmit && !emailUnchanged && emailField && emailField.value.trim()) {
+    const normalizedEmail = (emailField?.value || '').trim().toLowerCase();
+    const emailAlreadyConfirmed = emailField?.dataset.emailAvailable === normalizedEmail;
+    if (!skipEmailExistenceCheck && !emailUnchanged && !emailAlreadyConfirmed && emailField && normalizedEmail) {
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
             const emailCheckResponse = await fetch('/api/kkprofiling/check-email-exists', {
@@ -1909,13 +1930,16 @@ window.validateKkProfilingForm = async function (options = {}) {
                 return false;
             }
             if (emailCheckResult.exists) {
+                delete emailField.dataset.emailAvailable;
                 emailField.dataset.emailExists = 'true';
-                fieldError(emailField, emailCheckResult.message || 'This email is already taken. Please use another email.');
-                emailField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                fieldError(emailField, 'This email address is already in use. Please use a new email address that is not registered in the system.');
+                kkpShowEmailTakenModal();
                 return false;
             }
+            emailField.dataset.emailAvailable = normalizedEmail;
         } catch (err) {
-            // Continue to submit; server will validate
+            fieldError(emailField, 'We could not check this email address. Please try again.');
+            return false;
         }
     }
 

@@ -117,14 +117,15 @@ class KabataanProgramService
             return null;
         }
 
-        return Cache::remember("abyip.latest_approved_document.{$barangayId}", self::CACHE_TTL, function () use ($barangayId) {
+        return Cache::remember("abyip.latest_approved_document.v2.{$barangayId}", self::CACHE_TTL, function () use ($barangayId) {
+            $columns = ['id', 'barangay_id', 'fiscal_year', 'status', 'document_title'];
             $approved = Abyip::query()
                 ->documents()
                 ->where('barangay_id', $barangayId)
                 ->where('status', Abyip::STATUS_APPROVED)
                 ->orderByDesc('fiscal_year')
                 ->orderByDesc('id')
-                ->first();
+                ->first($columns);
 
             if ($approved !== null) {
                 return $approved;
@@ -136,7 +137,7 @@ class KabataanProgramService
                 ->where('barangay_id', $barangayId)
                 ->orderByDesc('fiscal_year')
                 ->orderByDesc('id')
-                ->first();
+                ->first($columns);
         });
     }
 
@@ -222,6 +223,7 @@ class KabataanProgramService
         if ($barangayId !== null) {
             Cache::forget("abyip.latest_document.{$barangayId}");
             Cache::forget("abyip.latest_approved_document.{$barangayId}");
+            Cache::forget("abyip.latest_approved_document.v2.{$barangayId}");
         }
     }
 
@@ -1506,6 +1508,7 @@ class KabataanProgramService
             $fileMeta = is_array($answer['answer'] ?? null) ? $answer['answer'] : null;
             if ($this->idReuseService->answerRequestsReuse($fileMeta)) {
                 $documents[$questionId] = $this->idReuseService->finalizeReuse($user, $question, $fileMeta);
+
                 continue;
             }
 

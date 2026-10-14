@@ -185,8 +185,9 @@ class KKProfilingController extends Controller
             return redirect()->route('kkprofiling.signup')
                 ->withErrors(['schedule' => $message]);
         }
-        $supportingDocumentsRequired = app(KkProfilingScheduleService::class)
-            ->supportingDocumentsRequired((int) $barangayRecord->id);
+        $scheduleService = app(KkProfilingScheduleService::class);
+        $supportingDocumentsRequired = $scheduleService->supportingDocumentsRequired((int) $barangayRecord->id);
+        $emailRequired = $scheduleService->emailRequired((int) $barangayRecord->id);
         // ──────────────────────────────────────────────────────────────────
 
         $respondentNumber = '';
@@ -217,6 +218,7 @@ class KKProfilingController extends Controller
             'barangayLogoUrl' => self::getBarangayLogoUrl($barangayRecord->id),
             'barangayZones' => $this->barangayZoneService->activeZonesForBarangay((int) $barangayRecord->id),
             'supportingDocumentsRequired' => $supportingDocumentsRequired,
+            'emailRequired' => $emailRequired,
             'wizardInitialStep' => $wizardInitialStep,
             'verificationSent' => $verificationSent,
             'registrationComplete' => false,
@@ -292,9 +294,9 @@ class KKProfilingController extends Controller
         }
 
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'last_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
+            'first_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
+            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $registration->barangay_id),
@@ -640,9 +642,9 @@ class KKProfilingController extends Controller
         }
 
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'last_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
+            'first_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
+            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $barangayRecord->id),
@@ -904,16 +906,13 @@ class KKProfilingController extends Controller
 
         // Check for active pending or approved registrations
         $activeRegistration = KabataanRegistration::query()
-            ->where('email', $email)
+            ->whereRaw('LOWER(email) = ?', [$email])
             ->whereIn('status', ['active', 'approved', 'pending_verification', 'password_set', 'pending', 'email_verified'])
             ->whereNull('deleted_at')
             ->first();
 
         if ($activeRegistration) {
-            $isPending = in_array($activeRegistration->status, ['pending_verification', 'password_set', 'pending', 'email_verified'], true);
-            $msg = $isPending
-                ? 'You already have a KK Profiling application under review. Please wait for the SK Official\'s review.'
-                : 'This email is already taken. Please use another email.';
+            $msg = 'This email address is already in use. Please use a new email address that is not registered in the system.';
 
             return response()->json([
                 'exists' => true,
@@ -923,7 +922,7 @@ class KKProfilingController extends Controller
 
         // If user only has a rejected registration, allow re-application
         $hasRejected = KabataanRegistration::query()
-            ->where('email', $email)
+            ->whereRaw('LOWER(email) = ?', [$email])
             ->where('status', 'rejected')
             ->exists();
 
@@ -935,13 +934,13 @@ class KKProfilingController extends Controller
             ]);
         }
 
-        $existingApprovedUser = User::where('email', $email)
+        $existingApprovedUser = User::whereRaw('LOWER(email) = ?', [$email])
             ->where('status', 'ACTIVE')
             ->exists();
 
         return response()->json([
             'exists' => $existingApprovedUser,
-            'message' => $existingApprovedUser ? 'This email is already taken. Please use another email.' : null,
+            'message' => $existingApprovedUser ? 'This email address is already in use. Please use a new email address that is not registered in the system.' : null,
         ]);
     }
 

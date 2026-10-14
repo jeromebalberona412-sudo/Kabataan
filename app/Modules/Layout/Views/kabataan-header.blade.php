@@ -13,7 +13,7 @@
 <nav class="kabataan-header{{ $guestHeader ? ' kabataan-header--guest' : '' }}{{ $kabataanViewOnly ? ' kabataan-header--view-only' : '' }}" id="kabataanHeader" aria-label="Main navigation">
     <div class="kabataan-header__container">
         <a href="{{ $guestHeader ? ((! empty($barangay) && ! request()->routeIs('guest_kabataan.barangays')) ? route('guest_kabataan.home') : route('guest_kabataan.barangays')) : route('dashboard') }}" class="kabataan-header__brand">
-            <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal" class="kabataan-header__logo">
+            <img src="{{ asset('images/skoneportal_logo_256.webp') }}" alt="SK OnePortal" class="kabataan-header__logo">
             <span class="kabataan-header__title">
                 Kabataan
                 <small>{{ $guestHeader ? 'Guest' : 'SK OnePortal Santa Cruz' }}</small>

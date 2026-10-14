@@ -12,6 +12,7 @@
         'app/Modules/Layout/assets/css/kabataan-logout.css',
         'app/Modules/Layout/assets/js/kabataan-logout.js',
         'app/Modules/Layout/assets/js/kabataan-session-timeout.js',
+        'app/Modules/Authentication/assets/css/auth-legal.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-form-body.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-signature.css',
@@ -26,7 +27,7 @@
 <body class="kkpu-page-body">
     <header class="kkpu-lock-bar" aria-label="Required KK Profiling update">
         <div class="kkpu-lock-bar__brand">
-            <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal" class="kkpu-lock-bar__logo">
+            <img src="{{ asset('images/skoneportal_logo_256.webp') }}" alt="SK OnePortal" class="kkpu-lock-bar__logo">
             <span class="kkpu-lock-bar__title">
                 Kabataan
                 <small>SK OnePortal Santa Cruz</small>

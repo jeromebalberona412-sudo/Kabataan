@@ -12,6 +12,11 @@
     const barangayName = root.dataset.barangayName || '';
     const verificationSentOnLoad = root.dataset.verificationSent === '1';
     const supportingDocumentsRequired = root.dataset.supportingDocumentsRequired === '1';
+    const emailRequired = root.dataset.emailRequired === '1';
+
+    function documentsAreRequired() {
+        return supportingDocumentsRequired && step1EmailFilled();
+    }
 
     const apiBase = `/api/kkprofiling/${slug}/wizard`;
 
@@ -775,7 +780,7 @@
         const finishSoftContinueHint = () => {
             if (ocrNoteEl) {
                 ocrNoteEl.hidden = false;
-                ocrNoteEl.textContent = supportingDocumentsRequired
+                ocrNoteEl.textContent = documentsAreRequired()
                     ? 'A valid ID is required for this profiling schedule.'
                     : 'Supporting ID upload is optional. You can continue to the next step anytime.';
             }
@@ -2991,7 +2996,7 @@
         const hasSelectedFiles = hasPartialDocumentUpload();
         const analyzing = step === 2 && isOcrAnalysisInProgress();
         const sameSideBlocked = step === 2 && hasSelectedFiles && hasBlockingOcrError();
-        const requiredDocumentMissing = step === 2 && supportingDocumentsRequired && !hasCompleteDocumentUpload();
+        const requiredDocumentMissing = step === 2 && documentsAreRequired() && !hasCompleteDocumentUpload();
         const navLocked = wizardNavBusy || wizardTurnstilePending || analyzing || sameSideBlocked || requiredDocumentMissing;
 
         if (navBar) {
@@ -3034,7 +3039,7 @@
             if (wizardTurnstilePending) {
                 nextLabelEl.textContent = step === 1
                     ? (step1EmailFilled() ? 'Save & Continue' : 'Submit KK Profiling')
-                    : (hasSelectedFiles ? 'Upload & Continue' : (supportingDocumentsRequired ? 'ID Required' : 'Skip & Continue'));
+                    : (hasSelectedFiles ? 'Upload & Continue' : (documentsAreRequired() ? 'ID Required' : 'Skip & Continue'));
             } else if (wizardNavBusy && step === 2) {
                 nextLabelEl.textContent = hasSelectedFiles ? 'Uploading…' : 'Continuing…';
             } else if (wizardNavBusy && step === 1) {
@@ -3046,7 +3051,7 @@
             } else if (step === 2) {
                 nextLabelEl.textContent = hasSelectedFiles
                     ? 'Upload & Continue'
-                    : (supportingDocumentsRequired ? 'ID Required' : 'Skip & Continue');
+                    : (documentsAreRequired() ? 'ID Required' : 'Skip & Continue');
             } else {
                 nextLabelEl.textContent = 'Continue';
             }
@@ -3123,7 +3128,7 @@
         }
 
         if (!options.skipScroll) {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            window.scrollTo({ top: 0, behavior: options.instantScroll ? 'auto' : 'smooth' });
         }
 
         scheduleMobileFormScale();
@@ -3260,7 +3265,7 @@
             // Clear stale Step 2 OCR so setStep(2) rechecks against the updated Step 1 identity.
             lastOcrScanFingerprint = null;
             lastOcrPayload = null;
-            await setStep(2);
+            await setStep(2, { instantScroll: true });
             return true;
         } catch (error) {
             const displayedErrors = applyServerErrors(error.errors);
@@ -3311,7 +3316,7 @@
             showDocUploadError('Please upload both front and back images of your selected ID, or remove the files to skip this step.');
             return false;
         }
-        if (supportingDocumentsRequired && !hasFiles && !hasCompleteDocumentUpload()) {
+        if (documentsAreRequired() && !hasFiles && !hasCompleteDocumentUpload()) {
             showDocUploadError('This barangay requires a valid ID. Upload both sides of your ID to continue.');
             return false;
         }
@@ -4069,8 +4074,17 @@
         }
 
         if (currentStep === 1) {
+            const acknowledgment = document.getElementById('kkpProfilingAcknowledgment');
+            if (acknowledgment && !acknowledgment.checked) {
+                window.kkpOpenTermsModal?.({ continueAfter: true });
+                return;
+            }
             if (step1EmailFilled()) {
                 await saveStep1();
+            } else if (emailRequired) {
+                if (typeof window.validateKkProfilingForm === 'function') {
+                    await window.validateKkProfilingForm({ skipEmailExistenceCheck: true });
+                }
             } else {
                 await beginSubmitWithoutEmail();
             }
@@ -4112,6 +4126,10 @@
             }
         }
     }
+
+    window.kkpContinueAfterTerms = function () {
+        handleNext();
+    };
 
     if (nextBtn) {
         nextBtn.addEventListener('click', handleNext);
@@ -4707,7 +4725,7 @@
         if (
             serverEmailError
             && serverStep2Completed
-            && (!supportingDocumentsRequired || hasCompleteDocumentUpload())
+            && (!documentsAreRequired() || hasCompleteDocumentUpload())
         ) {
             if (verificationSentOnLoad) {
                 verificationSent = true;
@@ -4725,7 +4743,7 @@
         const localStep = storedStep || draftStep;
         const requestedStep = Math.max(1, Math.min(3, Math.max(draftStep, localStep)));
         const canOpenStep3 = serverStep2Completed
-            && (!supportingDocumentsRequired || hasCompleteDocumentUpload());
+            && (!documentsAreRequired() || hasCompleteDocumentUpload());
         const highestAllowedStep = canOpenStep3 ? 3 : (serverHasStep1 ? 2 : 1);
         const targetStep = Math.min(requestedStep, highestAllowedStep);
         const skipAutoSendOnStep3 = targetStep === 3 && (verificationSent || verificationSentOnLoad);

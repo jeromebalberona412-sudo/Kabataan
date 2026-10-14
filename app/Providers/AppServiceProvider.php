@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Database\CachingPostgresBuilder;
 use App\Services\KabataanNotificationService;
 use App\Support\MailUrl;
 use Illuminate\Support\Facades\Auth;
@@ -14,11 +15,29 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        // Artisan, migrations, and tests keep the uncached builder so a
+        // schema change in the same process is visible immediately.
+        if ($this->app->runningInConsole() || config('database.default') !== 'pgsql') {
+            return;
+        }
+
+        $this->app->bind('db.schema', function ($app) {
+            $connection = $app['db']->connection();
+
+            if ($connection->getSchemaGrammar() === null) {
+                $connection->useDefaultSchemaGrammar();
+            }
+
+            return new CachingPostgresBuilder($connection);
+        });
     }
 
     public function boot(): void
     {
+        if (! $this->app->runningInConsole()) {
+            CachingPostgresBuilder::flush();
+        }
+
         $this->configureUrlDefaults();
         $this->warnProductionMisconfiguration();
         $this->shareHeaderNotifications();
@@ -50,6 +69,24 @@ class AppServiceProvider extends ServiceProvider
             || str_starts_with($host, '192.168.')
             || str_starts_with($host, '10.')
             || (bool) preg_match('/^172\.(1[6-9]|2\d|3[0-1])\./', $host);
+
+        // Local pages must load CSS and JavaScript from the host that answered
+        // the request. MailUrl::root() remains the production and email base.
+        if (! $isProdEnv && ! $this->app->runningInConsole()) {
+            try {
+                $requestRoot = request()->getSchemeAndHttpHost();
+            } catch (\Throwable) {
+                $requestRoot = '';
+            }
+
+            if ($requestRoot !== '') {
+                URL::forceRootUrl($requestRoot);
+                config(['filesystems.disks.public.url' => rtrim($requestRoot, '/').'/storage']);
+                URL::forceScheme($requestIsHttps ? 'https' : 'http');
+
+                return;
+            }
+        }
 
         $resolvedRoot = MailUrl::root();
         if ($resolvedRoot !== '' && filter_var($resolvedRoot, FILTER_VALIDATE_URL)) {

@@ -406,18 +406,17 @@
     gap: 8px;
 }
 
-.kkp-ack-text {
-    display: inline-flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 0.25rem 0.35rem;
-    min-width: 0;
-    white-space: nowrap;
+.kkp-acknowledgment .kkp-terms-link {
+    display: inline-block;
+    margin: 0 0 0.2rem;
+    text-align: left;
+    font-size: 0.75rem;
 }
 
-.kkp-ack-text .kkp-form-check-label {
-    margin: 0;
-    white-space: nowrap;
+.kkp-acknowledgment .kkp-form-check-label {
+    font-size: 0.75rem;
+    line-height: 1.3;
+    white-space: normal;
 }
 
 .kkp-terms-link {
@@ -461,6 +460,13 @@ body.kkp-terms-modal-open {
     overflow: hidden;
 }
 
+.auth-legal-modal .kkp-legal-doc-heading {
+    margin: 1.35rem 0 0.4rem;
+    color: #111827;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
 #kkpTermsModal.kkp-info-overlay {
     z-index: 8600;
     align-items: center !important;
@@ -470,15 +476,65 @@ body.kkp-terms-modal-open {
 
 #kkpTermsModal .kkp-terms-modal {
     width: 100%;
-    max-width: min(420px, calc(100vw - 2rem));
-    max-height: min(70vh, 380px);
+    max-width: min(640px, calc(100vw - 1.5rem));
+    max-height: min(88vh, 720px);
     margin: 0 auto;
     border-radius: 12px;
+    display: flex;
+    flex-direction: column;
 }
 
 #kkpTermsModal .kkp-info-modal-scroll {
-    padding: 1rem 1rem 0.45rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(62vh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem 1rem 0.75rem;
     padding-right: 2.1rem;
+}
+
+#kkpTermsModal .kkp-legal-section {
+    margin-top: 1.25rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #dbe3ef;
+}
+
+#kkpTermsModal .auth-legal-doc h3 {
+    margin: 1rem 0 0.35rem;
+    color: #1e3a5f;
+    font-size: 0.95rem;
+}
+
+#kkpTermsModal .auth-legal-doc p,
+#kkpTermsModal .auth-legal-doc li {
+    margin-bottom: 0.45rem;
+    font-size: 0.84rem;
+    line-height: 1.5;
+    text-align: left;
+}
+
+#kkpTermsModal .auth-legal-doc ul {
+    margin: 0 0 0.6rem 1.1rem;
+    padding: 0;
+}
+
+#kkpTermsModal .kkp-terms-scroll-notice {
+    margin: 0 0 0.55rem;
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: #475569;
+    text-align: left;
+}
+
+#kkpTermsModal .kkp-terms-scroll-notice.is-complete {
+    color: #166534;
+}
+
+.kkp-form-check-input:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
 }
 
 #kkpTermsModal .kkp-info-title {

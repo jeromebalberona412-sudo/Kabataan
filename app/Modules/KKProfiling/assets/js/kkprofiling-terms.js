@@ -1,13 +1,17 @@
 /**
- * KK Profiling Terms and Conditions modal + acknowledgment helpers.
+ * KK Profiling legal modal. Same scroll-to-end checkbox as Kabataan sign-in.
+ * Checking the box at the bottom of the document closes the modal.
  */
 (function () {
-    const ACK_MESSAGE = 'You must agree to the KK Profiling Terms and Conditions before submitting.';
-    const ACK_MIN_PX = 9;
-    const ACK_MAX_PX = 13;
+    const ACK_MESSAGE = 'You must agree to the Terms and Conditions and Privacy Policy before submitting.';
+    const SCROLL_THRESHOLD = 12;
 
-    function acknowledgmentCheckbox() {
+    function pageCheckbox() {
         return document.getElementById('kkpProfilingAcknowledgment');
+    }
+
+    function modalCheckbox() {
+        return document.getElementById('kkpTermsModalAck');
     }
 
     function acknowledgmentError() {
@@ -22,17 +26,42 @@
         return document.getElementById('kkpTermsModal');
     }
 
-    function hasAgreed() {
-        return acknowledgmentCheckbox()?.dataset.termsAgreed === '1';
+    function termsScroll() {
+        return document.getElementById('kkpTermsScroll');
     }
 
-    function setAgreed(agreed) {
-        const checkbox = acknowledgmentCheckbox();
-        if (!checkbox) {
-            return;
+    function isScrolledToBottom(element) {
+        if (!element || element.clientHeight < 40) {
+            return false;
         }
-        checkbox.dataset.termsAgreed = agreed ? '1' : '0';
-        checkbox.checked = Boolean(agreed);
+        return element.scrollHeight - element.scrollTop - element.clientHeight <= SCROLL_THRESHOLD;
+    }
+
+    function scrollPercent(element) {
+        if (!element) {
+            return 0;
+        }
+        const scrollable = element.scrollHeight - element.clientHeight;
+        if (scrollable <= 0) {
+            return 0;
+        }
+        return Math.min(100, Math.max(0, Math.round((element.scrollTop / scrollable) * 100)));
+    }
+
+    function scrollMessage(percent, atBottom) {
+        if (atBottom) {
+            return 'You have reached the end of the document. Please check the checkbox below to acknowledge.';
+        }
+        if (percent <= 0) {
+            return 'Please scroll down to read the entire document before acknowledging.';
+        }
+        if (percent < 50) {
+            return 'Keep scrolling. Please read the full document before acknowledging.';
+        }
+        if (percent < 80) {
+            return 'You are halfway there. Keep scrolling to finish reading.';
+        }
+        return 'Almost done. Scroll a little more to reach the end of the document.';
     }
 
     window.kkpProfilingAckMessage = ACK_MESSAGE;
@@ -50,8 +79,8 @@
             errorEl.hidden = false;
             errorEl.textContent = message || ACK_MESSAGE;
         }
-        acknowledgmentCheckbox()?.classList.add('kkp-input-err');
-        acknowledgmentCheckbox()?.setAttribute('aria-invalid', 'true');
+        pageCheckbox()?.classList.add('kkp-input-err');
+        pageCheckbox()?.setAttribute('aria-invalid', 'true');
         wrap?.classList.add('is-invalid');
     };
 
@@ -61,26 +90,66 @@
             errorEl.hidden = true;
             errorEl.textContent = '';
         }
-        acknowledgmentCheckbox()?.classList.remove('kkp-input-err');
-        acknowledgmentCheckbox()?.removeAttribute('aria-invalid');
+        pageCheckbox()?.classList.remove('kkp-input-err');
+        pageCheckbox()?.removeAttribute('aria-invalid');
         acknowledgmentWrap()?.classList.remove('is-invalid');
     };
 
-    function fitAcknowledgmentOneLine() {
-        const wrap = acknowledgmentWrap();
-        const text = wrap?.querySelector('.kkp-ack-text');
-        if (!wrap || !text || wrap.offsetParent === null) {
+    function syncScrollGate() {
+        const scroll = termsScroll();
+        const checkbox = modalCheckbox();
+        const label = document.getElementById('kkpTermsModalAckLabel');
+        const notice = termsModal()?.querySelector('[data-legal-scroll-notice]');
+        const noticeText = termsModal()?.querySelector('[data-legal-scroll-text]');
+        const noticePercent = termsModal()?.querySelector('[data-legal-scroll-percent]');
+        if (!scroll || !checkbox) {
             return;
         }
 
-        text.style.fontSize = `${ACK_MAX_PX}px`;
-        let size = ACK_MAX_PX;
-        const limit = Math.max(0, wrap.clientWidth - 28);
-        while (size > ACK_MIN_PX && text.scrollWidth > Math.max(limit, text.clientWidth)) {
-            size -= 0.25;
-            text.style.fontSize = `${size}px`;
+        const atBottom = isScrolledToBottom(scroll);
+        const percent = scrollPercent(scroll);
+        checkbox.disabled = !atBottom;
+        label?.classList.toggle('auth-legal-modal-ack--locked', !atBottom);
+        if (!atBottom && checkbox.checked) {
+            checkbox.checked = false;
+        }
+        if (notice) {
+            notice.classList.toggle('is-complete', atBottom);
+        }
+        if (noticeText) {
+            noticeText.textContent = scrollMessage(percent, atBottom);
+        }
+        if (noticePercent) {
+            noticePercent.hidden = false;
+            noticePercent.textContent = `${percent}%`;
         }
     }
+
+    function resetScrollGate() {
+        const scroll = termsScroll();
+        const modalAck = modalCheckbox();
+        const pageAck = pageCheckbox();
+        if (scroll) {
+            scroll.scrollTop = 0;
+        }
+        if (modalAck) {
+            modalAck.checked = false;
+            modalAck.disabled = true;
+        }
+        if (pageAck) {
+            pageAck.checked = false;
+            pageAck.disabled = true;
+        }
+        window.requestAnimationFrame(syncScrollGate);
+    }
+
+    window.kkpOpenTermsModal = function (options) {
+        const modal = termsModal();
+        if (modal) {
+            modal.dataset.continueAfter = options?.continueAfter ? '1' : '0';
+        }
+        setTermsModalOpen(true);
+    };
 
     function setTermsModalOpen(open) {
         const modal = termsModal();
@@ -88,98 +157,81 @@
             return;
         }
 
-        if (!open) {
-            const active = document.activeElement;
-            if (active && modal.contains(active) && typeof active.blur === 'function') {
-                active.blur();
-            }
-        }
-
         modal.hidden = !open;
         modal.setAttribute('aria-hidden', open ? 'false' : 'true');
         document.body.classList.toggle('kkp-terms-modal-open', open);
+        document.body.style.overflow = open ? 'hidden' : '';
 
         if (open) {
-            const scroll = modal.querySelector('.kkp-info-modal-scroll');
-            if (scroll) {
-                scroll.scrollTop = 0;
-            }
-            document.getElementById('kkpTermsAgreeBtn')?.focus();
+            resetScrollGate();
         }
     }
 
-    function agreeToTerms() {
-        setAgreed(true);
+    function acceptAndClose() {
+        const pageAck = pageCheckbox();
+        if (pageAck) {
+            pageAck.disabled = false;
+            pageAck.checked = true;
+        }
         window.kkpClearProfilingAckError();
+        const modal = termsModal();
+        if (modal) {
+            modal.dataset.continueAfter = '0';
+        }
         setTermsModalOpen(false);
-        acknowledgmentCheckbox()?.focus();
+        if (typeof window.kkpContinueAfterTerms === 'function') {
+            window.kkpContinueAfterTerms();
+            return;
+        }
+        pageAck?.focus();
     }
 
     function bindTermsModal() {
         const modal = termsModal();
-        const checkbox = acknowledgmentCheckbox();
+        const pageAck = pageCheckbox();
+        const modalAck = modalCheckbox();
+        const scroll = termsScroll();
         if (!modal || modal.dataset.bound === '1') {
             return;
         }
         modal.dataset.bound = '1';
 
-        if (checkbox?.checked) {
-            checkbox.dataset.termsAgreed = '1';
+        if (pageAck) {
+            pageAck.checked = false;
+            pageAck.disabled = true;
         }
 
         document.getElementById('kkpTermsOpenBtn')?.addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
+            modal.dataset.continueAfter = '0';
             setTermsModalOpen(true);
         });
 
-        document.getElementById('kkpTermsAgreeBtn')?.addEventListener('click', (event) => {
-            event.preventDefault();
-            agreeToTerms();
-        });
-
-        ['kkpTermsCloseBtn', 'kkpTermsDismissBtn', 'kkpTermsBackdrop'].forEach((id) => {
-            document.getElementById(id)?.addEventListener('click', (event) => {
-                event.preventDefault();
-                setTermsModalOpen(false);
-            });
-        });
-
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape' && !modal.hidden) {
-                setTermsModalOpen(false);
-            }
-        });
-
-        checkbox?.addEventListener('click', (event) => {
-            if (hasAgreed() && checkbox.checked) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-            checkbox.checked = hasAgreed();
-            if (!hasAgreed()) {
-                setTermsModalOpen(true);
-            }
-        });
-
-        checkbox?.addEventListener('change', () => {
-            if (!checkbox.checked) {
-                checkbox.dataset.termsAgreed = '0';
-                return;
-            }
-            if (!hasAgreed()) {
-                checkbox.checked = false;
-                setTermsModalOpen(true);
-            }
-        });
-
-        fitAcknowledgmentOneLine();
-        window.addEventListener('resize', fitAcknowledgmentOneLine);
-        if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', fitAcknowledgmentOneLine);
+        scroll?.addEventListener('scroll', syncScrollGate, { passive: true });
+        if (scroll && typeof ResizeObserver === 'function') {
+            new ResizeObserver(syncScrollGate).observe(scroll);
         }
+
+        modalAck?.addEventListener('change', () => {
+            if (modalAck.checked && !modalAck.disabled) {
+                acceptAndClose();
+            }
+        });
+
+        pageAck?.addEventListener('click', (event) => {
+            if (pageAck.disabled) {
+                event.preventDefault();
+                setTermsModalOpen(true);
+            }
+        });
+
+        pageAck?.addEventListener('change', () => {
+            if (!pageAck.checked) {
+                pageAck.disabled = true;
+            }
+        });
+
     }
 
     if (document.readyState === 'loading') {

@@ -17,6 +17,7 @@
         'app/Modules/KKProfiling/assets/css/kkprofiling-wizard-docs.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-optional-email.css',
         'app/Modules/KKProfiling/assets/css/kkprofiling-security-questions.css',
+        'app/Modules/Authentication/assets/css/auth-legal.css',
         'app/Modules/Authentication/assets/css/turnstile-gate.css',
         'app/Modules/Authentication/assets/js/turnstile-gate.js',
         'app/Modules/KKProfiling/assets/js/kkprofiling.js',
@@ -68,6 +69,7 @@
                 data-respondent-number="{{ $respondentNumber ?? '' }}"
                 data-initial-step="{{ $kkpInitialStep }}"
                 data-supporting-documents-required="{{ !empty($supportingDocumentsRequired) ? '1' : '0' }}"
+                data-email-required="{{ !empty($emailRequired) ? '1' : '0' }}"
                 data-verification-sent="{{ ($verificationSent ?? false) ? '1' : '0' }}"
                 data-registration-complete="{{ ($registrationComplete ?? false) ? '1' : '0' }}"
                 data-auto-approved="{{ ($registrationAutoApproved ?? false) ? '1' : '0' }}"
@@ -143,6 +145,20 @@
     </main>
 
     @include('kkprofiling::partials.kk-profiling-terms-modal')
+    <div id="kkpEmailTakenModal" class="kkp-info-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="kkpEmailTakenTitle" aria-hidden="true">
+        <div class="kkp-info-overlay-backdrop" id="kkpEmailTakenBackdrop"></div>
+        <div class="kkp-info-modal">
+            <div class="kkp-info-modal-scroll">
+                <h2 class="kkp-info-title" id="kkpEmailTakenTitle">Email Already Registered</h2>
+                <p>This email address is already in use. Please use a new email address that is not registered in the system.</p>
+            </div>
+            <div class="kkp-info-modal-footer">
+                <div class="kkp-info-modal-actions">
+                    <button type="button" class="kkp-info-btn kkp-info-btn-primary" id="kkpEmailTakenOkBtn">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
     @include('kkprofiling::partials.kk-profiling-no-email-modal')
     @include('kkprofiling::partials.kk-profiling-security-questions')
     @include('kkprofiling::partials.kk-profiling-signature-modals')

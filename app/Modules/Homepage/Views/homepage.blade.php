@@ -109,7 +109,7 @@
 
                 <div class="kabataan-hero-visual">
                     <div class="kabataan-hero-panel hp-hero-panel">
-                        <img src="{{ asset('images/skoneportal_logo.webp') }}" alt="SK OnePortal Kabataan logo" class="kabataan-hero-logo">
+                        <img src="{{ asset('images/skoneportal_logo_256.webp') }}" alt="SK OnePortal Kabataan logo" class="kabataan-hero-logo">
                         <p class="kabataan-hero-panel-lead">
                             Isang portal para sa mas madaling access sa mga programa, aktibidad, at oportunidad para sa Kabataan.
                         </p>

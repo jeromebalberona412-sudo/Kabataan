@@ -141,9 +141,9 @@ class KKProfilingWizardController extends Controller
             ]);
         }
 
-        if ($this->profilingScheduleService->supportingDocumentsRequired((int) $barangayRecord->id)) {
+        if ($this->profilingScheduleService->emailRequired((int) $barangayRecord->id)) {
             throw ValidationException::withMessages([
-                'registration' => ['This barangay requires a valid ID in Step 2. Enter an email address to continue and upload your ID.'],
+                'email' => ['Email is required.'],
             ]);
         }
 
@@ -216,6 +216,8 @@ class KKProfilingWizardController extends Controller
         $skipDocuments = $request->boolean('skip_documents');
         $supportingDocumentsRequired = $this->profilingScheduleService
             ->supportingDocumentsRequired((int) $barangayRecord->id);
+        $step1Email = strtolower(trim((string) ($wizard['email'] ?? ($wizard['step1_data']['email'] ?? ''))));
+        $documentsRequired = $supportingDocumentsRequired && $step1Email !== '';
         $fileRule = ['nullable', 'file', 'mimes:jpg,jpeg,png', 'max:10240'];
         $ocrPayload = null;
         $formSuggestions = null;
@@ -257,14 +259,14 @@ class KKProfilingWizardController extends Controller
         $typesWithUpload = array_keys($uploadsByType);
         $hasAnyUpload = $typesWithUpload !== [];
 
-        if ($supportingDocumentsRequired && $skipDocuments) {
+        if ($documentsRequired && $skipDocuments) {
             throw ValidationException::withMessages([
                 'document_type' => ['This barangay requires a valid ID. Upload both sides of your ID to continue.'],
             ]);
         }
 
         if (
-            $supportingDocumentsRequired
+            $documentsRequired
             && ! $hasAnyUpload
             && ! $request->boolean('use_stored_documents')
         ) {
@@ -474,8 +476,10 @@ class KKProfilingWizardController extends Controller
         $emailError = null;
 
         try {
-            $wizard = $this->dispatchWizardSetPasswordEmail($wizard, $barangayRecord);
-            $verificationSent = true;
+            if ($email !== '') {
+                $wizard = $this->dispatchWizardSetPasswordEmail($wizard, $barangayRecord);
+                $verificationSent = true;
+            }
         } catch (ValidationException $e) {
             $emailError = $e->errors()['email'][0] ?? 'This email address is invalid and cannot receive mail.';
             Log::warning('KK wizard set-password email rejected', [
@@ -2092,6 +2096,24 @@ class KKProfilingWizardController extends Controller
         }
     }
 
+    private function emailAddressIsRegistered(string $email): bool
+    {
+        $registered = KabataanRegistration::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->whereIn('status', ['active', 'approved', 'pending_verification', 'password_set', 'pending', 'email_verified'])
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if ($registered) {
+            return true;
+        }
+
+        return User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->where('status', 'ACTIVE')
+            ->exists();
+    }
+
     private function validateStep1(Request $request, int $barangayId): array
     {
         $email = strtolower(trim((string) $request->input('email', '')));
@@ -2109,7 +2131,7 @@ class KKProfilingWizardController extends Controller
             $request->merge(['middle_name' => null]);
         }
 
-        $namePattern = '/^[A-Za-z.\-\s]+$/';
+        $namePattern = "/^[A-Za-z.'\\-\\s]+$/";
 
         $validated = $request->validate([
             'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:'.$namePattern],
@@ -2121,7 +2143,9 @@ class KKProfilingWizardController extends Controller
             'sex' => 'required|in:Male,Female',
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
-            'email' => ValidEmailAddress::optionalRules(),
+            'email' => $this->profilingScheduleService->emailRequired($barangayId)
+                ? ValidEmailAddress::profilingRules()
+                : ValidEmailAddress::optionalRules(),
             'contact_number' => ['nullable', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
@@ -2208,6 +2232,13 @@ class KKProfilingWizardController extends Controller
         $validated['contact_number'] = $localContact;
 
         YouthClassificationInput::assertValid((string) ($validated['youth_classification'] ?? ''));
+
+        $email = strtolower(trim((string) ($validated['email'] ?? '')));
+        if ($email !== '' && $this->emailAddressIsRegistered($email)) {
+            throw ValidationException::withMessages([
+                'email' => ['This email address is already in use. Please use a new email address that is not registered in the system.'],
+            ]);
+        }
 
         return $validated;
     }

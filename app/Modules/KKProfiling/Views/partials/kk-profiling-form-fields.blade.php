@@ -285,9 +285,9 @@
 
                             <div class="kkp-inline-pair kkp-inline-pair--email">
 
-                                <label class="kkp-inline-label" for="kkpEmail">Email Address:@if(!empty($emailReadonly)) <span class="kkp-required">*</span>@else <span class="kkp-optional-label">(Optional)</span>@endif</label>
+                                <label class="kkp-inline-label" for="kkpEmail">Email Address:@if(!empty($emailReadonly) || !empty($emailRequired)) <span class="kkp-required">*</span>@else <span class="kkp-optional-label">(Optional)</span>@endif</label>
 
-                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " maxlength="64" autocomplete="email" autocapitalize="none" spellcheck="false" @if(!empty($emailReadonly)) required readonly tabindex="-1" @endif>
+                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " maxlength="64" autocomplete="email" autocapitalize="none" spellcheck="false" @if(!empty($emailReadonly) || !empty($emailRequired)) required @endif @if(!empty($emailReadonly)) readonly tabindex="-1" @endif>
 
                             </div>
 
