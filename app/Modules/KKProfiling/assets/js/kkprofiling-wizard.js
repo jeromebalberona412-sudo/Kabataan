@@ -117,11 +117,24 @@
         }
     }
 
+    let setStepRequest = null;
+
     async function persistWizardStepRemotely(step) {
+        if (!serverHasDraft || step < 2) {
+            return;
+        }
+
+        const request = postJson(`${apiBase}/set-step`, { step });
+        setStepRequest = request;
+
         try {
-            await postJson(`${apiBase}/set-step`, { step });
+            await request;
         } catch (error) {
             // Non-blocking — local step UI still wins for mobile/desktop toggles
+        } finally {
+            if (setStepRequest === request) {
+                setStepRequest = null;
+            }
         }
     }
     const clearDraftModal = document.getElementById('kkpClearDraftModal');
@@ -3265,7 +3278,8 @@
             // Clear stale Step 2 OCR so setStep(2) rechecks against the updated Step 1 identity.
             lastOcrScanFingerprint = null;
             lastOcrPayload = null;
-            await setStep(2, { instantScroll: true });
+            serverHasDraft = true;
+            await setStep(2, { instantScroll: true, skipRemotePersist: true });
             return true;
         } catch (error) {
             const displayedErrors = applyServerErrors(error.errors);

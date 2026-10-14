@@ -2,13 +2,6 @@
     $ackFormId = $acknowledgmentFormId ?? null;
 @endphp
 <div class="kkp-acknowledgment {{ $acknowledgmentClass ?? '' }}" id="kkpProfilingAcknowledgmentWrap">
-    <button
-        type="button"
-        class="kkp-terms-link"
-        id="kkpTermsOpenBtn"
-        aria-haspopup="dialog"
-        aria-controls="kkpTermsModal"
-    >Terms and Conditions &amp; Privacy Policy</button>
     <div class="kkp-form-check kkp-ack-row">
         <input
             type="checkbox"
@@ -22,7 +15,7 @@
             disabled
             @if ($ackFormId) form="{{ $ackFormId }}" @endif
         >
-        <label for="kkpProfilingAcknowledgment" class="kkp-form-check-label">I have read and agree to the Terms and Conditions and Privacy Policy.</label>
+        <span class="kkp-form-check-label kkp-ack-sentence">I have read and agree to the <button type="button" class="kkp-terms-link" id="kkpTermsOpenBtn" aria-haspopup="dialog" aria-controls="kkpTermsModal">Terms and Conditions and Privacy Policy</button>.</span>
     </div>
     <div
         class="kkp-field-error"

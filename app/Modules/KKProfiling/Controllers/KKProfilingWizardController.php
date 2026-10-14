@@ -28,6 +28,7 @@ use App\Services\RegistrationEvaluationService;
 use App\Services\SupportingDocumentVerificationRecorder;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
+use App\Support\KabataanRegistrationNameLimits;
 use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 use App\Support\YouthClassificationInput;
@@ -1016,19 +1017,32 @@ class KKProfilingWizardController extends Controller
     public function setStep(Request $request, string $barangay)
     {
         $barangayRecord = $this->resolveBarangay($barangay);
-        $wizard = $this->requireWizard();
+        $validated = $request->validate([
+            'step' => ['required', 'integer', 'min:1', 'max:3'],
+        ]);
+        $targetStep = (int) $validated['step'];
+
+        $wizard = $this->draftService->resolveWizard();
+
+        if (! $wizard) {
+            if ($targetStep === 1) {
+                return response()->json([
+                    'success' => true,
+                    'step' => 1,
+                    'draft' => null,
+                ]);
+            }
+
+            throw ValidationException::withMessages([
+                'draft' => ['Your registration session expired. Please start again from Step 1.'],
+            ]);
+        }
 
         if ((int) ($wizard['barangay_id'] ?? 0) !== (int) $barangayRecord->id) {
             throw ValidationException::withMessages([
                 'draft' => ['Your registration session does not match this barangay.'],
             ]);
         }
-
-        $validated = $request->validate([
-            'step' => ['required', 'integer', 'min:1', 'max:3'],
-        ]);
-
-        $targetStep = (int) $validated['step'];
 
         if (
             $targetStep >= 2
@@ -2131,12 +2145,10 @@ class KKProfilingWizardController extends Controller
             $request->merge(['middle_name' => null]);
         }
 
-        $namePattern = "/^[A-Za-z.'\\-\\s]+$/";
-
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:'.$namePattern],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:'.$namePattern],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:'.$namePattern],
+            'last_name' => KabataanRegistrationNameLimits::rules(true),
+            'first_name' => KabataanRegistrationNameLimits::rules(true),
+            'middle_name' => KabataanRegistrationNameLimits::rules(false),
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules($barangayId),
@@ -2163,21 +2175,21 @@ class KKProfilingWizardController extends Controller
                 'required',
                 'string',
                 'min:'.(int) config('signature.name_min', 1),
-                'max:'.(int) config('signature.name_max', 255),
+                'max:'.KabataanRegistrationNameLimits::signatureNameMax(),
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
             'last_name.min' => 'Minimum 2 characters required.',
             'first_name.min' => 'Minimum 2 characters required.',
             'middle_name.min' => 'Minimum 2 characters required.',
-            'last_name.max' => '150 maximum characters only.',
-            'first_name.max' => '150 maximum characters only.',
-            'middle_name.max' => '150 maximum characters only.',
+            'last_name.max' => KabataanRegistrationNameLimits::message(),
+            'first_name.max' => KabataanRegistrationNameLimits::message(),
+            'middle_name.max' => KabataanRegistrationNameLimits::message(),
             'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
-            'signature_name.max' => config('signature.messages.name_max'),
+            'signature_name.max' => KabataanRegistrationNameLimits::signatureNameMax().' maximum characters only.',
             'signature.required' => config('signature.messages.required'),
         ] + ValidEmailAddress::profilingMessages());
 

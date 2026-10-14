@@ -1162,6 +1162,15 @@ import {
         if (els.incoming) els.incoming.hidden = true;
     }
 
+    function publishCallNotice(data) {
+        var notice = data && data.message;
+        if (!notice || !window.CommsChat || typeof window.CommsChat.publishSentMessage !== 'function') return;
+        window.CommsChat.publishSentMessage(notice, []);
+        if (typeof window.CommsChat.appendMessage === 'function') {
+            window.CommsChat.appendMessage(notice);
+        }
+    }
+
     async function updateCallStatus(callId, status) {
         var r = routes();
         if (!r.callStatus || !window.Comms) return null;
@@ -1169,7 +1178,10 @@ import {
             method: 'POST',
             body: JSON.stringify({ status: status }),
             dedupe: false
-        }).then(function (data) { return data.call; });
+        }).then(function (data) {
+            publishCallNotice(data);
+            return data.call;
+        });
     }
 
     async function finishUnanswered(reason) {
@@ -1327,6 +1339,7 @@ import {
             callConnected = false;
             lastEndedCallId = null;
             currentCall = data.call;
+            publishCallNotice(data);
             wantsVideo = callType === 'video';
             if (conversation && conversation.other_user) {
                 currentCall.peer = conversation.other_user;

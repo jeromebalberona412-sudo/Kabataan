@@ -520,9 +520,11 @@
 .kkp-wizard-acknowledgment .kkp-form-check {
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 8px;
     margin: 0;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     min-width: 0;
 }
 
@@ -547,21 +549,21 @@
     flex: 0 0 auto;
 }
 
+.kkp-wizard-acknowledgment .kkp-ack-sentence,
 .kkp-wizard-acknowledgment .kkp-terms-link {
-    display: block;
-    align-self: flex-start;
-    margin: 0 0 0.15rem;
+    display: inline;
+    margin: 0;
     padding: 0;
     font-size: 0.72rem;
-    line-height: 1.25;
+    line-height: 1.2;
     text-align: left;
-    white-space: normal;
+    white-space: nowrap;
 }
 
 .kkp-wizard-acknowledgment .kkp-form-check-label {
     font-size: 0.72rem;
-    line-height: 1.25;
-    white-space: normal;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .kkp-wizard-acknowledgment .kkp-form-check-label {
@@ -599,7 +601,7 @@
     }
 
     .kkp-wizard-nav--step1 {
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         justify-content: flex-end;
         align-items: center;
     }
@@ -613,11 +615,11 @@
 
     .kkp-wizard-acknowledgment,
     .kkp-wizard-nav--step1 .kkp-wizard-acknowledgment {
-        width: auto;
+        width: 100%;
         max-width: none;
         order: 0;
         margin: 0;
-        flex: 1 1 auto;
+        flex: 1 1 100%;
         min-width: 0;
     }
 
@@ -631,10 +633,11 @@
     }
 
     .kkp-wizard-acknowledgment .kkp-form-check-label,
-    .kkp-wizard-acknowledgment .kkp-terms-link {
-        white-space: normal;
-        font-size: 0.68rem;
-        line-height: 1.25;
+    .kkp-wizard-acknowledgment .kkp-terms-link,
+    .kkp-wizard-acknowledgment .kkp-ack-sentence {
+        white-space: nowrap;
+        font-size: 0.62rem;
+        line-height: 1.2;
     }
 
     .kkp-wizard-acknowledgment .kkp-field-error {
@@ -662,9 +665,10 @@
     }
 
     .kkp-wizard-acknowledgment .kkp-form-check-label,
-    .kkp-wizard-acknowledgment .kkp-terms-link {
-        font-size: 0.65rem;
-        white-space: normal;
+    .kkp-wizard-acknowledgment .kkp-terms-link,
+    .kkp-wizard-acknowledgment .kkp-ack-sentence {
+        font-size: 0.58rem;
+        white-space: nowrap;
     }
 
     .kkp-wizard-nav--step1 .kkp-wizard-btn {
@@ -679,9 +683,10 @@
     }
 
     .kkp-wizard-acknowledgment .kkp-form-check-label,
-    .kkp-wizard-acknowledgment .kkp-terms-link {
-        font-size: 0.62rem;
-        white-space: normal;
+    .kkp-wizard-acknowledgment .kkp-terms-link,
+    .kkp-wizard-acknowledgment .kkp-ack-sentence {
+        font-size: 0.55rem;
+        white-space: nowrap;
     }
 
     .kkp-wizard-acknowledgment .kkp-form-check-input {

@@ -4,6 +4,7 @@ namespace App\Modules\Programs\Services;
 
 use App\Models\ProgramApplication;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use App\Support\MailUrl;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
@@ -23,6 +24,7 @@ class ProgramDocumentService
 
     public function __construct(
         private readonly ProgramIdReuseService $idReuseService,
+        private readonly CloudinaryService $cloudinary,
     ) {}
 
     /**
@@ -37,6 +39,13 @@ class ProgramDocumentService
         int $maxSizeKb = self::MAX_FILE_SIZE_KB,
     ): array {
         $this->assertValidUpload($file, $fileType, $maxSizeKb);
+
+        $mime = strtolower((string) ($file->getMimeType() ?: ''));
+        $extension = strtolower($file->getClientOriginalExtension());
+        $isImage = in_array($mime, self::IMAGE_MIMES, true) || in_array($extension, ['jpg', 'jpeg', 'png'], true);
+        if ($isImage) {
+            return $this->storeCloudinaryImageDraft($user, $scheduleProgramId, $questionId, $file, $mime !== '' ? $mime : $this->mimeFromPath($extension));
+        }
 
         $safeQuestionId = $this->sanitizeQuestionId($questionId);
         $directory = $this->draftDirectory($user->id, $scheduleProgramId);
@@ -91,6 +100,16 @@ class ProgramDocumentService
 
             if (Storage::disk(self::DISK)->exists($metaPath)) {
                 $meta = json_decode((string) Storage::disk(self::DISK)->get($metaPath), true);
+                if (is_array($meta) && (($meta['storage'] ?? '') === 'cloudinary') && ! empty($meta['url'])) {
+                    $documents[(string) $questionId] = $this->formatCloudinaryDocumentMeta(
+                        $scheduleProgramId,
+                        (string) $questionId,
+                        $meta,
+                    );
+
+                    continue;
+                }
+
                 if (is_array($meta) && ! empty($meta['path']) && Storage::disk(self::DISK)->exists($meta['path'])) {
                     $documents[(string) $questionId] = $this->formatDocumentMeta(
                         $scheduleProgramId,
@@ -194,6 +213,23 @@ class ProgramDocumentService
                 continue;
             }
 
+            if (is_array($fileMeta) && ($fileMeta['storage'] ?? '') === 'cloudinary' && ! empty($fileMeta['url'])) {
+                $documents[$questionId] = [
+                    'question_id' => $questionId,
+                    'question_label' => $answer['question_label'] ?? null,
+                    'storage' => 'cloudinary',
+                    'public_id' => $fileMeta['public_id'] ?? null,
+                    'url' => $fileMeta['url'],
+                    'path' => $fileMeta['public_id'] ?? $fileMeta['url'],
+                    'original_name' => $fileMeta['original_name'] ?? 'image',
+                    'size' => (int) ($fileMeta['size'] ?? 0),
+                    'mime' => $fileMeta['mime'] ?? 'image/jpeg',
+                    'uploaded_at' => $fileMeta['uploaded_at'] ?? now()->toIso8601String(),
+                ];
+
+                continue;
+            }
+
             $draftPath = is_array($fileMeta) && is_string($fileMeta['path'] ?? null)
                 ? $this->normalizeStoragePath($fileMeta['path'])
                 : null;
@@ -260,10 +296,19 @@ class ProgramDocumentService
                     $download,
                 );
             }
+            if (is_array($meta) && ($meta['storage'] ?? '') === 'cloudinary' && ! empty($meta['url'])) {
+                return redirect()->away((string) $meta['url']);
+            }
+
             if (is_array($meta) && ! empty($meta['path'])) {
                 $path = $meta['path'];
                 $originalName = $meta['original_name'] ?? basename($path);
             }
+        }
+
+        $draftMeta = $this->readDraftMeta($user->id, $scheduleProgramId, $questionId);
+        if (is_array($draftMeta) && ($draftMeta['storage'] ?? '') === 'cloudinary' && ! empty($draftMeta['url'])) {
+            return redirect()->away((string) $draftMeta['url']);
         }
 
         if ($path === null) {
@@ -284,6 +329,93 @@ class ProgramDocumentService
             'Content-Type' => $mime ?: $this->mimeFromPath($path),
             'Content-Disposition' => $disposition.'; filename="'.addslashes($originalName).'"',
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function storeCloudinaryImageDraft(
+        User $user,
+        int $scheduleProgramId,
+        string $questionId,
+        UploadedFile $file,
+        string $mime,
+    ): array {
+        if (! $this->cloudinary->isConfigured()) {
+            throw ValidationException::withMessages([
+                'file' => ['Image upload is not available right now. Please try again later.'],
+            ]);
+        }
+
+        try {
+            $uploaded = $this->cloudinary->upload($file, 'program_'.$scheduleProgramId.'_'.$questionId);
+        } catch (\Throwable $exception) {
+            report($exception);
+            throw ValidationException::withMessages([
+                'file' => ['The image could not be uploaded. Please try again.'],
+            ]);
+        }
+
+        $safeQuestionId = $this->sanitizeQuestionId($questionId);
+        $directory = $this->draftDirectory($user->id, $scheduleProgramId);
+        Storage::disk(self::DISK)->makeDirectory($directory);
+
+        $meta = [
+            'question_id' => $questionId,
+            'storage' => 'cloudinary',
+            'public_id' => $uploaded['public_id'],
+            'url' => $uploaded['url'],
+            'path' => $uploaded['public_id'],
+            'original_name' => $file->getClientOriginalName(),
+            'size' => $file->getSize(),
+            'mime' => $mime,
+            'uploaded_at' => now()->toIso8601String(),
+        ];
+
+        Storage::disk(self::DISK)->put(
+            $directory.'/'.$safeQuestionId.'.meta.json',
+            json_encode($meta, JSON_THROW_ON_ERROR),
+        );
+
+        return $this->formatCloudinaryDocumentMeta($scheduleProgramId, $questionId, $meta);
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function formatCloudinaryDocumentMeta(int $scheduleProgramId, string $questionId, array $meta): array
+    {
+        $formatted = $this->formatDocumentMeta(
+            $scheduleProgramId,
+            $questionId,
+            (string) ($meta['original_name'] ?? 'image'),
+            (string) ($meta['original_name'] ?? 'image'),
+            (int) ($meta['size'] ?? 0),
+            (string) ($meta['uploaded_at'] ?? now()->toIso8601String()),
+        );
+        $formatted['storage'] = 'cloudinary';
+        $formatted['public_id'] = $meta['public_id'] ?? null;
+        $formatted['url'] = $meta['url'] ?? null;
+        $formatted['path'] = $meta['public_id'] ?? ($meta['url'] ?? '');
+        $formatted['mime'] = $meta['mime'] ?? 'image/jpeg';
+
+        return $formatted;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function readDraftMeta(int $userId, int $scheduleProgramId, string $questionId): ?array
+    {
+        $metaPath = $this->draftDirectory($userId, $scheduleProgramId).'/'.$this->sanitizeQuestionId($questionId).'.meta.json';
+        if (! Storage::disk(self::DISK)->exists($metaPath)) {
+            return null;
+        }
+
+        $meta = json_decode((string) Storage::disk(self::DISK)->get($metaPath), true);
+
+        return is_array($meta) ? $meta : null;
     }
 
     /**

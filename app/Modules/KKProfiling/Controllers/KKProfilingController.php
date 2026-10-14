@@ -26,6 +26,7 @@ use App\Services\RegistrationEvaluationService;
 use App\Services\RespondentNumberService;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
+use App\Support\KabataanRegistrationNameLimits;
 use App\Support\MailUrl;
 use App\Support\YouthClassificationInput;
 use Carbon\Carbon;
@@ -294,9 +295,9 @@ class KKProfilingController extends Controller
         }
 
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
+            'last_name' => KabataanRegistrationNameLimits::rules(true),
+            'first_name' => KabataanRegistrationNameLimits::rules(true),
+            'middle_name' => KabataanRegistrationNameLimits::rules(false),
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $registration->barangay_id),
@@ -321,15 +322,18 @@ class KKProfilingController extends Controller
                 'required',
                 'string',
                 'min:'.(int) config('signature.name_min', 1),
-                'max:'.(int) config('signature.name_max', 255),
+                'max:'.KabataanRegistrationNameLimits::signatureNameMax(),
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
+            'last_name.max' => KabataanRegistrationNameLimits::message(),
+            'first_name.max' => KabataanRegistrationNameLimits::message(),
+            'middle_name.max' => KabataanRegistrationNameLimits::message(),
             'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
-            'signature_name.max' => config('signature.messages.name_max'),
+            'signature_name.max' => KabataanRegistrationNameLimits::signatureNameMax().' maximum characters only.',
             'signature.required' => config('signature.messages.required'),
         ] + ValidEmailAddress::profilingMessages());
 
@@ -642,9 +646,9 @@ class KKProfilingController extends Controller
         }
 
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', "regex:/^[A-Za-z.'\\-\\s]+$/"],
+            'last_name' => KabataanRegistrationNameLimits::rules(true),
+            'first_name' => KabataanRegistrationNameLimits::rules(true),
+            'middle_name' => KabataanRegistrationNameLimits::rules(false),
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $barangayRecord->id),
@@ -669,15 +673,18 @@ class KKProfilingController extends Controller
                 'required',
                 'string',
                 'min:'.(int) config('signature.name_min', 1),
-                'max:'.(int) config('signature.name_max', 255),
+                'max:'.KabataanRegistrationNameLimits::signatureNameMax(),
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
+            'last_name.max' => KabataanRegistrationNameLimits::message(),
+            'first_name.max' => KabataanRegistrationNameLimits::message(),
+            'middle_name.max' => KabataanRegistrationNameLimits::message(),
             'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
-            'signature_name.max' => config('signature.messages.name_max'),
+            'signature_name.max' => KabataanRegistrationNameLimits::signatureNameMax().' maximum characters only.',
             'signature.required' => config('signature.messages.required'),
         ] + ValidEmailAddress::profilingMessages());
 

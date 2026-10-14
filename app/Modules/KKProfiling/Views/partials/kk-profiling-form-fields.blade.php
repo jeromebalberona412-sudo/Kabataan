@@ -87,12 +87,12 @@
 
                     <div class="kkp-row-label">Name of Respondent <span class="kkp-required">*</span></div>
 
-                    <div class="kkp-name-row">
+                    <div class="kkp-name-row" data-kkp-name-max="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}">
 
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="150" autocomplete="off">
+                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}" autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Last Name <span class="kkp-required">*</span></label>
@@ -102,7 +102,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="150" autocomplete="off">
+                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}" autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">First Name <span class="kkp-required">*</span></label>
@@ -112,7 +112,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" " maxlength="150" autocomplete="off">
+                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" " maxlength="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}" autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Middle Name</label>
@@ -628,7 +628,7 @@
                             <div class="kkp-sig-name-wrapper">
 
                                 <input type="text" id="kkpSignatureName" name="signature_name"
-
+                                       data-kkp-signature-max="{{ \App\Support\KabataanRegistrationNameLimits::SIGNATURE_NAME_MAX }}"
                                        placeholder="" readonly class="kkp-sig-name-input">
 
                             </div>

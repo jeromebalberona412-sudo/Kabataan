@@ -39,7 +39,7 @@ return [
         'api_key' => env('CLOUDINARY_API_KEY'),
         'api_secret' => env('CLOUDINARY_API_SECRET'),
         'folder' => env('CLOUDINARY_FOLDER', 'sk_oneportal/kabataan_posts'),
-        'profile_upload_preset' => env('CLOUDINARY_PROFILE_UPLOAD_PRESET', 'kabataan_profile_images'),
+        'profile_upload_preset' => env('CLOUDINARY_PROFILE_UPLOAD_PRESET', 'Avatar_Profile_GroupChats'),
         'profile_folder' => env('CLOUDINARY_PROFILE_FOLDER', 'kabataan_profile_images'),
         'supporting_docs_upload_preset' => env('CLOUDINARY_SUPPORTING_DOCS_UPLOAD_PRESET', 'Supporting_Documents'),
         'supporting_docs_folder' => env('CLOUDINARY_SUPPORTING_DOCS_FOLDER', 'Supporting_Documents'),

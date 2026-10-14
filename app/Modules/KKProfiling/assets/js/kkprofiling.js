@@ -16,8 +16,18 @@ function kkpNormalizeNameValue(value) {
 }
 
 const KKP_NAME_SOFT_MAX = 50;
-const KKP_NAME_MAX_CHARS = 150;
-const KKP_NAME_MAX_MSG = '150 maximum characters only.';
+
+function kkpSignatureNameMax() {
+    const el = document.getElementById('kkpSignatureName');
+    const parsed = Number(el?.getAttribute('data-kkp-signature-max') || '');
+    return Number.isInteger(parsed) && parsed >= 255 ? parsed : 500;
+}
+const KKP_NAME_MAX_CHARS = (function () {
+    const el = document.querySelector('[data-kkp-name-max]');
+    const parsed = Number(el?.getAttribute('data-kkp-name-max') || '');
+    return Number.isInteger(parsed) && parsed >= 2 ? parsed : 150;
+})();
+const KKP_NAME_MAX_MSG = KKP_NAME_MAX_CHARS + ' maximum characters only.';
 
 /** KK Profiling practical email limits (not RFC 254). */
 const KKP_EMAIL_TOTAL_MAX = 64;
@@ -28,8 +38,8 @@ const KKP_EMAIL_LOCAL_MAX = 30;
 /** Live typing: letters/.- , one space between words, no leading/pure multi-space. */
 function kkpSanitizeNameInput(value) {
     return String(value || '')
-        .toUpperCase()
-        .replace(/[^A-Z.'\-\s]/g, '')
+        .toLocaleUpperCase('en-PH')
+        .replace(/[^\p{L}.'\-\s]/gu, '')
         .replace(/^\s+/, '')
         .replace(/\s{2,}/g, ' ');
 }
@@ -57,7 +67,7 @@ function kkpValidateNamePart(value, options = {}) {
         return KKP_NAME_MAX_MSG;
     }
 
-    if (!/^[A-Za-z.'\-\s]+$/.test(v)) {
+    if (!/^[\p{L}.'\-\s]+$/u.test(v)) {
         return 'Letters, spaces, periods, hyphens, and apostrophes only.';
     }
 
@@ -103,23 +113,45 @@ function kkpGetNameMeasureEl() {
     return kkpNameMeasureEl;
 }
 
-function kkpSyncNameMaxIndicator(el) {
-    const col = el?.closest('.kkp-name-col');
-    if (!col) {
-        return;
-    }
-
+function kkpClearNameMaxHint(el) {
     const prevTimer = kkpNameMaxHintTimers.get(el);
     if (prevTimer) {
         clearTimeout(prevTimer);
         kkpNameMaxHintTimers.delete(el);
     }
 
-    col.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
+    el?.closest('.kkp-name-col')?.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
+}
 
-    const len = (el.value || '').length;
-    if (len <= KKP_NAME_MAX_CHARS) {
+function kkpFlashNameMaxHint(el) {
+    const col = el?.closest('.kkp-name-col');
+    if (!col) {
         return;
+    }
+
+    let hint = col.querySelector('.kkp-name-max-hint');
+    if (!hint) {
+        hint = document.createElement('p');
+        hint.className = 'kkp-name-max-hint';
+        hint.setAttribute('role', 'status');
+        hint.textContent = KKP_NAME_MAX_MSG;
+        col.appendChild(hint);
+    }
+
+    const prevTimer = kkpNameMaxHintTimers.get(el);
+    if (prevTimer) {
+        clearTimeout(prevTimer);
+    }
+
+    kkpNameMaxHintTimers.set(el, setTimeout(() => {
+        hint.remove();
+        kkpNameMaxHintTimers.delete(el);
+    }, 900));
+}
+
+function kkpSyncNameMaxIndicator(el) {
+    if ((el?.value || '').length < KKP_NAME_MAX_CHARS) {
+        kkpClearNameMaxHint(el);
     }
 }
 
@@ -870,6 +902,33 @@ function kkpValidateContact(value, requireEmpty) {
             return;
         }
 
+        el.addEventListener('beforeinput', function (event) {
+            if (!event.inputType || event.inputType.indexOf('insert') !== 0) {
+                return;
+            }
+
+            const start = this.selectionStart ?? this.value.length;
+            const end = this.selectionEnd ?? start;
+            const insertLength = event.data == null ? 1 : event.data.length;
+            const nextLength = this.value.length - (end - start) + insertLength;
+
+            if (nextLength > KKP_NAME_MAX_CHARS) {
+                kkpFlashNameMaxHint(this);
+            }
+        });
+
+        el.addEventListener('keydown', function (event) {
+            if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) {
+                return;
+            }
+
+            const start = this.selectionStart ?? this.value.length;
+            const end = this.selectionEnd ?? start;
+            if (this.value.length - (end - start) + 1 > KKP_NAME_MAX_CHARS) {
+                kkpFlashNameMaxHint(this);
+            }
+        });
+
         el.addEventListener('input', function () {
             const start = this.selectionStart;
             const before = this.value;
@@ -882,7 +941,7 @@ function kkpValidateContact(value, requireEmpty) {
             if (next.length > KKP_NAME_MAX_CHARS) {
                 next = next.slice(0, KKP_NAME_MAX_CHARS);
                 this.value = next;
-                kkpSyncNameMaxIndicator(this);
+                kkpFlashNameMaxHint(this);
                 try {
                     this.setSelectionRange(KKP_NAME_MAX_CHARS, KKP_NAME_MAX_CHARS);
                 } catch (e) {
@@ -1840,8 +1899,18 @@ window.validateKkProfilingForm = async function (options = {}) {
                 sigSection.appendChild(err);
             }
         }
-    } else if (sigNameVal.length > 255) {
-        errors.push('Participant name must not exceed 255 characters.');
+    } else if (sigNameVal.length > kkpSignatureNameMax()) {
+        const sigMaxMsg = kkpSignatureNameMax() + ' maximum characters only.';
+        errors.push(sigMaxMsg);
+        const sigSection = document.querySelector('.kkp-sig-section-left');
+        if (sigSection) {
+            sigSection.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
+            const err = document.createElement('span');
+            err.className = 'kkp-field-error';
+            err.setAttribute('role', 'alert');
+            err.textContent = sigMaxMsg;
+            sigSection.appendChild(err);
+        }
     }
 
     const sigData = document.getElementById('kkpSignatureData');

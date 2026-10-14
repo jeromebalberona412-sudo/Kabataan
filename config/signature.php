@@ -62,7 +62,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'name_min' => 1,
-    'name_max' => 255,
+    'name_max' => 500,
 
     /*
     |--------------------------------------------------------------------------
@@ -79,6 +79,6 @@ return [
         'non_white_bg' => 'Please upload an image with a plain white background.',
         'blank' => 'Please upload an image containing visible text or a signature.',
         'name_required' => 'Name of Participant is required.',
-        'name_max' => 'Participant name must not exceed 255 characters.',
+        'name_max' => '500 maximum characters only.',
     ],
 ];

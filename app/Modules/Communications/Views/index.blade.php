@@ -37,6 +37,7 @@
         'storeConversation' => \App\Support\MailUrl::sameOrigin(route('api.communications.conversations.store')),
         'messages' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__/messages'),
         'read' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__/read'),
+        'markAllRead' => route('api.communications.conversations.mark-all-read'),
         'showConversation' => \App\Support\MailUrl::uri('/api/communications/conversations/__ID__'),
         'searchUsers' => \App\Support\MailUrl::sameOrigin(route('api.communications.users.search')),
         'unreadCount' => \App\Support\MailUrl::sameOrigin(route('api.communications.unread-count')),
@@ -70,6 +71,9 @@
                     <h1>Messages</h1>
                     <a href="{{ route('communications.calls') }}" class="comms-link-btn" title="Call history">Call history</a>
                 </div>
+                <button type="button" class="comms-mark-all-read" id="commsMarkAllRead" style="display:flex;align-items:center;justify-content:center;width:calc(100% - 24px);margin:8px 12px;box-sizing:border-box;background:#0039A8;color:#fff;border:0;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;line-height:1.2;cursor:pointer;">
+                    <span class="comms-mark-all-read-label" style="color:#fff;font-size:13px;font-weight:700;line-height:1.2;">Mark All as Read</span>
+                </button>
                 <label class="visually-hidden" for="commsUserSearch">Search people</label>
                 <div class="comms-search-wrap">
                     <input type="search" id="commsUserSearch" class="comms-search-input" placeholder="Search SK Officials in your barangay" autocomplete="off">

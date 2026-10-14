@@ -14,6 +14,15 @@ use Illuminate\Support\Facades\Log;
 
 class CallService
 {
+    protected ?Message $lastCallNotice = null;
+
+    public function pullLastCallNotice(): ?Message
+    {
+        $notice = $this->lastCallNotice;
+        $this->lastCallNotice = null;
+
+        return $notice;
+    }
     protected const STALE_RINGING_SECONDS = 90;
 
     protected const STALE_ACCEPTED_MINUTES = 45;
@@ -146,14 +155,32 @@ class CallService
     {
         $now = now();
 
-        Call::query()
+        $staleRings = Call::query()
             ->where('status', Call::STATUS_RINGING)
+            ->whereNull('started_at')
             ->where('created_at', '<', $now->copy()->subSeconds(self::STALE_RINGING_SECONDS))
-            ->update([
-                'status' => Call::STATUS_MISSED,
-                'ended_at' => $now,
-                'updated_at' => $now,
-            ]);
+            ->with('caller')
+            ->get();
+
+        foreach ($staleRings as $call) {
+            $call->status = Call::STATUS_MISSED;
+            $call->ended_at = $now;
+            $call->save();
+            $actor = $call->caller;
+            if (! $actor instanceof User) {
+                continue;
+            }
+            $alreadyNoted = Message::query()
+                ->where('conversation_id', $call->conversation_id)
+                ->where('message_type', 'call')
+                ->where('body', 'like', 'Missed %')
+                ->where('created_at', '>=', $call->created_at)
+                ->exists();
+            if ($alreadyNoted) {
+                continue;
+            }
+            $this->postCallMessage($call, $actor, (string) $this->statusMessageBody($call, Call::STATUS_MISSED));
+        }
 
         Call::query()
             ->where('status', Call::STATUS_ACCEPTED)
@@ -267,6 +294,19 @@ class CallService
             return $call;
         }
 
+        $terminal = [
+            Call::STATUS_ENDED,
+            Call::STATUS_REJECTED,
+            Call::STATUS_MISSED,
+            Call::STATUS_CANCELLED,
+        ];
+        if (in_array($previous, $terminal, true)) {
+            return $call;
+        }
+        if ($status === Call::STATUS_MISSED && ($previous === Call::STATUS_ACCEPTED || $call->started_at !== null)) {
+            return $call;
+        }
+
         $call->status = $status;
 
         if ($status === Call::STATUS_ACCEPTED && ! $call->started_at) {
@@ -362,19 +402,22 @@ class CallService
         return sprintf('%d:%02d', $m, $s);
     }
 
-    protected function postCallMessage(Call $call, Authenticatable $actor, string $body): void
+    protected function postCallMessage(Call $call, Authenticatable $actor, string $body): Message
     {
-        Message::query()->create([
+        $message = Message::query()->create([
             'conversation_id' => $call->conversation_id,
             'sender_id' => (int) $actor->id,
             'sender_type' => $this->types->portalType(),
             'body' => $body,
             'message_type' => 'call',
         ]);
+        $this->lastCallNotice = $message;
 
         Conversation::query()->whereKey($call->conversation_id)->update([
             'updated_at' => now(),
         ]);
+
+        return $message;
     }
 
     protected function assertCanActOnCall(Call $call, Authenticatable $user): void

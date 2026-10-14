@@ -154,7 +154,7 @@ import './communication.js';
             var unread = Number(c.unread_count || 0);
             var active = Number(c.id) === Number(state.activeId) ? ' is-active' : '';
             var fullName = peer.name || 'User';
-            var displayName = Comms.truncateText ? Comms.truncateText(fullName, 30) : fullName;
+            var displayName = Comms.truncateText ? Comms.truncateText(fullName, 22) : fullName;
             var avatar = peer.profile_image_url || Comms.defaultAvatar(fullName);
             var previewText = Comms.truncateText ? Comms.truncateText(preview, 40) : preview;
             return '<button type="button" class="comms-conv-item' + active + '" data-id="' + c.id + '" role="listitem" title="' + Comms.escapeHtml(fullName) + '">' +
@@ -169,7 +169,7 @@ import './communication.js';
                 '</div></button>';
         }).join('') + starters.map(function (user) {
             var fullName = user.name || 'User';
-            var displayName = Comms.truncateText ? Comms.truncateText(fullName, 30) : fullName;
+            var displayName = Comms.truncateText ? Comms.truncateText(fullName, 22) : fullName;
             var avatar = user.profile_image_url || Comms.defaultAvatar(fullName);
             var preview = user.position || user.user_type_label || 'SK Official';
             var previewText = Comms.truncateText ? Comms.truncateText(preview, 40) : preview;
@@ -1041,6 +1041,7 @@ import './communication.js';
             parts.push('<div class="comms-bubble-wrap ' + (mine ? 'is-mine' : 'is-theirs') + (pickerOpen ? ' is-picker-open' : '') + (isAutomation ? ' is-automation' : '') + '" data-id="' + m.id + '"' +
                 (m.batch_id ? ' data-batch-id="' + Comms.escapeHtml(String(m.batch_id)) + '"' : '') +
                 ' title="' + Comms.escapeHtml(formatFullDateTime(m.created_at)) + '">' +
+                renderSenderMeta(m, mine, items[index - 1]) +
                 '<div class="comms-bubble-row">' +
                 bubbleContent +
                 '<div class="comms-bubble-tools">' +
@@ -1312,7 +1313,8 @@ import './communication.js';
     function updatePeerHeader(conversation) {
         var peer = (conversation && conversation.other_user) || {};
         var fullName = peer.name || 'User';
-        els.peerName.textContent = Comms.truncateText ? Comms.truncateText(fullName, 36) : fullName;
+        els.peerName.textContent = Comms.truncateText ? Comms.truncateText(fullName, 22) : fullName;
+        els.peerName.title = fullName;
         els.peerName.setAttribute('title', fullName);
         var statusBits = [];
         var position = String(peer.position || '').trim();
@@ -1461,7 +1463,7 @@ import './communication.js';
             return '<div class="comms-dir-group-title">' + Comms.escapeHtml(group.title || 'People') + '</div>' +
                 users.map(function (u) {
                     var fullName = u.name || 'User';
-                    var displayName = Comms.truncateText ? Comms.truncateText(fullName, 30) : fullName;
+                    var displayName = Comms.truncateText ? Comms.truncateText(fullName, 22) : fullName;
                     var avatar = u.profile_image_url || Comms.defaultAvatar(fullName);
                     var metaRaw = [u.position || u.user_type_label || '', u.barangay_name || ''].filter(Boolean).join(' · ');
                     var meta = Comms.truncateText ? Comms.truncateText(metaRaw, 40) : metaRaw;
@@ -1579,7 +1581,12 @@ import './communication.js';
             created_at: row.created_at
         };
         conv.updated_at = row.created_at || conv.updated_at;
-        if (!mine && Number(state.activeId) !== id && row.id) {
+        var seenKey = String(row.id || '');
+        state.seenInboxIds = state.seenInboxIds || Object.create(null);
+        var alreadyCounted = !!(seenKey && state.seenInboxIds[seenKey]);
+        if (seenKey) state.seenInboxIds[seenKey] = 1;
+        var viewingThis = Number(state.activeId) === id && document.visibilityState !== 'hidden';
+        if (!mine && row.id && !alreadyCounted && !viewingThis) {
             conv.unread_count = Number(conv.unread_count || 0) + 1;
         }
         state.conversations.splice(idx, 1);
@@ -1604,8 +1611,19 @@ import './communication.js';
     }
 
     function loadConversations() {
+        var epoch = Number(window.__COMMS_INBOX_EPOCH__) || 0;
+        state.listGen = (state.listGen || 0) + 1;
+        var gen = state.listGen;
         return Comms.api(routes.conversations).then(function (data) {
-            state.conversations = data.conversations || [];
+            if (gen !== state.listGen) return;
+            if (epoch !== (Number(window.__COMMS_INBOX_EPOCH__) || 0)) return;
+            var list = data.conversations || [];
+            if (state.activeId && document.visibilityState !== 'hidden') {
+                list.forEach(function (c) {
+                    if (Number(c.id) === Number(state.activeId)) c.unread_count = 0;
+                });
+            }
+            state.conversations = list;
             if (Comms.writeInboxCache) Comms.writeInboxCache(state.conversations);
             renderConversations('');
             prefetchFaqForConversations(state.conversations);
@@ -1918,10 +1936,17 @@ import './communication.js';
             renderConversations('');
         }
         clearHeaderUnreadForConversation(id);
-        Comms.api(Comms.route(routes.read, id), { method: 'POST', body: '{}' }).then(function (data) {
+        if (document.visibilityState !== 'hidden') {
+            window.__COMMS_INBOX_EPOCH__ = (Number(window.__COMMS_INBOX_EPOCH__) || 0) + 1;
+        }
+        var readPromise = document.visibilityState === 'hidden'
+            ? Promise.resolve(null)
+            : Comms.api(Comms.route(routes.read, id), { method: 'POST', body: '{}' });
+        readPromise.then(function (data) {
             if (data && typeof data.unread_count === 'number' && window.CommsRealtime && typeof window.CommsRealtime.updateHeaderBadge === 'function') {
                 window.CommsRealtime.updateHeaderBadge(data.unread_count);
             }
+            if (data) loadConversations();
         }).catch(function () {});
 
         var convPromise = Comms.api(Comms.route(routes.showConversation, id));
@@ -2190,13 +2215,68 @@ import './communication.js';
         Comms.showToast('Message cannot exceed ' + state.messageMaxLength + ' characters.', 'error');
     }
 
-    function publishSentMessage(sent) {
+    function nameParts(fullName) {
+        return String(fullName || '').trim().split(/\s+/).filter(Boolean);
+    }
+
+    function lastNameToken(fullName) {
+        var parts = nameParts(fullName);
+        if (!parts.length) return '';
+        var suffixes = { jr: 1, sr: 1, ii: 1, iii: 1, iv: 1, v: 1 };
+        var last = parts[parts.length - 1].replace(/\.$/, '');
+        if (suffixes[last.toLowerCase()] && parts.length > 1) {
+            last = parts[parts.length - 2].replace(/\.$/, '');
+        }
+        return last;
+    }
+
+    function compactSenderLabel(fullName) {
+        var full = String(fullName || '').trim();
+        if (!full || full.toLowerCase() === 'none' || full.toLowerCase() === 'null') return 'Member';
+        var last = lastNameToken(full);
+        var first = nameParts(full)[0] || '';
+        var label = last || first || full;
+        var peers = [];
+        (state.messages || []).forEach(function (row) {
+            var peerName = String(row && row.sender_name || '').trim();
+            if (peerName && peers.indexOf(peerName) === -1) peers.push(peerName);
+        });
+        var collisions = peers.filter(function (peerName) {
+            return last && lastNameToken(peerName).toLowerCase() === last.toLowerCase();
+        });
+        if (collisions.length > 1 && first) {
+            label = last + ', ' + first.charAt(0).toUpperCase() + '.';
+        }
+        if (label.length > 20) {
+            label = label.slice(0, 17).replace(/\s+$/, '') + '...';
+        }
+        return label;
+    }
+
+    function renderSenderMeta(m, mine, previous) {
+        if (mine) return '';
+        if (previous && !previous.mine && String(previous.sender_id) === String(m.sender_id)
+            && previous.message_type !== 'call' && previous.message_type !== 'system') {
+            return '';
+        }
+        var full = String(m.sender_name || '').trim() || 'Member';
+        var name = compactSenderLabel(full);
+        var avatar = String(m.sender_avatar_url || m.sender_profile_image_url || '').trim() || (Comms.defaultAvatar ? Comms.defaultAvatar(full) : '');
+        return '<div class="comms-msg-sender" title="' + Comms.escapeHtml(full) + '">' +
+            (avatar ? '<img class="comms-msg-sender-avatar" src="' + Comms.escapeHtml(avatar) + '" alt="">' : '') +
+            '<span class="comms-msg-sender-name">' + Comms.escapeHtml(name) + '</span>' +
+            '</div>';
+    }
+
+    function publishSentMessage(sent, extraPeers) {
         if (!sent || !window.CommsRealtime || typeof window.CommsRealtime.broadcastMessage !== 'function') return;
         var conv = state.activeConversation;
         var peer = conv && conv.other_user;
+        var peers = Array.isArray(extraPeers) ? extraPeers : [];
         window.CommsRealtime.broadcastMessage(sent.conversation_id || state.activeId, sent, {
             peerId: peer && (peer.id || peer.user_id),
-            peerType: peer && (peer.user_type || peer.type || peer.portal_user_type)
+            peerType: peer && (peer.user_type || peer.type || peer.portal_user_type),
+            peers: peers
         });
     }
 
@@ -2438,6 +2518,40 @@ import './communication.js';
             if (!filterLocalOfficials(trimmed).length) {
                 Comms.showToast(err.message || 'Search failed.', 'error');
             }
+        });
+    }
+
+    var markAllBtn = document.getElementById('commsMarkAllRead');
+    var markAllBusy = false;
+    if (markAllBtn) {
+        markAllBtn.addEventListener('click', function () {
+            if (markAllBusy || !routes.markAllRead) return;
+            var label = markAllBtn.querySelector('.comms-mark-all-read-label');
+            markAllBusy = true;
+            markAllBtn.disabled = true;
+            markAllBtn.setAttribute('aria-busy', 'true');
+            if (label) label.textContent = 'Marking...';
+            window.__COMMS_INBOX_EPOCH__ = (Number(window.__COMMS_INBOX_EPOCH__) || 0) + 1;
+            Comms.api(routes.markAllRead, { method: 'POST', body: '{}', dedupe: true }).then(function (data) {
+                (state.conversations || []).forEach(function (c) { c.unread_count = 0; });
+                if (Comms.writeInboxCache) Comms.writeInboxCache(state.conversations);
+                renderConversations('');
+                if (data && typeof data.unread_count === 'number' && window.CommsRealtime && typeof window.CommsRealtime.updateHeaderBadge === 'function') {
+                    window.CommsRealtime.updateHeaderBadge(data.unread_count);
+                }
+                return loadConversations();
+            }).catch(function (err) {
+                Comms.showToast((err && err.message) || 'Could not mark messages as read. Please try again.', 'error');
+                loadConversations();
+                if (window.CommsRealtime && typeof window.CommsRealtime.refreshUnread === 'function') {
+                    window.CommsRealtime.refreshUnread();
+                }
+            }).finally(function () {
+                markAllBusy = false;
+                markAllBtn.disabled = false;
+                markAllBtn.removeAttribute('aria-busy');
+                if (label) label.textContent = 'Mark All as Read';
+            });
         });
     }
 
@@ -2800,6 +2914,7 @@ import './communication.js';
 
     window.CommsChat = {
         appendMessage: appendMessage,
+        publishSentMessage: publishSentMessage,
         reloadConversations: loadConversations,
         reloadActiveMessages: reloadActiveMessages,
         noteInboxActivity: noteInboxActivity,

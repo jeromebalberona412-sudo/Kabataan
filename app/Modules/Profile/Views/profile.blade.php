@@ -613,56 +613,43 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="kkp-docs-empty-icon" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     <p class="kkp-docs-empty-text">No supporting documents uploaded.</p>
                 </div>
-                {{-- Original upload form removed: no upload allowed when no documents exist --}}
-                <div class="kkp-docs-upload-section" hidden>
+                <div class="kkp-docs-upload-section">
                     <h3 class="kkp-docs-upload-heading">Upload document</h3>
                     <p class="kkp-docs-upload-intro">
-                        Upload <strong>one</strong> optional supporting ID  School ID or PhilSys / National ID. Provide front and back images. JPG or PNG, max 10MB each.
+                        Upload the front and back of one ID. Choose the ID type used in KK Profiling so programs can reuse it. JPG or PNG, max 10MB each.
                     </p>
 
                     <fieldset class="kkp-wizard-doc-type-fieldset" id="profileDocTypeFieldset">
                         <legend class="kkp-wizard-doc-type-legend">Select document type</legend>
                         <div class="kkp-wizard-doc-type-options" role="radiogroup" aria-label="Document type">
+                            @foreach(\App\Support\SupportingDocumentTypes::labels() as $docType => $docLabel)
                             <label class="kkp-wizard-doc-type-option">
-                                <input type="radio" name="profile_document_type" value="school_id" id="profileDocTypeSchoolId">
+                                <input type="radio" name="profile_document_type" value="{{ $docType }}" id="profileDocType{{ \Illuminate\Support\Str::studly($docType) }}">
                                 <span class="kkp-wizard-doc-type-card">
-                                    <span class="kkp-wizard-doc-type-icon" aria-hidden="true">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="5" width="20" height="14" rx="2"></rect><circle cx="8" cy="12" r="2"></circle><path d="M14 10h5M14 14h5"></path></svg>
-                                    </span>
                                     <span class="kkp-wizard-doc-type-text">
-                                        <span class="kkp-wizard-doc-type-name">School ID</span>
-                                        <span class="kkp-wizard-doc-type-desc">Front and back · optional upload</span>
+                                        <span class="kkp-wizard-doc-type-name">{{ $docLabel }}</span>
+                                        <span class="kkp-wizard-doc-type-desc">Front and back</span>
                                     </span>
                                 </span>
                             </label>
-                            <label class="kkp-wizard-doc-type-option">
-                                <input type="radio" name="profile_document_type" value="national_id" id="profileDocTypeNationalId">
-                                <span class="kkp-wizard-doc-type-card">
-                                    <span class="kkp-wizard-doc-type-icon" aria-hidden="true">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="9" cy="11" r="2"></circle><path d="M15 9h4M15 13h4"></path></svg>
-                                    </span>
-                                    <span class="kkp-wizard-doc-type-text">
-                                        <span class="kkp-wizard-doc-type-name">PhilSys / National ID</span>
-                                        <span class="kkp-wizard-doc-type-desc">Front and back · optional upload</span>
-                                    </span>
-                                </span>
-                            </label>
+                            @endforeach
                         </div>
                     </fieldset>
 
-                    @foreach([
-                        ['type' => 'school_id', 'panelId' => 'profileSchoolIdUpload', 'label' => 'School ID', 'prefix' => 'profileSchoolId'],
-                        ['type' => 'national_id', 'panelId' => 'profileNationalIdUpload', 'label' => 'PhilSys / National ID', 'prefix' => 'profileNationalId'],
-                    ] as $doc)
-                    <div class="kkp-wizard-upload-panel" id="{{ $doc['panelId'] }}" hidden>
-                        <p class="kkp-wizard-upload-panel-title">{{ $doc['label'] }}  upload front and back</p>
+                    @foreach(\App\Support\SupportingDocumentTypes::labels() as $docType => $docLabel)
+                    @php
+                        $docPrefix = 'profile'.\Illuminate\Support\Str::studly($docType);
+                        $doc = ['type' => $docType, 'panelId' => $docPrefix.'Upload', 'label' => $docLabel, 'prefix' => $docPrefix];
+                    @endphp
+                    <div class="kkp-wizard-upload-panel" id="{{ $doc['panelId'] }}" data-profile-doc-panel="{{ $doc['type'] }}" hidden>
+                        <p class="kkp-wizard-upload-panel-title">{{ $doc['label'] }} — upload front and back</p>
                         <div class="kkp-wizard-upload-grid">
                             @foreach(['front' => 'Front', 'back' => 'Back'] as $side => $sideLabel)
                             @php $inputId = $doc['prefix'].ucfirst($side); @endphp
                             <div class="kkp-wizard-upload-shell">
                                 <p class="kkp-wizard-upload-side-label">{{ $sideLabel }}</p>
                                 <label class="kkp-wizard-dropzone" for="{{ $inputId }}">
-                                    <input type="file" id="{{ $inputId }}" accept=".jpg,.jpeg,.png,image/jpeg,image/png" class="kkp-wizard-file-input" data-doc-side="{{ $side }}">
+                                    <input type="file" id="{{ $inputId }}" accept=".jpg,.jpeg,.png,image/jpeg,image/png" class="kkp-wizard-file-input" data-profile-doc-type="{{ $doc['type'] }}" data-doc-side="{{ $side }}">
                                     <span class="kkp-wizard-dropzone-empty">
                                         <span class="kkp-wizard-dropzone-icon" aria-hidden="true">??</span>
                                         <span class="kkp-wizard-dropzone-title">{{ $sideLabel }} image</span>

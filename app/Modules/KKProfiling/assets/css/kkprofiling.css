@@ -397,26 +397,35 @@
 }
 
 .kkp-acknowledgment-wrapper .kkp-form-check-label,
-.kkp-acknowledgment-wrapper .kkp-terms-link {
+.kkp-acknowledgment-wrapper .kkp-terms-link,
+.kkp-acknowledgment-wrapper .kkp-ack-sentence {
     font-size: 13px;
 }
 
 .kkp-ack-row {
+    display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 8px;
 }
 
+.kkp-ack-sentence {
+    white-space: nowrap;
+    min-width: 0;
+}
+
 .kkp-acknowledgment .kkp-terms-link {
-    display: inline-block;
-    margin: 0 0 0.2rem;
+    display: inline;
+    margin: 0;
     text-align: left;
-    font-size: 0.75rem;
+    font-size: inherit;
+    white-space: nowrap;
 }
 
 .kkp-acknowledgment .kkp-form-check-label {
     font-size: 0.75rem;
-    line-height: 1.3;
-    white-space: normal;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
 .kkp-terms-link {

@@ -213,6 +213,10 @@
         const label = escapeHtml(question.label || `Question ${index + 1}`);
         const questionId = escapeHtml(String(question.id));
         const name = `question_${question.id}`;
+        const isTeamName = question.field_key === 'team_name' || String(question.label || '').trim().toLowerCase() === 'team name';
+        const teamNameHelp = isTeamName
+            ? `<p class="gf-field-note" style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#92400e;">${escapeHtml(question.help_text || 'Important: All members of the same team must enter exactly the same Team Name. Use identical spelling, spacing, capitalization, and wording for every team member. Do not create different variations of your team\'s name.')}</p>`
+            : '';
 
         if (question.type === 'file') {
             const reusable = global.ProgramIdReuse?.reusableForQuestion?.(program, question.id);
@@ -304,7 +308,8 @@
         return `
             <div class="gf-card gf-question">
                 <label class="gf-question-label">${label} ${required}</label>
-                <input type="text" name="${name}" class="gf-input" placeholder="Your answer" data-question-id="${questionId}" data-question-type="text" data-question-label="${label}" ${requiredAttr}>
+                ${teamNameHelp}
+                <input type="text" name="${name}" class="gf-input" placeholder="Your answer" data-question-id="${questionId}" data-question-type="text" data-question-label="${label}" ${requiredAttr} autocomplete="off">
             </div>`;
     }
 
@@ -565,6 +570,11 @@
 
     function validateForm() {
         const questions = program.custom_questions || [];
+
+        if (form.querySelector('.is-uploading')) {
+            alert('Please wait for the file upload to finish before submitting.');
+            return false;
+        }
 
         for (const question of questions) {
             if (!question.required) continue;

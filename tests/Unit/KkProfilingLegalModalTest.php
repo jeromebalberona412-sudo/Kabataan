@@ -1,9 +1,12 @@
 <?php
 
-uses(Tests\TestCase::class);
+use Illuminate\Support\ViewErrorBag;
+use Tests\TestCase;
+
+uses(TestCase::class);
 
 test('kk profiling uses one modal for both legal documents', function () {
-    view()->share('errors', new Illuminate\Support\ViewErrorBag);
+    view()->share('errors', new ViewErrorBag);
 
     $modal = view('kkprofiling::partials.kk-profiling-terms-modal')->render();
     $acknowledgment = view('kkprofiling::partials.kk-profiling-acknowledgment')->render();
@@ -22,7 +25,8 @@ test('kk profiling uses one modal for both legal documents', function () {
         ->and($modal)->not->toContain('I Agree')
         ->and($modal)->not->toContain('>Close<')
         ->and($modal)->toContain('kkpTermsModalAck')
-        ->and($acknowledgment)->toContain('Terms and Conditions &amp; Privacy Policy')
-        ->and($acknowledgment)->toContain('I have read and agree to the Terms and Conditions and Privacy Policy.')
+        ->and($acknowledgment)->toContain('kkpTermsOpenBtn')
+        ->and($acknowledgment)->toContain('Terms and Conditions and Privacy Policy')
+        ->and($acknowledgment)->toContain('I have read and agree to the')
         ->and($acknowledgment)->toContain('disabled');
 });

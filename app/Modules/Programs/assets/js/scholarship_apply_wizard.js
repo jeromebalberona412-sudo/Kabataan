@@ -958,6 +958,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         if (confirmBtn) confirmBtn.disabled = true;
 
         try {
+            if (shell?.querySelector('.is-uploading')) {
+                throw new Error('Please wait for the file upload to finish.');
+            }
             await submitApplication();
             closeConfirmModal();
             showSuccessModal();

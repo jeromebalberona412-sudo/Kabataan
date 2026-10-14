@@ -44,7 +44,7 @@ class KabataanProgramService
     /** @var array<string, list<string>> */
     private const SCHOLARSHIP_TARGET_EDUCATION_LEVELS = [
         'senior_high' => ['High School Level', 'High School Grad'],
-        'college' => ['College Level', 'High School Grad'],
+        'college' => ['College Level'],
     ];
 
     /** @var list<string> */
@@ -497,6 +497,8 @@ class KabataanProgramService
         } catch (\Throwable $e) {
             report($e);
         }
+
+        $this->clearUserDashboardCache($user);
 
         return $this->formatUserApplication($application, true);
     }
@@ -954,9 +956,16 @@ class KabataanProgramService
         }
 
         $profile = $this->resolveKkProfile($user, ['education', 'youth_classification', 'youth_age_group']);
-        $education = $this->normalizeScholarshipEducation((string) ($profile['education'] ?? ''));
+        $education = self::canonicalScholarshipEducation((string) ($profile['education'] ?? ''));
 
-        if ($education === '' || ! in_array($education, self::SCHOLARSHIP_EDUCATION_LEVELS, true)) {
+        if ($education === '') {
+            return [
+                'eligible' => false,
+                'message' => 'Complete your Educational Background in KK Profiling before applying for a scholarship.',
+            ];
+        }
+
+        if (! in_array($education, self::SCHOLARSHIP_EDUCATION_LEVELS, true)) {
             return [
                 'eligible' => false,
                 'message' => 'Scholarship applications are only open to High School Level, High School Grad, and College Level Kabataan.',
@@ -1005,7 +1014,7 @@ class KabataanProgramService
             } elseif (in_array('senior_high', $targetLevels, true)) {
                 $message = 'This Senior High scholarship accepts High School Level or High School Grad educational backgrounds only.';
             } elseif (in_array('college', $targetLevels, true)) {
-                $message = 'This College scholarship accepts College Level or High School Grad educational backgrounds only.';
+                $message = 'This College scholarship accepts College Level educational backgrounds only.';
             }
 
             return [
@@ -1015,7 +1024,8 @@ class KabataanProgramService
         }
 
         $userClassification = trim((string) ($profile['youth_classification'] ?? ''));
-        if ($allowedClassifications !== [] && ! in_array($userClassification, $allowedClassifications, true)) {
+        $educationMatchesScholarship = in_array($education, $allowedEducationLevels !== [] ? $allowedEducationLevels : self::SCHOLARSHIP_EDUCATION_LEVELS, true);
+        if (! $educationMatchesScholarship && $allowedClassifications !== [] && ! in_array($userClassification, $allowedClassifications, true)) {
             return [
                 'eligible' => false,
                 'message' => $targetLevels !== []
@@ -1199,7 +1209,7 @@ class KabataanProgramService
         return null;
     }
 
-    private function normalizeScholarshipEducation(string $value): string
+    public static function canonicalScholarshipEducation(string $value): string
     {
         $trimmed = trim($value);
         if ($trimmed === '') {
@@ -1207,13 +1217,20 @@ class KabataanProgramService
         }
 
         $normalized = preg_replace('/\s+/', ' ', $trimmed) ?? $trimmed;
+        $key = strtolower($normalized);
         $map = [
             'high school level' => 'High School Level',
+            'highschool level' => 'High School Level',
+            'senior high' => 'High School Level',
+            'senior high school' => 'High School Level',
+            'senior high school level' => 'High School Level',
             'high school grad' => 'High School Grad',
+            'high school graduate' => 'High School Grad',
+            'highschool grad' => 'High School Grad',
+            'highschool graduate' => 'High School Grad',
             'college level' => 'College Level',
+            'college' => 'College Level',
         ];
-
-        $key = strtolower($normalized);
 
         return $map[$key] ?? $trimmed;
     }
@@ -1466,18 +1483,31 @@ class KabataanProgramService
             ];
         }
 
-        if (empty($meta['path'])) {
+        if (empty($meta['path']) && empty($meta['url']) && empty($meta['public_id'])) {
             return null;
         }
 
-        return [
+        $stored = [
             'question_id' => $meta['question_id'] ?? null,
-            'path' => str_replace('\\', '/', (string) $meta['path']),
+            'path' => str_replace('\\', '/', (string) ($meta['path'] ?? ($meta['public_id'] ?? ''))),
             'original_name' => $meta['original_name'] ?? null,
             'size' => isset($meta['size']) ? (int) $meta['size'] : null,
-            'mime' => $meta['mime'] ?? 'application/pdf',
+            'mime' => $meta['mime'] ?? null,
             'uploaded_at' => $meta['uploaded_at'] ?? null,
         ];
+
+        if (($meta['storage'] ?? '') === 'cloudinary' || ! empty($meta['url'])) {
+            $stored['storage'] = 'cloudinary';
+            $stored['public_id'] = $meta['public_id'] ?? ($stored['path'] !== '' ? $stored['path'] : null);
+            $stored['url'] = $meta['url'] ?? null;
+            $stored['mime'] = $stored['mime'] ?: 'image/jpeg';
+        }
+
+        if ($stored['mime'] === null || $stored['mime'] === '') {
+            $stored['mime'] = 'application/pdf';
+        }
+
+        return $stored;
     }
 
     /**

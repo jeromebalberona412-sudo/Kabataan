@@ -6,6 +6,7 @@ use App\Models\Barangay;
 use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Rules\ValidEmailAddress;
+use App\Support\KabataanRegistrationNameLimits;
 use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 use Carbon\Carbon;
@@ -583,22 +584,31 @@ class KkRegistrationDraftService
             ]);
         }
 
+        $names = KabataanRegistrationNameLimits::assertStored($step1);
         $namePreview = new KabataanRegistration([
-            'first_name' => mb_substr((string) ($step1['first_name'] ?? ''), 0, 100),
-            'last_name' => mb_substr((string) ($step1['last_name'] ?? ''), 0, 100),
-            'middle_name' => ($step1['middle_name'] ?? null)
-                ? mb_substr((string) $step1['middle_name'], 0, 100)
-                : null,
+            'first_name' => $names['first_name'],
+            'last_name' => $names['last_name'],
+            'middle_name' => $names['middle_name'],
             'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
         ]);
 
         // Create/update the youth login first, outside a DB transaction.
         // PostgreSQL aborts the whole transaction after a failed INSERT, so
         // role/unique retries cannot run inside the same transaction.
+        $displayName = $namePreview->full_name;
+        $userNameMax = KabataanRegistrationNameLimits::usersNameMax();
+        if (mb_strlen($displayName) > $userNameMax) {
+            Log::warning('KK profiling account display name exceeds users.name', [
+                'length' => mb_strlen($displayName),
+                'column_max' => $userNameMax,
+            ]);
+            $displayName = mb_substr($displayName, 0, $userNameMax);
+        }
+
         $user = $this->upsertYouthUser(
             $email,
             $password,
-            $namePreview->full_name,
+            $displayName,
             $barangay->tenant_id,
             $barangay->id,
         );
@@ -626,11 +636,9 @@ class KkRegistrationDraftService
         $registrationPayload = [
             'tenant_id' => $barangay->tenant_id,
             'barangay_id' => $barangay->id,
-            'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
-            'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
-            'middle_name' => ($step1['middle_name'] ?? null)
-                ? mb_substr((string) $step1['middle_name'], 0, 100)
-                : null,
+            'last_name' => $names['last_name'],
+            'first_name' => $names['first_name'],
+            'middle_name' => $names['middle_name'],
             'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
             'email' => $email,
             'contact_number' => $contactNumber !== '' ? $contactNumber : null,
@@ -765,6 +773,7 @@ class KkRegistrationDraftService
             'step2_data' => [],
         ];
 
+        $names = KabataanRegistrationNameLimits::assertStored($step1);
         $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
         $contactNumber = app(PhoneNumberService::class)->toLocalMobile((string) ($step1['contact_number'] ?? ''))
             ?: mb_substr(preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? '')) ?: '', 0, 15);
@@ -772,11 +781,9 @@ class KkRegistrationDraftService
         $registrationPayload = [
             'tenant_id' => $barangay->tenant_id,
             'barangay_id' => $barangay->id,
-            'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
-            'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
-            'middle_name' => ($step1['middle_name'] ?? null)
-                ? mb_substr((string) $step1['middle_name'], 0, 100)
-                : null,
+            'last_name' => $names['last_name'],
+            'first_name' => $names['first_name'],
+            'middle_name' => $names['middle_name'],
             'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
             'email' => null,
             'contact_number' => $contactNumber !== '' ? $contactNumber : null,
