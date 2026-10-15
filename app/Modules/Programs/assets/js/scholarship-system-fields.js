@@ -25,18 +25,17 @@
     const SCHOOL_TEXT_MIN = 20;
     const SCHOOL_TEXT_MAX = 100;
     const UNITS_ENROLLED_MAX = 100;
-    const NAME_MAX_LENGTH = 50;
+    const NAME_MIN_LENGTH = 2;
+    const NAME_SOFT_MAX_LENGTH = 50;
+    const NAME_MAX_LENGTH = 150;
     const STRAND_MAX_LENGTH = 100;
     const STRAND_ABBREVIATION_MAX_LENGTH = 50;
-    const NAME_NO_SPACE_FIELD_IDS = new Set([
-        'mother_middle_name', 'father_middle_name', 'guardian_middle_name',
-        'mother_last_name', 'father_last_name', 'guardian_last_name',
+    const FAMILY_NAME_FIELD_IDS = new Set([
+        'mother_first_name', 'mother_middle_name', 'mother_last_name',
+        'father_first_name', 'father_middle_name', 'father_last_name',
+        'guardian_first_name', 'guardian_middle_name', 'guardian_last_name',
     ]);
-    const FIRST_NAME_FIELD_IDS = new Set([
-        'mother_first_name', 'father_first_name', 'guardian_first_name',
-    ]);
-    const NAME_NO_SPACE_PATTERN = /^[A-Za-z.\-]+$/;
-    const FIRST_NAME_PATTERN = /^(?!\s)[A-Za-z.\-]+(\s[A-Za-z.\-]+)*$/;
+    const FAMILY_NAME_PATTERN = /^(?!\s)[\p{L}.\-]+(?: [\p{L}.\-]+)*$/u;
     const OCCUPATION_OTHER_VALUE = 'Other Occupation';
     const OCCUPATION_OTHER_MIN = 3;
     const OCCUPATION_OTHER_MAX = 100;
@@ -264,19 +263,7 @@
         }
 
         if (field.type === 'year') {
-            const values = collectAnswers(container, kkEducation);
-            const bounds = field.id === 'expected_graduation_year'
-                ? getExpectedGraduationBounds()
-                : getYearGraduatedBounds(field.id, values);
-            let year = String(el.value || '').replace(/\D/g, '').slice(0, 4);
-            if (year.length === 4) {
-                const parsed = parseInt(year, 10);
-                if (!Number.isNaN(parsed)) {
-                    if (parsed < bounds.min) year = String(bounds.min);
-                    if (parsed > bounds.max) year = String(bounds.max);
-                }
-            }
-            el.value = year;
+            el.value = String(el.value || '').replace(/\D/g, '').slice(0, 4);
             return;
         }
 
@@ -285,12 +272,17 @@
             return;
         }
 
-        if (field.type === 'name') {
-            if (NAME_NO_SPACE_FIELD_IDS.has(field.id)) {
-                el.value = String(el.value || '').replace(/\s/g, '');
-            } else if (FIRST_NAME_FIELD_IDS.has(field.id)) {
-                el.value = String(el.value || '').replace(/^\s+/, '');
+        if (field.type === 'name' && FAMILY_NAME_FIELD_IDS.has(field.id)) {
+            const sanitized = sanitizeFamilyName(el.value);
+            const extended = el.dataset.nameExtended === '1';
+            if (!extended && sanitized.length > NAME_SOFT_MAX_LENGTH) {
+                el.dataset.namePending = sanitized.slice(NAME_SOFT_MAX_LENGTH, NAME_MAX_LENGTH);
+                el.value = sanitized.slice(0, NAME_SOFT_MAX_LENGTH);
+                openLongNameModal(el);
+                return;
             }
+            el.value = sanitized.slice(0, extended ? NAME_MAX_LENGTH : NAME_SOFT_MAX_LENGTH);
+            return;
         }
 
         const maxLen = getFieldMaxLength(field);
@@ -537,20 +529,28 @@
         return validateNameField('', value, required);
     }
 
+    function isFamilyNameField(fieldId) {
+        return FAMILY_NAME_FIELD_IDS.has(fieldId);
+    }
+
+    function sanitizeFamilyName(raw) {
+        let value = String(raw || '').normalize('NFC');
+        value = value.replace(/[^\p{L}.\-\s]/gu, '');
+        value = value.replace(/^\s+/, '');
+        value = value.replace(/ {2,}/g, ' ');
+        return value;
+    }
+
     function validateNameField(fieldId, value, required) {
         const trimmed = String(value || '').trim();
         if (!trimmed) return required ? 'This field is required.' : '';
-        if (trimmed.length < 3) return 'Must be at least 3 characters.';
+        if (trimmed.length < NAME_MIN_LENGTH) return `Must be at least ${NAME_MIN_LENGTH} characters.`;
         if (trimmed.length > NAME_MAX_LENGTH) return `Must not exceed ${NAME_MAX_LENGTH} characters.`;
 
-        if (fieldId && NAME_NO_SPACE_FIELD_IDS.has(fieldId)) {
-            if (/\s/.test(trimmed)) return 'Spaces are not allowed.';
-            if (!NAME_NO_SPACE_PATTERN.test(trimmed)) return 'Letters, periods, and hyphens only.';
-            return '';
-        }
-
-        if (fieldId && FIRST_NAME_FIELD_IDS.has(fieldId)) {
-            if (!FIRST_NAME_PATTERN.test(trimmed)) return 'Cannot start with a space. Use letters, periods, and hyphens only.';
+        if (isFamilyNameField(fieldId)) {
+            if (!FAMILY_NAME_PATTERN.test(trimmed)) {
+                return 'Enter a character before each space. Letters, periods, and hyphens only.';
+            }
             return '';
         }
 
@@ -807,6 +807,7 @@
         const lengthAttrs = field.minLength && field.maxLength
             ? `minlength="${field.minLength}" maxlength="${field.maxLength}"`
             : (maxLen ? `maxlength="${maxLen}"` : '');
+        const nameExtended = field.type === 'name' && String(rawValue || '').trim().length > NAME_SOFT_MAX_LENGTH;
         const inputClass = field.type === 'currency'
             ? 'gf-input schol-system-input schol-system-currency'
             : `gf-input schol-system-input${uppercaseClass}`;
@@ -815,8 +816,8 @@
         return `
             <div class="gf-form-group schol-system-field-wrap" data-field-wrap="${field.id}" ${hiddenAttr}>
                 <label for="sys_${field.id}">${escapeHtml(fieldLabel)}${reqMark}</label>
-                <input class="${inputClass}" type="${inputType}" name="${field.id}" id="sys_${field.id}" data-system-field="${field.id}" data-field-type="${field.type}" value="${displayValue}" ${required ? 'required' : ''} ${extraAttrs} ${lengthAttrs} autocomplete="off">
-                ${field.type === 'name' ? `<span class="sch-field-hint">3–${NAME_MAX_LENGTH} characters, no leading spaces</span>` : ''}
+                <input class="${inputClass}" type="${inputType}" name="${field.id}" id="sys_${field.id}" data-system-field="${field.id}" data-field-type="${field.type}" value="${displayValue}" ${required ? 'required' : ''} ${extraAttrs} ${lengthAttrs} ${nameExtended ? 'data-name-extended="1"' : ''} autocomplete="off">
+                ${field.type === 'name' ? `<span class="sch-field-hint">${NAME_MIN_LENGTH}–${NAME_MAX_LENGTH} characters. Type a character before each space.</span>` : ''}
                 ${field.id === 'strand' ? `<span class="sch-field-hint">Maximum ${STRAND_MAX_LENGTH} characters</span>` : ''}
                 ${field.id === 'strand_abbreviation' ? `<span class="sch-field-hint">Maximum ${STRAND_ABBREVIATION_MAX_LENGTH} characters, no spaces</span>` : ''}
                 ${field.minLength && field.maxLength ? `<span class="sch-field-hint">${field.minLength}–${field.maxLength} characters</span>` : (field.maxLength ? `<span class="sch-field-hint">Maximum ${field.maxLength} characters</span>` : '')}
@@ -889,6 +890,82 @@
         bindApplicantEvents(container, kkEducation);
     }
 
+    let longNameTarget = null;
+
+    function ensureLongNameModal() {
+        let modal = document.getElementById('schLongNameModal');
+        if (modal) return modal;
+
+        modal = document.createElement('div');
+        modal.id = 'schLongNameModal';
+        modal.className = 'sch-long-name-modal';
+        modal.hidden = true;
+        modal.innerHTML = `
+            <div class="sch-long-name-backdrop" data-long-name-cancel></div>
+            <div class="sch-long-name-card" role="dialog" aria-modal="true" aria-labelledby="schLongNameTitle">
+                <h2 id="schLongNameTitle">Long name</h2>
+                <p>This name is longer than 50 characters. Type <strong>YES</strong> to continue. The maximum is 150 characters.</p>
+                <label for="schLongNameConfirm">Type YES to continue</label>
+                <input id="schLongNameConfirm" type="text" autocomplete="off" inputmode="text">
+                <p class="sch-field-inline-error" id="schLongNameError" hidden>Type YES to continue.</p>
+                <div class="sch-long-name-actions">
+                    <button type="button" class="sch-long-name-cancel" data-long-name-cancel>Cancel</button>
+                    <button type="button" class="sch-long-name-continue" id="schLongNameContinue" disabled>Continue</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        const input = modal.querySelector('#schLongNameConfirm');
+        const continueBtn = modal.querySelector('#schLongNameContinue');
+        const syncContinue = () => {
+            const ok = String(input.value || '').trim().toLowerCase() === 'yes';
+            continueBtn.disabled = !ok;
+            modal.querySelector('#schLongNameError').hidden = true;
+        };
+        input.addEventListener('input', syncContinue);
+        modal.querySelectorAll('[data-long-name-cancel]').forEach((el) => {
+            el.addEventListener('click', closeLongNameModal);
+        });
+        continueBtn.addEventListener('click', () => {
+            if (String(input.value || '').trim().toLowerCase() !== 'yes' || !longNameTarget) {
+                modal.querySelector('#schLongNameError').hidden = false;
+                return;
+            }
+            const target = longNameTarget;
+            const pending = target.dataset.namePending || '';
+            target.dataset.nameExtended = '1';
+            delete target.dataset.namePending;
+            target.value = sanitizeFamilyName(`${target.value}${pending}`).slice(0, NAME_MAX_LENGTH);
+            closeLongNameModal();
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+            target.focus();
+        });
+
+        return modal;
+    }
+
+    function closeLongNameModal() {
+        const modal = document.getElementById('schLongNameModal');
+        if (!modal) return;
+        modal.hidden = true;
+        document.body.classList.remove('sch-long-name-open');
+        longNameTarget = null;
+    }
+
+    function openLongNameModal(el) {
+        if (!el || el.dataset.nameExtended === '1') return;
+        const modal = ensureLongNameModal();
+        if (!modal.hidden && longNameTarget === el) return;
+        longNameTarget = el;
+        const input = modal.querySelector('#schLongNameConfirm');
+        input.value = '';
+        modal.querySelector('#schLongNameContinue').disabled = true;
+        modal.querySelector('#schLongNameError').hidden = true;
+        modal.hidden = false;
+        document.body.classList.add('sch-long-name-open');
+        input.focus();
+    }
+
     function showInlineFieldError(wrap, message) {
         if (!wrap) return;
         const errorEl = wrap.querySelector('.sch-field-inline-error');
@@ -919,8 +996,8 @@
 
         const maxLen = field.type === 'contact'
             ? 11
-            : (field.type === 'year' ? 4 : getFieldMaxLength(field));
-        if (maxLen && String(el.value || '').length >= maxLen) {
+            : getFieldMaxLength(field);
+        if (field.type !== 'year' && maxLen && String(el.value || '').length > maxLen) {
             showInlineFieldError(wrap, `Must not exceed ${maxLen} characters.`);
             return;
         }
@@ -955,25 +1032,44 @@
                 if (!field) return;
 
                 if (event.key === ' ') {
-                    if (field.id === 'strand_abbreviation' || NAME_NO_SPACE_FIELD_IDS.has(field.id)) {
+                    if (field.id === 'strand_abbreviation') {
                         event.preventDefault();
                         return;
                     }
-                    if (FIRST_NAME_FIELD_IDS.has(field.id) && el.selectionStart === 0) {
-                        event.preventDefault();
+                    if (isFamilyNameField(field.id)) {
+                        const before = el.value.slice(0, el.selectionStart || 0);
+                        if (before.trim() === '' || before.endsWith(' ')) {
+                            event.preventDefault();
+                        }
                         return;
                     }
                 }
 
+                if (field.type === 'year') {
+                    if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+                    const selection = el.selectionEnd - el.selectionStart;
+                    if (el.value.length - selection >= 4) {
+                        event.preventDefault();
+                    }
+                    return;
+                }
+
                 const maxLen = field.type === 'contact'
                     ? 11
-                    : (field.type === 'year' ? 4 : getFieldMaxLength(field));
-                if (!maxLen) return;
-                if (event.key.length !== 1) return;
+                    : getFieldMaxLength(field);
+                const softCap = isFamilyNameField(field.id) && el.dataset.nameExtended !== '1'
+                    ? NAME_SOFT_MAX_LENGTH
+                    : maxLen;
+                if (!softCap) return;
+                if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
                 const selection = el.selectionEnd - el.selectionStart;
-                if (el.value.length - selection >= maxLen) {
+                if (el.value.length - selection >= softCap) {
                     event.preventDefault();
-                    showInlineFieldError(el.closest('[data-field-wrap]'), `Must not exceed ${maxLen} characters.`);
+                    if (isFamilyNameField(field.id) && el.dataset.nameExtended !== '1') {
+                        openLongNameModal(el);
+                        return;
+                    }
+                    showInlineFieldError(el.closest('[data-field-wrap]'), `Must not exceed ${softCap} characters.`);
                 }
             });
             el.addEventListener('blur', runValidation);

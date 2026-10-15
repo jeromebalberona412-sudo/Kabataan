@@ -11,6 +11,7 @@ use App\Modules\Programs\Services\ProgramDocumentService;
 use App\Modules\Programs\Services\ProgramIdReuseService;
 use App\Support\SupportingDocumentTypes;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -152,6 +153,47 @@ class ProgramController extends Controller
 
         return response()->json([
             'message' => 'Application cancelled successfully. You may submit a new application.',
+            'application' => $application,
+        ]);
+    }
+
+    public function updatePersonalInformation(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:150'],
+            'middle_name' => ['nullable', 'string', 'max:150'],
+            'last_name' => ['required', 'string', 'max:150'],
+            'suffix' => ['nullable', 'string', 'max:20'],
+            'sex' => ['required', 'string', 'max:20'],
+            'email' => ['required', 'string', 'max:150'],
+            'contact_number' => ['required', 'string', 'max:20'],
+        ]);
+
+        $application = $this->programService->updatePersonalInformation(Auth::user(), $id, $validated);
+
+        return response()->json([
+            'message' => 'Personal information updated.',
+            'application' => $application,
+        ]);
+    }
+
+    public function resubmitDocument(Request $request, int $id, string $questionId): JsonResponse
+    {
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'max:5120'],
+        ]);
+
+        $file = $validated['file'];
+        if (! $file instanceof UploadedFile) {
+            throw ValidationException::withMessages([
+                'file' => ['Please choose the replacement file.'],
+            ]);
+        }
+
+        $application = $this->programService->resubmitDocument(Auth::user(), $id, $questionId, $file);
+
+        return response()->json([
+            'message' => 'Requirement resubmitted. Your answers were not changed.',
             'application' => $application,
         ]);
     }

@@ -158,6 +158,17 @@ class ConversationService
             ];
         });
 
+        if ($userType === ParticipantTypeResolver::KABATAAN) {
+            $viewerBarangayId = $this->resolveUserBarangayId($user);
+            $items = $items->filter(function (array $item) use ($viewerBarangayId) {
+                $other = $item['other_user'] ?? [];
+
+                return ($other['user_type'] ?? '') === ParticipantTypeResolver::SK_OFFICIAL
+                    && $viewerBarangayId > 0
+                    && (int) ($other['barangay_id'] ?? 0) === $viewerBarangayId;
+            })->values();
+        }
+
         if ($search !== null && trim($search) !== '') {
             $q = mb_strtolower(trim($search));
             $items = $items->filter(function (array $item) use ($q) {
@@ -280,10 +291,9 @@ class ConversationService
         if ($viewerType === ParticipantTypeResolver::KABATAAN) {
             $builder->where('role', 'sk_official');
             if ($viewerBarangayId > 0) {
-                $builder->where(function (Builder $officials) use ($viewerBarangayId) {
-                    $officials->where('barangay_id', $viewerBarangayId)
-                        ->orWhereNull('barangay_id');
-                });
+                $builder->where('barangay_id', $viewerBarangayId);
+            } else {
+                $builder->whereRaw('1 = 0');
             }
         } elseif ($viewerType === ParticipantTypeResolver::SK_OFFICIAL) {
             $builder->where(function (Builder $scope) {
@@ -400,7 +410,7 @@ class ConversationService
 
     /**
      * Messaging rules:
-     * - Kabataan: SK Officials (same barangay when known; otherwise any active official)
+     * - Kabataan: SK Officials in the same barangay only
      * - SK Official: any active Kabataan / SK Official / SK Federation
      * - SK Federation: active kabataan / sk_official / sk_fed accounts
      */
@@ -425,7 +435,8 @@ class ConversationService
 
         return match ($fromType) {
             ParticipantTypeResolver::KABATAAN => $toType === ParticipantTypeResolver::SK_OFFICIAL
-                && ($fromBarangayId <= 0 || $toBarangayId <= 0 || $fromBarangayId === $toBarangayId),
+                && $fromBarangayId > 0
+                && $toBarangayId === $fromBarangayId,
             ParticipantTypeResolver::SK_OFFICIAL => match ($toType) {
                 ParticipantTypeResolver::KABATAAN,
                 ParticipantTypeResolver::SK_OFFICIAL,

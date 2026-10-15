@@ -83,6 +83,67 @@ class ProgramDocumentService
     }
 
     /**
+     * Replace one stored requirement after an official asks for resubmission.
+     *
+     * @return array<string, mixed>
+     */
+    public function replaceStoredDocument(
+        User $user,
+        ProgramApplication $application,
+        string $questionId,
+        UploadedFile $file,
+    ): array {
+        $draft = $this->uploadDraft($user, (int) $application->program_id, $questionId, $file);
+        $existing = is_array(($application->required_documents ?? [])[$questionId] ?? null)
+            ? $application->required_documents[$questionId]
+            : [];
+
+        $meta = [
+            'question_id' => $questionId,
+            'question_label' => $existing['question_label'] ?? null,
+            'original_name' => $draft['original_name'] ?? $file->getClientOriginalName(),
+            'size' => (int) ($draft['size'] ?? $file->getSize() ?? 0),
+            'mime' => $draft['mime'] ?? ($file->getMimeType() ?: 'application/pdf'),
+            'uploaded_at' => now()->toIso8601String(),
+            'review_status' => 'pending_review',
+            'resubmit_reason' => null,
+            'resubmitted_at' => now()->toIso8601String(),
+        ];
+
+        if (($draft['storage'] ?? '') === 'cloudinary' && ! empty($draft['url'])) {
+            $meta['storage'] = 'cloudinary';
+            $meta['public_id'] = $draft['public_id'] ?? null;
+            $meta['url'] = $draft['url'];
+            $meta['path'] = $draft['public_id'] ?? $draft['url'];
+
+            return $meta;
+        }
+
+        $draftPath = $this->normalizeStoragePath((string) ($draft['path'] ?? ''));
+        if ($draftPath === '' || ! Storage::disk(self::DISK)->exists($draftPath)) {
+            throw ValidationException::withMessages([
+                'file' => ['The replacement file could not be saved. Please upload it again.'],
+            ]);
+        }
+
+        $extension = pathinfo($draftPath, PATHINFO_EXTENSION) ?: 'pdf';
+        $permanentDirectory = $this->applicationDirectory($application->id);
+        Storage::disk(self::DISK)->makeDirectory($permanentDirectory);
+        $permanentPath = $permanentDirectory.'/'.$this->sanitizeQuestionId($questionId).'.'.$extension;
+
+        if ($draftPath !== $permanentPath) {
+            Storage::disk(self::DISK)->copy($draftPath, $permanentPath);
+        }
+
+        $meta['disk'] = self::DISK;
+        $meta['path'] = $permanentPath;
+        $meta['size'] = Storage::disk(self::DISK)->size($permanentPath);
+        $meta['mime'] = $this->mimeFromPath($permanentPath);
+
+        return $meta;
+    }
+
+    /**
      * @return array<string, array<string, mixed>>
      */
     public function listDraftDocuments(User $user, int $scheduleProgramId, array $questionIds): array
@@ -168,6 +229,9 @@ class ProgramDocumentService
                         (int) $application->program_id,
                         $qid,
                     );
+                    $documents[$qid]['question_id'] = $qid;
+                    $documents[$qid]['review_status'] = (string) ($meta['review_status'] ?? 'pending_review');
+                    $documents[$qid]['resubmit_reason'] = $meta['resubmit_reason'] ?? null;
                 }
 
                 continue;
@@ -178,6 +242,9 @@ class ProgramDocumentService
             }
 
             $documents[$qid] = $this->enrichDocumentUrls($meta, $application->id);
+            $documents[$qid]['question_id'] = $qid;
+            $documents[$qid]['review_status'] = (string) ($meta['review_status'] ?? 'pending_review');
+            $documents[$qid]['resubmit_reason'] = $meta['resubmit_reason'] ?? null;
         }
 
         return $documents;

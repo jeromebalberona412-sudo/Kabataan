@@ -10,6 +10,8 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/api/kabataan/programs/applications/{id}', [ProgramController::class, 'showApplication'])->name('kabataan.programs.applications.show');
     Route::post('/api/kabataan/programs/applications', [ProgramController::class, 'submitApplication'])->name('kabataan.programs.applications.store');
     Route::post('/api/kabataan/programs/applications/{id}/cancel', [ProgramController::class, 'cancelApplication'])->name('kabataan.programs.applications.cancel');
+    Route::put('/api/kabataan/programs/applications/{id}/personal', [ProgramController::class, 'updatePersonalInformation'])->whereNumber('id')->name('kabataan.programs.applications.personal');
+    Route::post('/api/kabataan/programs/applications/{id}/documents/{questionId}/resubmit', [ProgramController::class, 'resubmitDocument'])->whereNumber('id')->name('kabataan.programs.applications.resubmit');
     Route::post('/api/kabataan/programs/documents/upload', [ProgramController::class, 'uploadDocument'])->name('kabataan.programs.documents.upload');
     Route::get('/api/kabataan/programs/kk-id/{side}', [ProgramController::class, 'showKkId'])->name('kabataan.programs.kk-id.show');
     Route::get('/api/kabataan/programs/documents/{scheduleProgramId}/{questionId}', [ProgramController::class, 'showDocument'])->name('kabataan.programs.documents.show');

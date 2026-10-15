@@ -232,7 +232,41 @@
         `).join('');
     }
 
-    function renderAnswerItems(answers) {
+    function renderPersonalEditForm(application) {
+        if (!application?.can_edit_personal) return '';
+        const personal = application.editable_personal || {};
+        const applicationId = application.id;
+        return `
+            <form class="prog-personal-edit" data-application-id="${escapeHtml(String(applicationId))}" style="margin-top:16px;padding:14px;border:1px solid #bbf7d0;border-radius:10px;background:#f0fdf4;">
+                <p style="margin:0 0 10px;font-weight:700;">Edit personal information</p>
+                <p style="margin:0 0 12px;font-size:13px;color:#166534;">You already passed, and this scholarship is still open. Question answers stay as submitted.</p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+                    <label>First name<input name="first_name" required maxlength="150" value="${escapeHtml(personal.first_name || '')}" style="display:block;width:100%;margin-top:4px;"></label>
+                    <label>Middle name<input name="middle_name" maxlength="150" value="${escapeHtml(personal.middle_name || '')}" style="display:block;width:100%;margin-top:4px;"></label>
+                    <label>Last name<input name="last_name" required maxlength="150" value="${escapeHtml(personal.last_name || '')}" style="display:block;width:100%;margin-top:4px;"></label>
+                    <label>Suffix<input name="suffix" maxlength="20" value="${escapeHtml(personal.suffix || '')}" style="display:block;width:100%;margin-top:4px;"></label>
+                    <label>Sex<select name="sex" required style="display:block;width:100%;margin-top:4px;">
+                        <option value="Male"${personal.sex === 'Male' ? ' selected' : ''}>Male</option>
+                        <option value="Female"${personal.sex === 'Female' ? ' selected' : ''}>Female</option>
+                    </select></label>
+                    <label>Email<input name="email" type="email" required maxlength="150" value="${escapeHtml(personal.email || '')}" style="display:block;width:100%;margin-top:4px;"></label>
+                    <label>Contact number<input name="contact_number" required maxlength="11" inputmode="numeric" value="${escapeHtml(personal.contact_number || '')}" style="display:block;width:100%;margin-top:4px;"></label>
+                </div>
+                <button type="submit" style="margin-top:12px;background:#16a34a;color:#fff;border:0;border-radius:6px;padding:8px 12px;font-weight:700;cursor:pointer;">Save personal information</button>
+            </form>`;
+    }
+
+    function renderRequirementResubmit(file, applicationId, questionId) {
+        if (String(file?.review_status || '') !== 'needs_resubmission') return '';
+        return `
+            <form class="prog-doc-resubmit" data-application-id="${escapeHtml(String(applicationId))}" data-question-id="${escapeHtml(questionId)}" style="margin-top:10px;">
+                <p style="margin:0 0 6px;color:#9a3412;font-size:13px;">Resubmit this requirement: ${escapeHtml(file.resubmit_reason || 'The uploaded file needs to be replaced.')}</p>
+                <input type="file" name="file" required accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                <button type="submit" style="margin-top:8px;background:#b91c1c;color:#fff;border:0;border-radius:6px;padding:6px 10px;font-weight:700;cursor:pointer;">Resubmit requirement</button>
+            </form>`;
+    }
+
+    function renderAnswerItems(answers, application) {
         if (!answers.length) {
             return '<p class="sl-view-empty">No answers submitted for this application.</p>';
         }
@@ -240,6 +274,7 @@
         return answers.map((answer) => {
             if (answer.question_type === 'file' && answer.answer && typeof answer.answer === 'object') {
                 const file = answer.answer;
+                const questionId = String(answer.question_id || file.question_id || '');
                 return `
                     <div class="sl-answer-item">
                         <p class="sl-info-label">${escapeHtml(answer.question_label || 'Document')}</p>
@@ -250,6 +285,7 @@
                                 <span class="sl-file-meta">${escapeHtml(file.size_display || '')}</span>
                             </span>
                         </a>
+                        ${renderRequirementResubmit(file, application?.id, questionId)}
                     </div>
                 `;
             }
@@ -454,10 +490,11 @@
                     applicationViewMeta.textContent = `${application.program_period || '—'} • Submitted: ${application.submitted_at || '—'} • Status: ${application.status_display || application.status}`;
                 }
                 if (applicationViewPersonalInfo) {
-                    applicationViewPersonalInfo.innerHTML = renderPersonalInfoItems(application.personal_info || []);
+                    applicationViewPersonalInfo.innerHTML = renderPersonalInfoItems(application.personal_info || [])
+                        + renderPersonalEditForm(application);
                 }
                 if (applicationViewAnswers) {
-                    applicationViewAnswers.innerHTML = renderAnswerItems(application.answers || []);
+                    applicationViewAnswers.innerHTML = renderAnswerItems(application.answers || [], application);
                 }
 
                 if (applicationViewCancelledInfo) {
@@ -753,5 +790,54 @@
         if (applicationCancelModal) {
             applicationCancelModal.querySelector('.sl-cancel-modal-overlay')?.addEventListener('click', closeCancelReasonModal);
         }
+
+        document.addEventListener('submit', async (event) => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement)) return;
+            const isPersonal = form.classList.contains('prog-personal-edit');
+            const isDocument = form.classList.contains('prog-doc-resubmit');
+            if (!isPersonal && !isDocument) return;
+            if (!applicationViewModal || !applicationViewModal.contains(form)) return;
+            event.preventDefault();
+            const applicationId = form.dataset.applicationId;
+            const button = form.querySelector('button[type="submit"]');
+            if (button) button.disabled = true;
+            try {
+                let response;
+                if (isPersonal) {
+                    const payload = Object.fromEntries(new FormData(form).entries());
+                    response = await fetch(`/api/kabataan/programs/applications/${applicationId}/personal`, {
+                        method: 'PUT',
+                        headers: {
+                            Accept: 'application/json',
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify(payload),
+                    });
+                } else {
+                    const body = new FormData(form);
+                    response = await fetch(`/api/kabataan/programs/applications/${applicationId}/documents/${encodeURIComponent(form.dataset.questionId || '')}/resubmit`, {
+                        method: 'POST',
+                        headers: {
+                            Accept: 'application/json',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                        },
+                        credentials: 'same-origin',
+                        body,
+                    });
+                }
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'Unable to save.');
+                }
+                openApplicationView(applicationId);
+                window.alert(data.message || 'Saved.');
+            } catch (error) {
+                if (button) button.disabled = false;
+                window.alert(error.message || 'Unable to save.');
+            }
+        });
     });
 })();

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ProgramAccomplishmentDocument;
 use App\Models\ProgramAccomplishmentReport;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -214,6 +215,76 @@ class PublicProgramAccomplishmentService
             'cover' => $coverUrl,
             'photos' => $photos,
             'documents' => $docs,
+            'proposal' => $this->proposalForReport($report),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function proposalForReport(ProgramAccomplishmentReport $report): ?array
+    {
+        if (! Schema::hasTable('budget_tracking_programs')) {
+            return null;
+        }
+
+        $name = mb_strtolower(trim((string) ($report->program?->program_name ?? $report->title)), 'UTF-8');
+        if ($name === '') {
+            return null;
+        }
+
+        $program = DB::table('budget_tracking_programs')
+            ->where('barangay_id', $report->barangay_id)
+            ->whereNull('deleted_at')
+            ->whereRaw('LOWER(program_name) = ?', [$name])
+            ->first();
+
+        if ($program === null) {
+            return null;
+        }
+
+        $items = Schema::hasTable('budget_tracking_line_items')
+            ? DB::table('budget_tracking_line_items')
+                ->where('budget_tracking_program_id', $program->id)
+                ->whereNull('deleted_at')
+                ->orderBy('sort_order')
+                ->get()
+            : collect();
+
+        $scheduleStart = null;
+        $scheduleEnd = null;
+        if (Schema::hasTable('abyip_program_durations') && $program->abyip_program_id) {
+            $duration = DB::table('abyip_program_durations')
+                ->where('barangay_id', $report->barangay_id)
+                ->where('abyip_program_id', $program->abyip_program_id)
+                ->first();
+            $scheduleStart = $duration->start_date ?? null;
+            $scheduleEnd = $duration->end_date ?? null;
+        }
+
+        $allocated = Schema::hasTable('budget_tracking_reports')
+            ? DB::table('budget_tracking_reports')->where('budget_tracking_program_id', $program->id)->value('snapshot_allocated')
+            : null;
+
+        return [
+            'program_name' => $program->program_name,
+            'implementation_date' => $program->implementation_date,
+            'schedule_start' => $scheduleStart,
+            'schedule_end' => $scheduleEnd,
+            'venue' => $program->venue,
+            'proponent' => $program->proponent,
+            'participants_label' => $program->participants_label,
+            'source_of_fund' => $program->source_of_fund,
+            'resource_persons' => $program->resource_persons,
+            'rationale' => $program->rationale,
+            'objectives' => $program->objectives,
+            'allocated' => $allocated !== null ? (float) $allocated : 0,
+            'line_items' => $items->map(fn ($item) => [
+                'unit' => $item->unit,
+                'description' => $item->description,
+                'unit_cost' => $item->unit_cost,
+                'amount' => $item->amount,
+            ])->values()->all(),
         ];
     }
 

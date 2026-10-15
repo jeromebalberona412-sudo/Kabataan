@@ -7,24 +7,13 @@ use Illuminate\Validation\ValidationException;
 
 class ScholarshipSystemFieldsService
 {
-    private const NAME_REGEX = '/^(?!\s)[A-Za-z.\-\s]+$/';
+    private const NAME_REGEX = '/^(?!\s)[\p{L}.\-\s]+$/u';
 
-    private const NAME_NO_SPACE_REGEX = '/^[A-Za-z.\-]+$/';
+    private const FAMILY_NAME_REGEX = '/^(?!\s)[\p{L}.\-]+(?: [\p{L}.\-]+)*$/u';
 
-    private const FIRST_NAME_REGEX = '/^(?!\s)[A-Za-z.\-]+(\s[A-Za-z.\-]+)*$/';
+    private const NAME_MIN_LENGTH = 2;
 
-    /** @var list<string> */
-    private const NAME_NO_SPACE_FIELDS = [
-        'mother_middle_name', 'father_middle_name', 'guardian_middle_name',
-        'mother_last_name', 'father_last_name', 'guardian_last_name',
-    ];
-
-    /** @var list<string> */
-    private const FIRST_NAME_FIELDS = [
-        'mother_first_name', 'father_first_name', 'guardian_first_name',
-    ];
-
-    private const NAME_MAX_LENGTH = 50;
+    private const NAME_MAX_LENGTH = 150;
 
     private const STRAND_MAX_LENGTH = 100;
 
@@ -316,31 +305,14 @@ class ScholarshipSystemFieldsService
             if ($stringValue === '' && $field['required']) {
                 return "{$field['label']} is required.";
             }
-            if ($stringValue !== '' && strlen($stringValue) < 3) {
-                return "{$field['label']} must be at least 3 characters.";
+            if ($stringValue !== '' && mb_strlen($stringValue) < self::NAME_MIN_LENGTH) {
+                return "{$field['label']} must be at least ".self::NAME_MIN_LENGTH.' characters.';
             }
-            if ($stringValue !== '' && strlen($stringValue) > self::NAME_MAX_LENGTH) {
+            if ($stringValue !== '' && mb_strlen($stringValue) > self::NAME_MAX_LENGTH) {
                 return "{$field['label']} must not exceed ".self::NAME_MAX_LENGTH.' characters.';
             }
-            if ($stringValue !== '' && in_array($field['id'], self::NAME_NO_SPACE_FIELDS, true)) {
-                if (preg_match('/\s/', $stringValue)) {
-                    return "{$field['label']} cannot contain spaces.";
-                }
-                if (! preg_match(self::NAME_NO_SPACE_REGEX, $stringValue)) {
-                    return "{$field['label']} has an invalid format.";
-                }
-
-                return '';
-            }
-            if ($stringValue !== '' && in_array($field['id'], self::FIRST_NAME_FIELDS, true)) {
-                if (! preg_match(self::FIRST_NAME_REGEX, $stringValue)) {
-                    return "{$field['label']} cannot start with a space.";
-                }
-
-                return '';
-            }
-            if ($stringValue !== '' && ! preg_match(self::NAME_REGEX, $stringValue)) {
-                return "{$field['label']} has an invalid format.";
+            if ($stringValue !== '' && ! preg_match(self::FAMILY_NAME_REGEX, $stringValue)) {
+                return "{$field['label']} must start with a character. A space is allowed only after a character.";
             }
 
             return '';

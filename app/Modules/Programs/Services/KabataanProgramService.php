@@ -14,6 +14,7 @@ use App\Modules\Profile\Services\ProfileImageService;
 use App\Services\ScholarshipSystemFieldsService;
 use App\Services\SkOfficialsNotificationDispatcher;
 use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
@@ -356,6 +357,141 @@ class KabataanProgramService
     }
 
     /**
+     * Scholarship personal information can be updated after approval while the period is still open.
+     * Question answers stay as submitted.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    public function updatePersonalInformation(User $user, int $applicationId, array $input): array
+    {
+        $application = $this->ownedApplication($user, $applicationId);
+        $program = $application->scheduleProgram;
+
+        if ($program === null || strtoupper((string) $program->program_letter) !== 'A') {
+            throw ValidationException::withMessages([
+                'application_id' => ['Personal information can be updated on an approved scholarship application only.'],
+            ]);
+        }
+
+        if ($application->status !== ProgramApplication::STATUS_APPROVED || ! $this->isSchedulePeriodOpen($program)) {
+            throw ValidationException::withMessages([
+                'application_id' => ['Personal information can be edited only after you pass and while the application period is still open.'],
+            ]);
+        }
+
+        $firstName = $this->validatedPersonName($input['first_name'] ?? '', 'first_name', 'First name');
+        $lastName = $this->validatedPersonName($input['last_name'] ?? '', 'last_name', 'Last name');
+        $middleName = trim((string) ($input['middle_name'] ?? ''));
+        if ($middleName !== '') {
+            $middleName = $this->validatedPersonName($middleName, 'middle_name', 'Middle name');
+        }
+        $suffix = trim((string) ($input['suffix'] ?? ''));
+        if (mb_strlen($suffix) > 20) {
+            throw ValidationException::withMessages([
+                'suffix' => ['Suffix must not exceed 20 characters.'],
+            ]);
+        }
+        $sex = trim((string) ($input['sex'] ?? ''));
+        if (! in_array($sex, ['Male', 'Female'], true)) {
+            throw ValidationException::withMessages([
+                'sex' => ['Sex must be Male or Female.'],
+            ]);
+        }
+        $email = trim((string) ($input['email'] ?? ''));
+        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false || mb_strlen($email) > 150) {
+            throw ValidationException::withMessages([
+                'email' => ['Enter a valid email address.'],
+            ]);
+        }
+        $contact = preg_replace('/\s+/', '', (string) ($input['contact_number'] ?? '')) ?? '';
+        if (! preg_match('/^09\d{9}$/', $contact)) {
+            throw ValidationException::withMessages([
+                'contact_number' => ['Contact number must be 11 digits and start with 09.'],
+            ]);
+        }
+
+        $application->update([
+            'first_name' => $firstName,
+            'middle_name' => $middleName !== '' ? $middleName : null,
+            'last_name' => $lastName,
+            'suffix' => $suffix !== '' ? $suffix : null,
+            'sex' => $sex,
+            'email' => $email,
+            'contact_number' => $contact,
+        ]);
+
+        $this->clearUserDashboardCache($user);
+
+        return $this->formatUserApplication($application->fresh(['scheduleProgram']), true, $user);
+    }
+
+    /**
+     * Replace one requirement that an official marked for resubmission.
+     *
+     * @return array<string, mixed>
+     */
+    public function resubmitDocument(User $user, int $applicationId, string $questionId, UploadedFile $file): array
+    {
+        $application = $this->ownedApplication($user, $applicationId);
+        $questionId = trim($questionId);
+
+        if (! in_array($application->status, [ProgramApplication::STATUS_PENDING, ProgramApplication::STATUS_APPROVED], true)) {
+            throw ValidationException::withMessages([
+                'application_id' => ['This application can no longer resubmit requirements.'],
+            ]);
+        }
+
+        $documents = is_array($application->required_documents) ? $application->required_documents : [];
+        $current = $documents[$questionId] ?? null;
+        if (! is_array($current) || ($current['review_status'] ?? '') !== 'needs_resubmission') {
+            throw ValidationException::withMessages([
+                'question_id' => ['This requirement was not asked to be resubmitted.'],
+            ]);
+        }
+
+        $documents[$questionId] = $this->documentService->replaceStoredDocument($user, $application, $questionId, $file);
+        $application->update([
+            'required_documents' => $documents,
+            'remarks' => 'Requirement resubmitted.',
+        ]);
+
+        $this->clearUserDashboardCache($user);
+
+        return $this->formatUserApplication($application->fresh(['scheduleProgram']), true, $user);
+    }
+
+    private function ownedApplication(User $user, int $applicationId): ProgramApplication
+    {
+        $application = ProgramApplication::query()
+            ->with(['scheduleProgram'])
+            ->whereKey($applicationId)
+            ->where('kabataan_id', $user->id)
+            ->first();
+
+        if ($application === null) {
+            throw ValidationException::withMessages([
+                'application_id' => ['Application not found.'],
+            ]);
+        }
+
+        return $application;
+    }
+
+    private function validatedPersonName(mixed $value, string $field, string $label): string
+    {
+        $name = trim((string) $value);
+        $length = mb_strlen($name);
+        if ($length < 2 || $length > 150 || ! preg_match('/^(?!\s)[\p{L}.\-]+(?: [\p{L}.\-]+)*$/u', $name)) {
+            throw ValidationException::withMessages([
+                $field => [$label.' must be 2 to 150 characters. Type a character before each space.'],
+            ]);
+        }
+
+        return $name;
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $answers
      * @return array<string, mixed>
      */
@@ -516,6 +652,18 @@ class KabataanProgramService
             ->where('status', ScheduleProgram::STATUS_OPEN)
             ->orderByDesc('start_date')
             ->orderByDesc('id');
+    }
+
+    private function canEditScholarshipPersonalInfo(ProgramApplication $application): bool
+    {
+        $program = $application->scheduleProgram;
+        if ($program === null) {
+            return false;
+        }
+
+        return strtoupper((string) $program->program_letter) === 'A'
+            && $application->status === ProgramApplication::STATUS_APPROVED
+            && $this->isSchedulePeriodOpen($program);
     }
 
     private function isSchedulePeriodOpen(ScheduleProgram $program): bool
@@ -842,6 +990,7 @@ class KabataanProgramService
                 ?? now()->format('Y'),
             'cancel_reason' => $application->cancel_reason,
             'can_cancel' => $application->status === ProgramApplication::STATUS_PENDING,
+            'can_edit_personal' => $this->canEditScholarshipPersonalInfo($application),
             'team_name' => $this->extractTeamNameFromApplication($application),
             'answers_preview' => $this->formatAnswersPreview($application->custom_answers ?? []),
         ];
@@ -849,6 +998,15 @@ class KabataanProgramService
         if ($withAnswers) {
             if ($user !== null) {
                 $payload['personal_info'] = $this->formatApplicationPersonalInfo($application, $user);
+                $payload['editable_personal'] = [
+                    'first_name' => (string) ($application->first_name ?? ''),
+                    'middle_name' => (string) ($application->middle_name ?? ''),
+                    'last_name' => (string) ($application->last_name ?? ''),
+                    'suffix' => (string) ($application->suffix ?? ''),
+                    'sex' => (string) ($application->sex ?? ''),
+                    'email' => (string) ($application->email ?? ''),
+                    'contact_number' => (string) ($application->contact_number ?? ''),
+                ];
                 $registration = KabataanRegistration::query()
                     ->where('user_id', $user->id)
                     ->latest()

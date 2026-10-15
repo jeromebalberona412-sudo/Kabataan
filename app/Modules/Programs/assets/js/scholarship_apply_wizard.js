@@ -134,14 +134,24 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
     }
 
     function saveDraft() {
+        const nameExtended = {};
+        form?.querySelectorAll('[data-name-extended="1"]').forEach((el) => {
+            if (el.name) nameExtended[el.name] = true;
+        });
         const payload = {
             system_field_answers: getSystemFieldAnswers(),
             id_reuse_choices: idReuseChoices,
+            uploaded_documents: uploadedDocuments,
+            name_extended: nameExtended,
             step: currentStep,
             savedAt: new Date().toISOString(),
         };
-        localStorage.setItem(draftKey(), JSON.stringify(payload));
-        draftSavedAt = payload.savedAt;
+        try {
+            localStorage.setItem(draftKey(), JSON.stringify(payload));
+            draftSavedAt = payload.savedAt;
+        } catch {
+            draftSavedAt = null;
+        }
     }
 
     function formatIsoDateDisplay(iso) {
@@ -323,6 +333,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         SF.renderApplicantSectionById(shell.querySelector('#systemEducationalBackground'), 'educational_background', saved, kkEducation);
         SF.renderApplicantSectionById(shell.querySelector('#systemBackgroundInformation'), 'background_information', saved, kkEducation);
         SF.renderApplicantSectionById(shell.querySelector('#systemAdditionalInformation'), 'additional_information', saved, kkEducation);
+        const extended = draft?.name_extended || {};
+        Object.keys(extended).forEach((fieldId) => {
+            const input = shell.querySelector(`[name="${fieldId}"]`);
+            if (input) input.dataset.nameExtended = '1';
+        });
     }
 
     function renderFileCard(documentMeta) {
@@ -442,6 +457,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
                         delete uploadedDocuments[questionId];
                         showUploadArea(questionId);
                     }
+                    const question = questionById(questionId);
+                    if (question?.required && !uploadedDocuments[questionId]) {
+                        setUploadState(questionId, 'error', 'Please upload a new ID.');
+                    }
                     saveDraft();
                 },
             });
@@ -547,7 +566,20 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
             input.addEventListener('change', () => {
                 const file = input.files?.[0];
-                if (!file) return;
+                if (!file) {
+                    const question = questionById(questionId);
+                    if (question?.required && !uploadedDocuments[questionId]) {
+                        setUploadState(questionId, 'error', 'This field is required.');
+                    }
+                    return;
+                }
+                const question = questionById(questionId);
+                const errorMessage = validateSelectedFile(question, file);
+                if (errorMessage) {
+                    setUploadState(questionId, 'error', errorMessage);
+                    input.value = '';
+                    return;
+                }
                 uploadPdfFile(questionId, file, input.dataset.questionLabel || 'Document');
                 input.value = '';
             });
@@ -585,6 +617,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
                     global.ProgramIdReuse?.restoreChoice?.(shell, questionId, 'new');
                 }
                 showUploadArea(questionId);
+                const question = questionById(questionId);
+                if (question?.required) {
+                    setUploadState(questionId, 'error', 'This field is required.');
+                }
                 saveDraft();
             });
         });
@@ -840,6 +876,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
     function goToStep(step) {
         currentStep = Math.max(1, Math.min(TOTAL_STEPS, step));
+        saveDraft();
         updateStepUI();
     }
 
@@ -1019,6 +1056,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         global.ScholarshipSystemFields?.setProgramContext?.(program);
 
         const draft = loadDraft();
+        if (draft?.uploaded_documents && typeof draft.uploaded_documents === 'object') {
+            uploadedDocuments = { ...draft.uploaded_documents, ...uploadedDocuments };
+        }
         if (draft?.id_reuse_choices && typeof draft.id_reuse_choices === 'object') {
             idReuseChoices = { ...draft.id_reuse_choices };
         }
@@ -1043,8 +1083,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
         loadSystemFields();
         renderCustomQuestions();
         bindEvents();
+        form?.addEventListener('input', saveDraft);
+        form?.addEventListener('change', saveDraft);
+        window.addEventListener('beforeunload', saveDraft);
         updateStepUI();
     }
 
-    global.ScholarshipApplyWizard = { init };
+    global.ScholarshipApplyWizard = { init, saveDraft };
 })(window);

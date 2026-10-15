@@ -431,7 +431,17 @@
         `).join('');
     }
 
-    function renderAnswerItems(answers) {
+    function renderRequirementResubmit(file, applicationId, questionId) {
+        if (String(file?.review_status || '') !== 'needs_resubmission') return '';
+        return `
+            <form class="prog-doc-resubmit" data-application-id="${escapeHtml(String(applicationId))}" data-question-id="${escapeHtml(questionId)}" style="margin-top:10px;">
+                <p style="margin:0 0 6px;color:#9a3412;font-size:13px;">Resubmit this requirement: ${escapeHtml(file.resubmit_reason || 'The uploaded file needs to be replaced.')}</p>
+                <input type="file" name="file" required accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                <button type="submit" style="margin-top:8px;background:#b91c1c;color:#fff;border:0;border-radius:6px;padding:6px 10px;font-weight:700;cursor:pointer;">Resubmit requirement</button>
+            </form>`;
+    }
+
+    function renderAnswerItems(answers, application) {
         if (!answers?.length) {
             return '<p class="sl-view-empty">No answers submitted.</p>';
         }
@@ -452,6 +462,7 @@
                                 <span class="sports-view-file-action">View document</span>
                             </span>
                         </a>
+                        ${renderRequirementResubmit(file, application?.id, String(answer.question_id || file.question_id || ''))}
                     </div>`;
             }
 
@@ -498,7 +509,7 @@
                     applicationViewPersonalInfo.innerHTML = renderPersonalInfoItems(application.personal_info || []);
                 }
                 if (applicationViewAnswers) {
-                    applicationViewAnswers.innerHTML = renderAnswerItems(application.answers || []);
+                    applicationViewAnswers.innerHTML = renderAnswerItems(application.answers || [], application);
                 }
                 if (applicationViewCancelledInfo) {
                     applicationViewCancelledInfo.hidden = application.status !== 'cancelled';
@@ -629,6 +640,37 @@
         });
 
         resetCancelConfirmButton();
+
+        document.addEventListener('submit', async (event) => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement)) return;
+            if (!form.classList.contains('prog-doc-resubmit')) return;
+            if (!applicationViewModal || !applicationViewModal.contains(form)) return;
+            event.preventDefault();
+            const applicationId = form.dataset.applicationId;
+            const button = form.querySelector('button[type="submit"]');
+            if (button) button.disabled = true;
+            try {
+                const response = await fetch(`/api/kabataan/programs/applications/${applicationId}/documents/${encodeURIComponent(form.dataset.questionId || '')}/resubmit`, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                    },
+                    credentials: 'same-origin',
+                    body: new FormData(form),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'Unable to resubmit this requirement.');
+                }
+                openApplicationView(applicationId);
+                window.alert(data.message || 'Requirement resubmitted.');
+            } catch (error) {
+                if (button) button.disabled = false;
+                window.alert(error.message || 'Unable to resubmit this requirement.');
+            }
+        });
 
         if (applicationViewModal) {
             applicationViewModal.dataset.historyBound = '1';

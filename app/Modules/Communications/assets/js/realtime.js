@@ -300,11 +300,15 @@ import { createClient } from '@supabase/supabase-js';
                 window.Comms.writeInboxCache(cached);
             }
         }
-        document.querySelectorAll('.comms-msg-item[data-id="' + cid + '"]').forEach(function (btn) {
-            btn.classList.remove('comms-msg-unread');
+        if (typeof window.clearHeaderConversationUnreadLocal === 'function') {
+            window.clearHeaderConversationUnreadLocal(cid);
+        }
+        document.querySelectorAll('.comms-msg-item[data-id="' + cid + '"], .comms-chat-fs-item[data-id="' + cid + '"]').forEach(function (btn) {
+            btn.classList.remove('comms-msg-unread', 'is-unread');
             btn.setAttribute('data-unread', '0');
-            var dot = btn.querySelector('.comms-msg-unread-dot, .comms-unread');
-            if (dot) dot.remove();
+            btn.querySelectorAll('.comms-msg-unread-dot, .comms-unread, .comms-chat-fs-item-badge').forEach(function (dot) {
+                dot.remove();
+            });
         });
     }
 

@@ -87,20 +87,62 @@ let kkpNameMeasureEl = null;
 let kkpNameMaxHintTimers = new WeakMap();
 const kkpLongNameAllowedByField = new WeakMap();
 let kkpPendingLongName = null;
+const KKP_LONG_NAME_STORAGE_KEY = 'kkp_long_name_confirmed_v1';
+
+function kkpLongNameFieldKey(el) {
+    return el?.id || el?.name || '';
+}
+
+function kkpReadLongNameConfirmed() {
+    try {
+        const parsed = JSON.parse(sessionStorage.getItem(KKP_LONG_NAME_STORAGE_KEY) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function kkpNameStepIsActive() {
+    const step1 = document.getElementById('kkpWizardStep1');
+    if (!step1) {
+        return true;
+    }
+
+    return !step1.hidden;
+}
 
 function kkpIsLongNameAllowed(el) {
-    return el ? kkpLongNameAllowedByField.get(el) === true : false;
+    if (!el) {
+        return false;
+    }
+    if (kkpLongNameAllowedByField.get(el) === true) {
+        return true;
+    }
+    const key = kkpLongNameFieldKey(el);
+
+    return key !== '' && kkpReadLongNameConfirmed()[key] === true;
 }
 
 function kkpSetLongNameAllowed(el, allowed) {
     if (!el) {
         return;
     }
+    const key = kkpLongNameFieldKey(el);
     if (allowed) {
         kkpLongNameAllowedByField.set(el, true);
-    } else {
-        kkpLongNameAllowedByField.delete(el);
+        if (!key) {
+            return;
+        }
+        const stored = kkpReadLongNameConfirmed();
+        stored[key] = true;
+        try {
+            sessionStorage.setItem(KKP_LONG_NAME_STORAGE_KEY, JSON.stringify(stored));
+        } catch (e) {
+            // ignore private-mode storage failures
+        }
+        return;
     }
+    kkpLongNameAllowedByField.delete(el);
 }
 
 function kkpGetNameMeasureEl() {
@@ -804,10 +846,12 @@ function kkpValidateContact(value, requireEmpty) {
 
     function openLongNameModal(el, nextValue, caret) {
         const modal = document.getElementById('kkpLongNameModal');
-        if (!modal) {
+        const keepSavedName = !modal || !kkpNameStepIsActive() || kkpIsLongNameAllowed(el);
+        if (keepSavedName) {
             kkpSetLongNameAllowed(el, true);
             el.value = nextValue.slice(0, KKP_NAME_MAX_CHARS);
             kkpSyncNameMaxIndicator(el);
+            kkpFitNameInputFont(el);
             return;
         }
 
@@ -930,7 +974,7 @@ function kkpValidateContact(value, requireEmpty) {
             }
         });
 
-        el.addEventListener('input', function () {
+        el.addEventListener('input', function (event) {
             const start = this.selectionStart;
             const before = this.value;
             let next = kkpSanitizeNameInput(before);
@@ -952,11 +996,19 @@ function kkpValidateContact(value, requireEmpty) {
                 return;
             }
 
-            if (next.length <= KKP_NAME_SOFT_MAX) {
-                kkpSetLongNameAllowed(this, false);
+            if (next.length <= KKP_NAME_SOFT_MAX && !kkpIsLongNameAllowed(this)) {
+                kkpLongNameAllowedByField.delete(this);
             }
 
+            const restoringSavedName = event.isTrusted === false || !kkpNameStepIsActive();
             if (!kkpIsLongNameAllowed(this) && next.length > KKP_NAME_SOFT_MAX) {
+                if (restoringSavedName) {
+                    kkpSetLongNameAllowed(this, true);
+                    this.value = next;
+                    kkpSyncNameMaxIndicator(this);
+                    kkpFitNameInputFont(this);
+                    return;
+                }
                 this.value = next.slice(0, KKP_NAME_SOFT_MAX);
                 openLongNameModal(this, next, caret);
                 kkpFitNameInputFont(this);
@@ -1953,13 +2005,13 @@ window.validateKkProfilingForm = async function (options = {}) {
     }
 
     // ── If errors, scroll to first error and stop ──
-    if (errors.length > 0) {
+        if (errors.length > 0) {
         const firstErr = Array.from(document.querySelectorAll('.kkp-field-error, .kkp-demo-block-error, #kkpSignatureStatus.is-invalid'))
             .find((el) => !el.hidden && (el.textContent || '').trim() !== '');
         if (firstErr) {
-            firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstErr.scrollIntoView({ behavior: 'auto', block: 'center' });
         } else {
-            acknowledgmentCheckbox?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            acknowledgmentCheckbox?.scrollIntoView({ behavior: 'auto', block: 'center' });
         }
         return false;
     }
@@ -2027,7 +2079,7 @@ window.handleFormSubmit = async function (event) {
         return false;
     }
 
-    if (!await window.validateKkProfilingForm()) {
+    if (!await window.validateKkProfilingForm({ skipEmailExistenceCheck: true })) {
         return false;
     }
 

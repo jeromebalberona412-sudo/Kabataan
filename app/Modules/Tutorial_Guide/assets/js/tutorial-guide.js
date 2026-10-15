@@ -31,8 +31,8 @@
         },
         {
             key: 'programs',
-            target: '[data-tour="programs"]',
-            mobileTarget: '#programsDrawerSidebar [data-tour="programs"] .sidebar-title, #programsDrawerSidebar [data-tour="programs"]',
+            target: '.programs-sidebar-left .sidebar-title',
+            mobileTarget: '#programsDrawerSidebar [data-tour="programs"] .sidebar-title',
             icon: 'fa-list',
             title: 'Programs in Your Barangay',
             description: 'Browse available barangay programs such as Education, Sports, Health, and more. Tap a category to view and apply.',
@@ -41,7 +41,7 @@
         },
         {
             key: 'community-feed',
-            target: '[data-tour="community-feed"]',
+            target: '[data-tour="community-feed"] h1, [data-tour="community-feed"]',
             icon: 'fa-rss',
             title: 'Community Feed',
             description: 'Read announcements, events, activities, and program updates from your barangay SK and the SK Federation.',
@@ -50,8 +50,8 @@
         },
         {
             key: 'barangay-profiles',
-            target: '[data-tour="barangay-profiles"]',
-            mobileTarget: '#programsDrawerSidebar [data-tour="barangay-profiles"] .sidebar-title, #programsDrawerSidebar [data-tour="barangay-profiles"]',
+            target: '.barangay-sidebar-right .sidebar-title',
+            mobileTarget: '#programsDrawerSidebar [data-tour="barangay-profiles"] .sidebar-title',
             icon: 'fa-building',
             title: 'Barangay SK Profiles',
             description: 'Browse SK officials from each barangay. Open a barangay to see officers, term dates, and their posts.',
@@ -185,11 +185,23 @@
             if (inDrawer.length) return inDrawer[0];
         }
 
-        const matches = document.querySelectorAll(step.target);
+        const selectors = String(step.target).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        const matches = [];
+        selectors.forEach(function (selector) {
+            document.querySelectorAll(selector).forEach(function (el) { matches.push(el); });
+        });
+        let fallback = null;
         for (let i = 0; i < matches.length; i += 1) {
-            if (isElementUsable(matches[i])) return matches[i];
+            if (!isElementUsable(matches[i])) continue;
+            if (!fallback) fallback = matches[i];
+            if (isElementOnScreen(matches[i])) return matches[i];
         }
-        return matches.length ? matches[0] : null;
+        return fallback;
+    }
+
+    function isElementOnScreen(el) {
+        const rect = el.getBoundingClientRect();
+        return rect.bottom > 8 && rect.right > 8 && rect.top < window.innerHeight - 8 && rect.left < window.innerWidth - 8;
     }
 
     function scrollTourTargetIntoView(el) {
@@ -454,17 +466,11 @@
             currentHighlightedEl = fresh;
 
             const spotRect = fresh.getBoundingClientRect();
-            const padding = 8;
-            let spotLeft = Math.max(0, spotRect.left - padding);
-            let spotTop = Math.max(0, spotRect.top - padding);
-            let spotWidth = Math.min(window.innerWidth - spotLeft, Math.max(48, spotRect.width + (padding * 2)));
-            let spotHeight = Math.min(window.innerHeight - spotTop, Math.max(36, spotRect.height + (padding * 2)));
-
-            // Keep spotlight on-screen for tall drawer cards.
-            if (spotHeight > window.innerHeight * 0.42) {
-                spotHeight = Math.min(window.innerHeight * 0.36, Math.max(72, spotRect.height));
-                spotTop = Math.max(8, Math.min(spotTop, window.innerHeight - spotHeight - 120));
-            }
+            const padding = 6;
+            const spotLeft = Math.max(0, Math.round(spotRect.left - padding));
+            const spotTop = Math.max(0, Math.round(spotRect.top - padding));
+            const spotWidth = Math.max(8, Math.min(window.innerWidth - spotLeft, Math.round(spotRect.width + (padding * 2))));
+            const spotHeight = Math.max(8, Math.min(window.innerHeight - spotTop, Math.round(spotRect.height + (padding * 2))));
 
             spotlightEl.style.opacity = '1';
             spotlightEl.style.left = `${spotLeft}px`;

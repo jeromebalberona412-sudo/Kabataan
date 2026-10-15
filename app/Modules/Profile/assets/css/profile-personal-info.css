@@ -1354,6 +1354,8 @@
     height: auto;
     object-fit: contain;
     margin: 0 auto;
+    background: transparent;
+    mix-blend-mode: multiply;
 }
 
 .prof-kk-sig-overlay--visible {

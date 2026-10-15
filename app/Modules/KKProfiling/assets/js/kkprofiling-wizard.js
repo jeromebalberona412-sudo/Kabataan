@@ -1267,7 +1267,6 @@
         showOcrRetryActions(false);
 
         const run = (async () => {
-            await new Promise((resolve) => window.setTimeout(resolve, 40));
             if (token !== ocrScanToken) {
                 return;
             }
@@ -1376,10 +1375,6 @@
                     renderOcrFields(lastOcrPayload);
                     updateNavButtons(currentStep);
                     return;
-                }
-
-                if (retryCount < 1) {
-                    return scanIdIfReady({ retryCount: retryCount + 1, force: true });
                 }
 
                 const offlineMessage = 'Unable to verify right now. Please tap Retry, or continue to the next step.';
@@ -2164,9 +2159,8 @@
         updateIdCaptureProgress();
         updateNavButtons(currentStep);
 
-        if (!skipScan) {
-            // Wait for Upload & Continue before sending either image for validation.
-            clearOcrUiState({ hidePanel: true });
+        if (!skipScan && hasCompleteDocumentUpload()) {
+            void scanIdIfReady();
         }
     }
 
@@ -3254,7 +3248,7 @@
         }
 
         const valid = await window.validateKkProfilingForm({
-            skipEmailExistenceCheck: false,
+            skipEmailExistenceCheck: true,
         });
 
         if (!valid) {
@@ -3262,6 +3256,7 @@
         }
 
         setWizardNavBusy(true);
+        await setStep(2, { instantScroll: true, skipRemotePersist: true });
 
         try {
             syncHiddenCheckboxFields();
@@ -3275,13 +3270,12 @@
                 throw new Error(response?.message || 'Step 1 could not be saved. Please try again.');
             }
 
-            // Clear stale Step 2 OCR so setStep(2) rechecks against the updated Step 1 identity.
             lastOcrScanFingerprint = null;
             lastOcrPayload = null;
             serverHasDraft = true;
-            await setStep(2, { instantScroll: true, skipRemotePersist: true });
             return true;
         } catch (error) {
+            await setStep(1, { instantScroll: true, skipRemotePersist: true });
             const displayedErrors = applyServerErrors(error.errors);
             if (displayedErrors === 0) {
                 const serverMessage = Object.values(error.errors || {}).flat().find((message) => typeof message === 'string');
@@ -3369,6 +3363,7 @@
                     formData.append('cf-turnstile-response', turnstileToken);
                 }
 
+                await setStep(3, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                 const response = await postFormData(`${apiBase}/step-2`, formData);
 
                 if (response?.verification_sent) {
@@ -3387,8 +3382,9 @@
                 saved = true;
 
                 if (saved) {
-                    const skipAutoSend = Boolean(response?.verification_sent);
-                    await setStep(3, { skipAutoSend });
+                    if (response?.verification_sent && window.startResendTimer) {
+                        window.startResendTimer();
+                    }
 
                     if (response?.email_error) {
                         showEmailStatus(response.email_error, 'error');
@@ -3396,6 +3392,7 @@
                     }
                 }
             } catch (error) {
+                await setStep(2, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                 const registrationMessage = error.errors?.registration?.[0] || '';
                 if (isDuplicateRegistrationMessage(registrationMessage)) {
                     showDuplicateRegistrationModal();
@@ -3440,12 +3437,14 @@
                     formData.append('cf-turnstile-response', turnstileToken);
                 }
 
+                await setStep(3, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                 const response = await postFormData(`${apiBase}/step-2`, formData);
 
                 if (response?.ocr) {
                     lastOcrPayload = response.ocr;
                     renderOcrFields(response.ocr);
                     if (hasStep1IdMismatch(response.ocr) || hasBlockingOcrError()) {
+                        await setStep(2, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                         return false;
                     }
                 }
@@ -3467,8 +3466,9 @@
                     }
                 }
 
-                const skipAutoSend = Boolean(response?.verification_sent);
-                await setStep(3, { skipAutoSend });
+                if (response?.verification_sent && window.startResendTimer) {
+                    window.startResendTimer();
+                }
 
                 if (response?.email_error) {
                     showEmailStatus(response.email_error, 'error');
@@ -3477,6 +3477,7 @@
 
                 return true;
             } catch (error) {
+                await setStep(2, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                 const registrationMessage = error.errors?.registration?.[0] || '';
                 if (isDuplicateRegistrationMessage(registrationMessage)) {
                     showDuplicateRegistrationModal();
@@ -3546,9 +3547,11 @@
         }
 
         try {
+            await setStep(3, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
             const beforeCompressKey = documentPairCacheKey(files);
             const compressed = await compressActiveDocumentFiles();
             if (!compressed.front || !compressed.back) {
+                await setStep(2, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                 showDocUploadError('Please upload both front and back images of your selected ID.');
                 return false;
             }
@@ -3558,6 +3561,7 @@
             if (afterCompressKey !== beforeCompressKey || !lastDistinctPairOk) {
                 const compressedSameSideError = await validateDistinctFrontAndBack(compressed);
                 if (compressedSameSideError) {
+                    await setStep(2, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                     showDocUploadError(compressedSameSideError);
                     lastOcrPayload = {
                         success: false,
@@ -3592,6 +3596,7 @@
                 lastOcrPayload = response.ocr;
                 renderOcrFields(response.ocr);
                 if (hasStep1IdMismatch(response.ocr) || hasBlockingOcrError()) {
+                    await setStep(2, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
                     return false;
                 }
             }
@@ -3613,9 +3618,6 @@
                 }
             }
 
-            const skipAutoSend = Boolean(response?.verification_sent);
-            await setStep(3, { skipAutoSend });
-
             if (response?.email_error) {
                 showEmailStatus(response.email_error, 'error');
                 enableResendButton();
@@ -3623,6 +3625,7 @@
 
             return true;
         } catch (error) {
+            await setStep(2, { instantScroll: true, skipRemotePersist: true, skipAutoSend: true });
             const registrationMessage = error.errors?.registration?.[0] || '';
             if (isDuplicateRegistrationMessage(registrationMessage)) {
                 showDuplicateRegistrationModal();
@@ -4066,12 +4069,6 @@
 
     async function handleNext() {
         if (wizardNavBusy || wizardTurnstilePending) {
-            return;
-        }
-
-        if (currentStep === 2 && isOcrAnalysisInProgress()) {
-            showDocUploadError('Please wait — your ID is still being verified.');
-            ocrPanel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             return;
         }
 
