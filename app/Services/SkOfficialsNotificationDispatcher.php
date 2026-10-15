@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class SkOfficialsNotificationDispatcher
 {
@@ -112,9 +113,25 @@ class SkOfficialsNotificationDispatcher
         string $title,
         string $body,
     ): void {
+        try {
+            $this->storeCommunityFeedPostActivity($ownerUserId, $postId, $title, $body);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    private function storeCommunityFeedPostActivity(
+        int $ownerUserId,
+        int $postId,
+        string $title,
+        string $body,
+    ): void {
         if (! Schema::hasTable('sk_officials_notifications') || $ownerUserId <= 0 || $postId <= 0) {
             return;
         }
+
+        $title = Str::limit($title, 200);
+        $body = Str::limit($body, 1000);
 
         $owner = DB::table('users')
             ->where('id', $ownerUserId)

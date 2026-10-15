@@ -6,6 +6,8 @@ final class KkProfilingValidationMessages
 {
     public const DUPLICATE_IDENTITY = "Duplicate Registration Detected\n\nIt looks like you may already have an existing registration in the system.\n\nIf you have registered before, please use your existing account or registration instead of creating a new one.\n\nIf you believe this is your first registration, please contact your Barangay SK Officials for assistance in checking and verifying your registration.";
 
+    public const ACKNOWLEDGMENT_REQUIRED = 'You must agree to the KK Profiling Terms and Conditions before submitting.';
+
     /** @deprecated Use DUPLICATE_IDENTITY */
     public const DUPLICATE_FULL_NAME = self::DUPLICATE_IDENTITY;
 

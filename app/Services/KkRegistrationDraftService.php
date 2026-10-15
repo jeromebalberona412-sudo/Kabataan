@@ -6,6 +6,7 @@ use App\Models\Barangay;
 use App\Models\KabataanRegistration;
 use App\Models\User;
 use App\Rules\ValidEmailAddress;
+use App\Support\KabataanRegistrationNameLimits;
 use App\Support\MailUrl;
 use App\Support\SupportingDocumentTypes;
 use Carbon\Carbon;
@@ -266,6 +267,23 @@ class KkRegistrationDraftService
         }
 
         return ! empty($sides['front']['path']) && ! empty($sides['back']['path']);
+    }
+
+    public function hasCompletedStep2(array $wizard): bool
+    {
+        $step2 = is_array($wizard['step2_data'] ?? null) ? $wizard['step2_data'] : [];
+
+        if (array_key_exists('supporting_documents_required', $step2)) {
+            return true;
+        }
+
+        foreach (SupportingDocumentTypes::allowed() as $documentType) {
+            if ($this->hasStoredDocumentPair($wizard, $documentType)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function skipStep2(array $wizard): array
@@ -566,22 +584,31 @@ class KkRegistrationDraftService
             ]);
         }
 
+        $names = KabataanRegistrationNameLimits::assertStored($step1);
         $namePreview = new KabataanRegistration([
-            'first_name' => mb_substr((string) ($step1['first_name'] ?? ''), 0, 100),
-            'last_name' => mb_substr((string) ($step1['last_name'] ?? ''), 0, 100),
-            'middle_name' => ($step1['middle_name'] ?? null)
-                ? mb_substr((string) $step1['middle_name'], 0, 100)
-                : null,
+            'first_name' => $names['first_name'],
+            'last_name' => $names['last_name'],
+            'middle_name' => $names['middle_name'],
             'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
         ]);
 
         // Create/update the youth login first, outside a DB transaction.
         // PostgreSQL aborts the whole transaction after a failed INSERT, so
         // role/unique retries cannot run inside the same transaction.
+        $displayName = $namePreview->full_name;
+        $userNameMax = KabataanRegistrationNameLimits::usersNameMax();
+        if (mb_strlen($displayName) > $userNameMax) {
+            Log::warning('KK profiling account display name exceeds users.name', [
+                'length' => mb_strlen($displayName),
+                'column_max' => $userNameMax,
+            ]);
+            $displayName = mb_substr($displayName, 0, $userNameMax);
+        }
+
         $user = $this->upsertYouthUser(
             $email,
             $password,
-            $namePreview->full_name,
+            $displayName,
             $barangay->tenant_id,
             $barangay->id,
         );
@@ -591,6 +618,7 @@ class KkRegistrationDraftService
         }
 
         $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
+        $formData['supporting_documents_required'] = (bool) ($wizard['step2_data']['supporting_documents_required'] ?? false);
         if ($claimId > 0) {
             $formData['guest_account_claimed'] = true;
         }
@@ -608,11 +636,9 @@ class KkRegistrationDraftService
         $registrationPayload = [
             'tenant_id' => $barangay->tenant_id,
             'barangay_id' => $barangay->id,
-            'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
-            'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
-            'middle_name' => ($step1['middle_name'] ?? null)
-                ? mb_substr((string) $step1['middle_name'], 0, 100)
-                : null,
+            'last_name' => $names['last_name'],
+            'first_name' => $names['first_name'],
+            'middle_name' => $names['middle_name'],
             'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
             'email' => $email,
             'contact_number' => $contactNumber !== '' ? $contactNumber : null,
@@ -747,6 +773,7 @@ class KkRegistrationDraftService
             'step2_data' => [],
         ];
 
+        $names = KabataanRegistrationNameLimits::assertStored($step1);
         $formData = $this->jsonSafeFormData($this->buildFormData($step1, $wizard));
         $contactNumber = app(PhoneNumberService::class)->toLocalMobile((string) ($step1['contact_number'] ?? ''))
             ?: mb_substr(preg_replace('/\D+/', '', (string) ($step1['contact_number'] ?? '')) ?: '', 0, 15);
@@ -754,11 +781,9 @@ class KkRegistrationDraftService
         $registrationPayload = [
             'tenant_id' => $barangay->tenant_id,
             'barangay_id' => $barangay->id,
-            'last_name' => mb_substr((string) $step1['last_name'], 0, 100),
-            'first_name' => mb_substr((string) $step1['first_name'], 0, 100),
-            'middle_name' => ($step1['middle_name'] ?? null)
-                ? mb_substr((string) $step1['middle_name'], 0, 100)
-                : null,
+            'last_name' => $names['last_name'],
+            'first_name' => $names['first_name'],
+            'middle_name' => $names['middle_name'],
             'suffix' => mb_substr((string) ($this->resolvedSuffix($step1) ?? 'None'), 0, 10),
             'email' => null,
             'contact_number' => $contactNumber !== '' ? $contactNumber : null,
@@ -937,13 +962,19 @@ class KkRegistrationDraftService
             return null;
         }
 
+        $currentStep = $this->mapCurrentStepForClient((int) ($wizard['current_step'] ?? 1));
+        if ($currentStep >= 3 && ! $this->hasCompletedStep2($wizard)) {
+            $currentStep = ! empty($wizard['step1_data']) ? 2 : 1;
+        }
+
         return [
             'token' => $wizard['token'],
-            'current_step' => $this->mapCurrentStepForClient((int) ($wizard['current_step'] ?? 1)),
+            'current_step' => $currentStep,
             'email' => $wizard['email'] ?? null,
             'email_verified' => ! empty($wizard['email_verified_at']),
             'verification_sent' => ! empty($wizard['verification_sent_at']),
             'has_step1' => ! empty($wizard['step1_data']),
+            'has_completed_step2' => $this->hasCompletedStep2($wizard),
             'has_documents' => ! empty($wizard['step2_data']['documents']),
             'step1' => $wizard['step1_data'] ?? null,
             'step2' => $this->step2StatusPayload($wizard),
@@ -1143,7 +1174,10 @@ class KkRegistrationDraftService
 
         unset($wizard['step3_data']);
 
-        if ((int) ($wizard['current_step'] ?? 1) >= 3 && empty($wizard['verification_sent_at'])) {
+        if (
+            (int) ($wizard['current_step'] ?? 1) >= 3
+            && ! $this->hasCompletedStep2($wizard)
+        ) {
             $wizard['current_step'] = 2;
         }
 

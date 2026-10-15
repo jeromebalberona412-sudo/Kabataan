@@ -559,24 +559,21 @@ function initProfileSupportingDocuments() {
     if (!submitBtn) {
         return;
     }
-    const schoolIdPanel = document.getElementById('profileSchoolIdUpload');
-    const nationalIdPanel = document.getElementById('profileNationalIdUpload');
     const docTypeRadios = uploadModal.querySelectorAll('input[name="profile_document_type"]');
+    const docPanels = uploadModal.querySelectorAll('[data-profile-doc-panel]');
     const maxBytes = 10 * 1024 * 1024;
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const inputMap = {};
+    const pendingFiles = {};
 
-    const inputMap = {
-        school_id: {
-            front: document.getElementById('profileSchoolIdFront'),
-            back: document.getElementById('profileSchoolIdBack'),
-        },
-        national_id: {
-            front: document.getElementById('profileNationalIdFront'),
-            back: document.getElementById('profileNationalIdBack'),
-        },
-    };
-
-    const pendingFiles = { school_id: { front: null, back: null }, national_id: { front: null, back: null } };
+    uploadModal.querySelectorAll('input[data-profile-doc-type][data-doc-side]').forEach((input) => {
+        const type = input.getAttribute('data-profile-doc-type');
+        const side = input.getAttribute('data-doc-side');
+        if (!type || !side) return;
+        if (!inputMap[type]) inputMap[type] = {};
+        if (!pendingFiles[type]) pendingFiles[type] = { front: null, back: null };
+        inputMap[type][side] = input;
+    });
 
     function showError(message) {
         if (!errorEl) return;
@@ -626,15 +623,15 @@ function initProfileSupportingDocuments() {
 
     function updatePanels() {
         const type = selectedDocumentType();
-        if (schoolIdPanel) schoolIdPanel.hidden = type !== 'school_id';
-        if (nationalIdPanel) nationalIdPanel.hidden = type !== 'national_id';
-        if (type === 'school_id') {
-            clearSidePreview('national_id', 'front');
-            clearSidePreview('national_id', 'back');
-        } else if (type === 'national_id') {
-            clearSidePreview('school_id', 'front');
-            clearSidePreview('school_id', 'back');
-        }
+        docPanels.forEach((panel) => {
+            const panelType = panel.getAttribute('data-profile-doc-panel');
+            const selected = panelType === type;
+            panel.hidden = !selected;
+            if (!selected && panelType) {
+                clearSidePreview(panelType, 'front');
+                clearSidePreview(panelType, 'back');
+            }
+        });
         updateSubmitState();
     }
 
@@ -679,8 +676,7 @@ function initProfileSupportingDocuments() {
 
     function resetUploadModal() {
         docTypeRadios.forEach((radio) => { radio.checked = false; });
-        if (schoolIdPanel) schoolIdPanel.hidden = true;
-        if (nationalIdPanel) nationalIdPanel.hidden = true;
+        docPanels.forEach((panel) => { panel.hidden = true; });
         clearAllPending();
         if (submitBtn) {
             submitBtn.disabled = true;
@@ -755,10 +751,11 @@ function initProfileSupportingDocuments() {
     uploadModal.querySelectorAll('[data-clear-profile-doc]').forEach((button) => {
         button.addEventListener('click', function () {
             const inputId = button.getAttribute('data-clear-profile-doc');
-            if (inputId?.includes('SchoolId')) {
-                clearSidePreview('school_id', inputId.includes('Front') ? 'front' : 'back');
-            } else if (inputId?.includes('NationalId')) {
-                clearSidePreview('national_id', inputId.includes('Front') ? 'front' : 'back');
+            const input = inputId ? document.getElementById(inputId) : null;
+            const type = input?.getAttribute('data-profile-doc-type');
+            const side = input?.getAttribute('data-doc-side');
+            if (type && side) {
+                clearSidePreview(type, side);
             }
             updateSubmitState();
         });

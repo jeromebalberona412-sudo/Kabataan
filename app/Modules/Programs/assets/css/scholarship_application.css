@@ -575,6 +575,96 @@
     display: none;
 }
 
+.gf-id-reuse {
+    margin-bottom: 12px;
+    padding: 14px 16px;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.gf-id-reuse-question {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #202124;
+    margin-bottom: 12px;
+}
+
+.gf-id-reuse-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.gf-id-reuse-thumb {
+    margin: 0;
+    width: 112px;
+}
+
+.gf-id-reuse-img {
+    width: 112px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid #dadce0;
+    background: #fff;
+}
+
+.gf-id-reuse-thumb figcaption {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #5f6368;
+    text-align: center;
+}
+
+.gf-id-reuse-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.gf-id-reuse-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 14px;
+    color: #202124;
+    cursor: pointer;
+}
+
+.gf-id-reuse-option input {
+    margin-top: 3px;
+}
+
+.gf-id-reuse-status {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #137333;
+}
+
+.gf-file-card-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+@media (max-width: 414px) {
+    .gf-id-reuse-thumbs {
+        gap: 8px;
+    }
+
+    .gf-id-reuse-thumb,
+    .gf-id-reuse-img {
+        width: 96px;
+    }
+
+    .gf-id-reuse-img {
+        height: 64px;
+    }
+}
+
 .gf-pdf-modal {
     position: fixed;
     inset: 0;
@@ -1297,6 +1387,93 @@
 
 .sch-field-inline-error:not([hidden]) {
     display: block;
+}
+
+.sch-long-name-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.sch-long-name-modal[hidden] {
+    display: none;
+}
+
+.sch-long-name-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.sch-long-name-card {
+    position: relative;
+    width: min(100%, 420px);
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+}
+
+.sch-long-name-card h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+}
+
+.sch-long-name-card p {
+    margin: 0 0 12px;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.sch-long-name-card label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.sch-long-name-card input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 16px;
+}
+
+.sch-long-name-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.sch-long-name-cancel,
+.sch-long-name-continue {
+    min-height: 40px;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-weight: 600;
+}
+
+.sch-long-name-cancel {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+}
+
+.sch-long-name-continue {
+    background: #16a34a;
+    border: 1px solid #15803d;
+    color: #fff;
+}
+
+.sch-long-name-continue:disabled {
+    opacity: 0.5;
 }
 
 .gf-field-wrap.has-inline-error .gf-input,

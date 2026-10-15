@@ -11,6 +11,8 @@ use Throwable;
 
 class CloudinaryService
 {
+    public const KABATAAN_IMAGE_PRESET = 'Avatar_Profile_GroupChats';
+
     private Cloudinary $cloudinary;
 
     private string $folder;
@@ -41,19 +43,8 @@ class CloudinaryService
     {
         $this->ensureConfigured();
 
-        $options = [
-            'public_id' => $this->folder.'/'.$publicId,
-            'overwrite' => true,
-            'resource_type' => 'image',
-        ];
-
-        if ($invalidate) {
-            $options['invalidate'] = true;
-        }
-
         $path = $file->getRealPath() ?: $file->getPathname();
-
-        $result = $this->uploadImageAsset($path, $options, $file->getClientOriginalName());
+        $result = $this->uploadUnsignedImage($path, $file->getClientOriginalName());
 
         $version = isset($result['version']) ? (int) $result['version'] : null;
 
@@ -73,30 +64,8 @@ class CloudinaryService
     {
         $this->ensureConfigured();
 
-        $folder = trim((string) config('services.cloudinary.communication_folder', 'communication'), '/');
-        $preset = trim((string) config('services.cloudinary.communication_upload_preset', ''));
         $path = $file->getRealPath() ?: $file->getPathname();
-        $displayName = pathinfo((string) $file->getClientOriginalName(), PATHINFO_FILENAME);
-        $ext = strtolower((string) $file->getClientOriginalExtension());
-
-        $options = [
-            'folder' => $folder !== '' ? $folder : 'communication',
-            'resource_type' => 'image',
-            'overwrite' => false,
-            'use_filename' => false,
-            'unique_filename' => false,
-            'display_name' => $displayName !== '' ? $displayName : 'communication_image',
-        ];
-
-        if ($ext === 'svg' && (bool) config('communications.attachments.allow_svg', false)) {
-            $options['format'] = 'svg';
-        }
-
-        if ($preset !== '') {
-            $options['upload_preset'] = $preset;
-        }
-
-        $result = $this->uploadImageAsset($path, $options, $file->getClientOriginalName());
+        $result = $this->uploadUnsignedImage($path, $file->getClientOriginalName());
         $version = isset($result['version']) ? (int) $result['version'] : null;
         $deliveryUrl = (string) ($result['secure_url'] ?? $result['url'] ?? '');
 
@@ -261,32 +230,8 @@ class CloudinaryService
         $path = $source instanceof UploadedFile
             ? ($source->getRealPath() ?: $source->getPathname())
             : $source;
-        $folder = trim((string) config('services.cloudinary.supporting_docs_folder', 'Supporting_Documents'), '/');
-        $preset = trim((string) config('services.cloudinary.supporting_docs_upload_preset', 'Supporting_Documents'));
-
-        if ($displayName === null && $source instanceof UploadedFile) {
-            $displayName = pathinfo($source->getClientOriginalName(), PATHINFO_FILENAME);
-        }
-
-        $options = [
-            'folder' => $folder,
-            'public_id' => ltrim($publicId, '/'),
-            'resource_type' => 'image',
-            'overwrite' => false,
-            'use_filename' => false,
-            'unique_filename' => false,
-        ];
-
-        if ($displayName) {
-            $options['display_name'] = $displayName;
-        }
-
-        if ($preset !== '') {
-            $options['upload_preset'] = $preset;
-        }
-
         $filename = $source instanceof UploadedFile ? $source->getClientOriginalName() : basename($path);
-        $result = $this->uploadImageAsset($path, $options, $filename);
+        $result = $this->uploadUnsignedImage($path, $filename);
 
         $version = isset($result['version']) ? (int) $result['version'] : null;
         $deliveryUrl = (string) ($result['secure_url'] ?? $result['url'] ?? '');
@@ -313,31 +258,13 @@ class CloudinaryService
     {
         $this->ensureConfigured();
 
-        $folder = trim((string) config('services.cloudinary.profile_folder', 'kabataan_profile_images'), '/');
-        $baseId = trim(ltrim($publicId, '/'));
-        // Keep folder in public_id so delete/display stay consistent.
-        $fullPublicId = $folder !== ''
-            ? (str_starts_with($baseId, $folder.'/') ? $baseId : $folder.'/'.$baseId)
-            : $baseId;
-
         $path = $file->getRealPath() ?: $file->getPathname();
         if (! is_string($path) || $path === '' || ! is_file($path)) {
             throw new RuntimeException('Profile image file path is not readable.');
         }
 
-        $options = [
-            'public_id' => $fullPublicId,
-            'resource_type' => 'image',
-            'overwrite' => true,
-            'invalidate' => true,
-            'unique_filename' => false,
-            'use_filename' => false,
-            'type' => 'upload',
-        ];
-
-        $result = $this->uploadImageAsset($path, $options, $file->getClientOriginalName());
-
-        $storedPublicId = (string) ($result['public_id'] ?? $fullPublicId);
+        $result = $this->uploadUnsignedImage($path, $file->getClientOriginalName());
+        $storedPublicId = (string) ($result['public_id'] ?? '');
         $version = isset($result['version']) ? (int) $result['version'] : null;
         $deliveryUrl = (string) ($result['secure_url'] ?? $result['url'] ?? '');
 
@@ -351,7 +278,7 @@ class CloudinaryService
             if ($optimized !== '') {
                 $deliveryUrl = $optimized;
             }
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Keep Cloudinary secure_url if SDK delivery fails.
         }
 
@@ -395,10 +322,7 @@ class CloudinaryService
     private function uploadUnsignedImage(string $path, string $filename): array
     {
         $cloud = trim((string) config('services.cloudinary.cloud_name'));
-        $preset = trim((string) config('services.cloudinary.profile_upload_preset', 'kabataan_profile_images'));
-        if ($preset === '') {
-            $preset = 'kabataan_profile_images';
-        }
+        $preset = self::KABATAAN_IMAGE_PRESET;
 
         $safeName = $filename !== '' ? $filename : 'image';
 

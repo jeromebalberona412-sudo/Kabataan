@@ -46,7 +46,7 @@ class KabataanSetPasswordEmail extends Notification
         foreach ([
             public_path('images/SK_OnePortal_logo.png'),
             public_path('images/SK_OnePortal.png'),
-            public_path('images/skoneportal_logo.webp'),
+            public_path('images/skoneportal_logo_256.webp'),
         ] as $path) {
             if (is_string($path) && is_file($path)) {
                 $logoPath = $path;

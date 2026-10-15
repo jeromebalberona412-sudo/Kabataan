@@ -460,8 +460,8 @@ import '../../../Communications/assets/js/chat-modal.js';
             });
         }
 
-        const unreadTotal = items.reduce(function (sum, c) { return sum + Number(c.unread_count || 0); }, 0);
-        if (pill) {
+        if (!(window.CommsRealtime && typeof window.CommsRealtime.updateHeaderBadge === 'function') && pill) {
+            const unreadTotal = items.reduce(function (sum, c) { return sum + Number(c.unread_count || 0); }, 0);
             pill.style.display = unreadTotal > 0 ? '' : 'none';
             pill.textContent = unreadTotal > 99 ? '99+' : String(unreadTotal);
         }
@@ -632,7 +632,9 @@ import '../../../Communications/assets/js/chat-modal.js';
         }).catch(function () {});
     }
 
-    setInterval(refreshUnreadBadge, 30000);
+    if (!(window.CommsRealtime && typeof window.CommsRealtime.refreshUnread === 'function')) {
+        setInterval(refreshUnreadBadge, 30000);
+    }
 })();
 
 (function wireKabataanPageInteractionRestore() {
@@ -742,4 +744,41 @@ import '../../../Communications/assets/js/chat-modal.js';
         }
         restoreKabataanPageInteraction();
     }, true);
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.comms-msg-mark-all') : null;
+        if (!btn || btn.disabled) return;
+        e.preventDefault();
+        btn.disabled = true;
+        btn.textContent = 'Marking...';
+        var csrf = document.querySelector('meta[name="csrf-token"]');
+        fetch('/api/communications/conversations/mark-all-read', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': csrf ? csrf.getAttribute('content') : ''
+            },
+            credentials: 'same-origin',
+            body: '{}'
+        }).then(function (r) {
+            return r.ok ? r.json() : Promise.reject();
+        }).then(function (data) {
+            window.__COMMS_INBOX_EPOCH__ = (Number(window.__COMMS_INBOX_EPOCH__) || 0) + 1;
+            if (data && typeof data.unread_count !== 'undefined' && window.CommsRealtime && typeof window.CommsRealtime.updateHeaderBadge === 'function') {
+                window.CommsRealtime.updateHeaderBadge(data.unread_count);
+            }
+            if (typeof window.refreshMessagesPopover === 'function') {
+                window.refreshMessagesPopover();
+            }
+        }).catch(function () {
+            if (window.Comms && typeof window.Comms.showToast === 'function') {
+                window.Comms.showToast('Could not mark messages as read. Please try again.', 'error');
+            }
+        }).finally(function () {
+            btn.disabled = false;
+            btn.textContent = 'Mark All as Read';
+        });
+    });
 })();

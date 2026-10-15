@@ -251,6 +251,34 @@
     object-fit: contain;
 }
 
+.ba-proposal {
+    margin-top: 16px;
+}
+
+.ba-proposal-scroll {
+    overflow-x: auto;
+}
+
+.ba-proposal-table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+}
+
+.ba-proposal-table th,
+.ba-proposal-table td {
+    border: 1px solid #e5e7eb;
+    padding: 8px;
+    text-align: left;
+    font-size: 13px;
+}
+
+.ba-proposal-note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #475569;
+}
+
 @media (max-width: 414px) {
     .ba-expand-stats,
     .ba-expand-info-grid {

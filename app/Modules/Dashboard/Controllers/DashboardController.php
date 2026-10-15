@@ -41,7 +41,7 @@ class DashboardController extends Controller
         // Cache barangay profiles for faster loading
         $barangayProfiles = Cache::remember(
             "kabataan_brgy_profiles_tenant_{$tenantId}",
-            30, // 30 minutes cache
+            1800,
             fn () => $this->barangaySkProfileService->listForTenant($tenantId)
         );
 

@@ -27,7 +27,7 @@
             <div class="branding-content">
                 <div class="logo-wrapper">
                     <img
-                        src="{{ asset('images/skoneportal_logo.webp') }}"
+                        src="{{ asset('images/skoneportal_logo_256.webp') }}"
                         alt="SK OnePortal Logo"
                         class="youth-logo"
                     >

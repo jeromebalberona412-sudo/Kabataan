@@ -18,6 +18,7 @@ use App\Services\KabataanNotificationService;
 use App\Services\KabataanPhotoService;
 use App\Services\KabataanProfilingHistoryService;
 use App\Services\KkProfilingScheduleService;
+use App\Services\KkProfilingValidationMessages;
 use App\Services\KkRegistrationDraftService;
 use App\Services\KkSurveyResponseService;
 use App\Services\PhoneNumberService;
@@ -25,6 +26,7 @@ use App\Services\RegistrationEvaluationService;
 use App\Services\RespondentNumberService;
 use App\Services\TurnstileAttemptGuard;
 use App\Services\TurnstileService;
+use App\Support\KabataanRegistrationNameLimits;
 use App\Support\MailUrl;
 use App\Support\YouthClassificationInput;
 use Carbon\Carbon;
@@ -184,6 +186,9 @@ class KKProfilingController extends Controller
             return redirect()->route('kkprofiling.signup')
                 ->withErrors(['schedule' => $message]);
         }
+        $scheduleService = app(KkProfilingScheduleService::class);
+        $supportingDocumentsRequired = $scheduleService->supportingDocumentsRequired((int) $barangayRecord->id);
+        $emailRequired = $scheduleService->emailRequired((int) $barangayRecord->id);
         // ──────────────────────────────────────────────────────────────────
 
         $respondentNumber = '';
@@ -213,6 +218,8 @@ class KKProfilingController extends Controller
             'respondentDisplay' => self::formatRespondentDisplay($respondentNumber),
             'barangayLogoUrl' => self::getBarangayLogoUrl($barangayRecord->id),
             'barangayZones' => $this->barangayZoneService->activeZonesForBarangay((int) $barangayRecord->id),
+            'supportingDocumentsRequired' => $supportingDocumentsRequired,
+            'emailRequired' => $emailRequired,
             'wizardInitialStep' => $wizardInitialStep,
             'verificationSent' => $verificationSent,
             'registrationComplete' => false,
@@ -278,6 +285,9 @@ class KKProfilingController extends Controller
             'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
             'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
             'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+            'contact_number' => trim((string) $request->input('contact_number', '')) === '09'
+                ? null
+                : $request->input('contact_number'),
         ]);
 
         if ($request->input('middle_name') === '') {
@@ -285,9 +295,9 @@ class KKProfilingController extends Controller
         }
 
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'last_name' => KabataanRegistrationNameLimits::rules(true),
+            'first_name' => KabataanRegistrationNameLimits::rules(true),
+            'middle_name' => KabataanRegistrationNameLimits::rules(false),
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $registration->barangay_id),
@@ -295,7 +305,7 @@ class KKProfilingController extends Controller
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
             'email' => ValidEmailAddress::profilingRules(),
-            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber((int) $registration->id)],
+            'contact_number' => ['nullable', 'string', 'max:30', new PhilippineMobileNumber((int) $registration->id)],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -307,23 +317,28 @@ class KKProfilingController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
+            'profiling_acknowledgment' => ['required', 'accepted'],
             'signature_name' => [
                 'required',
                 'string',
                 'min:'.(int) config('signature.name_min', 1),
-                'max:'.(int) config('signature.name_max', 255),
+                'max:'.KabataanRegistrationNameLimits::signatureNameMax(),
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
-            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
+            'last_name.max' => KabataanRegistrationNameLimits::message(),
+            'first_name.max' => KabataanRegistrationNameLimits::message(),
+            'middle_name.max' => KabataanRegistrationNameLimits::message(),
+            'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
+            'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
-            'signature_name.max' => config('signature.messages.name_max'),
+            'signature_name.max' => KabataanRegistrationNameLimits::signatureNameMax().' maximum characters only.',
             'signature.required' => config('signature.messages.required'),
         ] + ValidEmailAddress::profilingMessages());
 
         $localContact = app(PhoneNumberService::class)->toLocalMobile($validated['contact_number'] ?? null);
-        if ($localContact === null) {
+        if (! empty($validated['contact_number']) && $localContact === null) {
             return $this->updateErrorResponse($request, [
                 'contact_number' => PhoneNumberService::MSG_INVALID,
             ]);
@@ -377,7 +392,7 @@ class KKProfilingController extends Controller
 
         $existingForm = $registration->form_data ?? [];
         // Respondent # is assigned only after a successful update completes.
-        unset($validated['respondent_number']);
+        unset($validated['respondent_number'], $validated['profiling_acknowledgment']);
 
         $originalEmail = strtolower(trim((string) $registration->email));
         $validated['email'] = $originalEmail;
@@ -621,6 +636,9 @@ class KKProfilingController extends Controller
             'last_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('last_name', ''))) ?: '',
             'first_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('first_name', ''))) ?: '',
             'middle_name' => preg_replace('/\s+/', ' ', trim((string) $request->input('middle_name', ''))) ?: null,
+            'contact_number' => trim((string) $request->input('contact_number', '')) === '09'
+                ? null
+                : $request->input('contact_number'),
         ]);
 
         if ($request->input('middle_name') === '') {
@@ -628,9 +646,9 @@ class KKProfilingController extends Controller
         }
 
         $validated = $request->validate([
-            'last_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'first_name' => ['required', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
-            'middle_name' => ['nullable', 'string', 'min:2', 'max:150', 'regex:/^[A-Za-z.\-\s]+$/'],
+            'last_name' => KabataanRegistrationNameLimits::rules(true),
+            'first_name' => KabataanRegistrationNameLimits::rules(true),
+            'middle_name' => KabataanRegistrationNameLimits::rules(false),
             'suffix' => ['required', 'string', 'in:None,Jr.,Sr.,I,II,III,IV,V,Others'],
             'custom_suffix' => ['nullable', 'required_if:suffix,Others', 'string', 'max:5', 'regex:/^(?!\s+$)[A-Za-z.\s]+$/'],
             'purok_zone' => $this->barangayZoneService->purokZoneRules((int) $barangayRecord->id),
@@ -638,7 +656,7 @@ class KKProfilingController extends Controller
             'age' => 'required|integer|min:15|max:30',
             'birthday' => 'required|date|before_or_equal:today',
             'email' => ValidEmailAddress::profilingRules(),
-            'contact_number' => ['required', 'string', 'max:30', new PhilippineMobileNumber],
+            'contact_number' => ['nullable', 'string', 'max:30', new PhilippineMobileNumber],
             'civil_status' => 'required|string',
             'youth_classification' => 'required|string',
             'youth_age_group' => 'required|string',
@@ -650,23 +668,28 @@ class KKProfilingController extends Controller
             'kk_assembly' => 'required|string|in:Yes,No',
             'kk_times' => 'required_if:kk_assembly,Yes|nullable|string',
             'kk_reason' => 'required_if:kk_assembly,No|nullable|string',
+            'profiling_acknowledgment' => ['required', 'accepted'],
             'signature_name' => [
                 'required',
                 'string',
                 'min:'.(int) config('signature.name_min', 1),
-                'max:'.(int) config('signature.name_max', 255),
+                'max:'.KabataanRegistrationNameLimits::signatureNameMax(),
             ],
             'signature' => ['required', 'string', new ParticipantSignatureImage],
         ], [
-            'contact_number.required' => PhoneNumberService::MSG_REQUIRED,
+            'last_name.max' => KabataanRegistrationNameLimits::message(),
+            'first_name.max' => KabataanRegistrationNameLimits::message(),
+            'middle_name.max' => KabataanRegistrationNameLimits::message(),
+            'profiling_acknowledgment.required' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
+            'profiling_acknowledgment.accepted' => KkProfilingValidationMessages::ACKNOWLEDGMENT_REQUIRED,
             'signature_name.required' => config('signature.messages.name_required'),
             'signature_name.min' => config('signature.messages.name_required'),
-            'signature_name.max' => config('signature.messages.name_max'),
+            'signature_name.max' => KabataanRegistrationNameLimits::signatureNameMax().' maximum characters only.',
             'signature.required' => config('signature.messages.required'),
         ] + ValidEmailAddress::profilingMessages());
 
         $localContact = app(PhoneNumberService::class)->toLocalMobile($validated['contact_number'] ?? null);
-        if ($localContact === null) {
+        if (! empty($validated['contact_number']) && $localContact === null) {
             return $this->submitErrorResponse($request, [
                 'contact_number' => PhoneNumberService::MSG_INVALID,
             ]);
@@ -714,7 +737,7 @@ class KKProfilingController extends Controller
             ]);
         }
 
-        unset($validated['respondent_number']);
+        unset($validated['respondent_number'], $validated['profiling_acknowledgment']);
         $scheduleService = app(KkProfilingScheduleService::class);
         $activeSchedule = $scheduleService->activeUpdateSchedule((int) $barangayRecord->id);
         if ($activeSchedule !== null) {
@@ -890,16 +913,13 @@ class KKProfilingController extends Controller
 
         // Check for active pending or approved registrations
         $activeRegistration = KabataanRegistration::query()
-            ->where('email', $email)
+            ->whereRaw('LOWER(email) = ?', [$email])
             ->whereIn('status', ['active', 'approved', 'pending_verification', 'password_set', 'pending', 'email_verified'])
             ->whereNull('deleted_at')
             ->first();
 
         if ($activeRegistration) {
-            $isPending = in_array($activeRegistration->status, ['pending_verification', 'password_set', 'pending', 'email_verified'], true);
-            $msg = $isPending
-                ? 'You already have a KK Profiling application under review. Please wait for the SK Official\'s review.'
-                : 'This email is already taken. Please use another email.';
+            $msg = 'This email address is already in use. Please use a new email address that is not registered in the system.';
 
             return response()->json([
                 'exists' => true,
@@ -909,7 +929,7 @@ class KKProfilingController extends Controller
 
         // If user only has a rejected registration, allow re-application
         $hasRejected = KabataanRegistration::query()
-            ->where('email', $email)
+            ->whereRaw('LOWER(email) = ?', [$email])
             ->where('status', 'rejected')
             ->exists();
 
@@ -921,13 +941,13 @@ class KKProfilingController extends Controller
             ]);
         }
 
-        $existingApprovedUser = User::where('email', $email)
+        $existingApprovedUser = User::whereRaw('LOWER(email) = ?', [$email])
             ->where('status', 'ACTIVE')
             ->exists();
 
         return response()->json([
             'exists' => $existingApprovedUser,
-            'message' => $existingApprovedUser ? 'This email is already taken. Please use another email.' : null,
+            'message' => $existingApprovedUser ? 'This email address is already in use. Please use a new email address that is not registered in the system.' : null,
         ]);
     }
 

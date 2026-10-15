@@ -1253,8 +1253,7 @@
         if (!educationHistoryBtn) {
             return;
         }
-        const hasHistory = Boolean(programsData?.has_scholarship_application_history)
-            || (programsData?.schedule_programs || []).some((schedule) => schedule.has_applied);
+        const hasHistory = Boolean(programsData?.has_scholarship_application_history);
         educationHistoryBtn.hidden = !hasHistory;
     }
 

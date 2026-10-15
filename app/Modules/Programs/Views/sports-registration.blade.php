@@ -20,6 +20,7 @@
         'app/Modules/Programs/assets/css/sports-registration.css',
         'app/Modules/Programs/assets/css/sports-applications-history.css',
         'app/Modules/Programs/assets/js/sports-applications-history.js',
+        'app/Modules/Programs/assets/js/program-id-reuse.js',
         'app/Modules/Programs/assets/js/sports_apply_wizard.js',
     ])
 </head>

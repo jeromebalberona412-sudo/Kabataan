@@ -4,13 +4,14 @@ namespace App\Modules\Programs\Services;
 
 use App\Models\ProgramApplication;
 use App\Models\User;
+use App\Services\CloudinaryService;
 use App\Support\MailUrl;
 use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 class ProgramDocumentService
 {
@@ -18,12 +19,33 @@ class ProgramDocumentService
 
     private const DISK = 'public';
 
+    /** @var list<string> */
+    private const IMAGE_MIMES = ['image/jpeg', 'image/jpg', 'image/png'];
+
+    public function __construct(
+        private readonly ProgramIdReuseService $idReuseService,
+        private readonly CloudinaryService $cloudinary,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
-    public function uploadDraft(User $user, int $scheduleProgramId, string $questionId, UploadedFile $file): array
-    {
-        $this->assertValidPdf($file);
+    public function uploadDraft(
+        User $user,
+        int $scheduleProgramId,
+        string $questionId,
+        UploadedFile $file,
+        string $fileType = 'pdf',
+        int $maxSizeKb = self::MAX_FILE_SIZE_KB,
+    ): array {
+        $this->assertValidUpload($file, $fileType, $maxSizeKb);
+
+        $mime = strtolower((string) ($file->getMimeType() ?: ''));
+        $extension = strtolower($file->getClientOriginalExtension());
+        $isImage = in_array($mime, self::IMAGE_MIMES, true) || in_array($extension, ['jpg', 'jpeg', 'png'], true);
+        if ($isImage) {
+            return $this->storeCloudinaryImageDraft($user, $scheduleProgramId, $questionId, $file, $mime !== '' ? $mime : $this->mimeFromPath($extension));
+        }
 
         $safeQuestionId = $this->sanitizeQuestionId($questionId);
         $directory = $this->draftDirectory($user->id, $scheduleProgramId);
@@ -46,7 +68,7 @@ class ProgramDocumentService
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
             'size' => $file->getSize(),
-            'mime' => 'application/pdf',
+            'mime' => $file->getMimeType() ?: $this->mimeFromPath($path),
             'uploaded_at' => now()->toIso8601String(),
         ], JSON_THROW_ON_ERROR));
 
@@ -58,6 +80,67 @@ class ProgramDocumentService
             $file->getSize(),
             now()->toIso8601String(),
         );
+    }
+
+    /**
+     * Replace one stored requirement after an official asks for resubmission.
+     *
+     * @return array<string, mixed>
+     */
+    public function replaceStoredDocument(
+        User $user,
+        ProgramApplication $application,
+        string $questionId,
+        UploadedFile $file,
+    ): array {
+        $draft = $this->uploadDraft($user, (int) $application->program_id, $questionId, $file);
+        $existing = is_array(($application->required_documents ?? [])[$questionId] ?? null)
+            ? $application->required_documents[$questionId]
+            : [];
+
+        $meta = [
+            'question_id' => $questionId,
+            'question_label' => $existing['question_label'] ?? null,
+            'original_name' => $draft['original_name'] ?? $file->getClientOriginalName(),
+            'size' => (int) ($draft['size'] ?? $file->getSize() ?? 0),
+            'mime' => $draft['mime'] ?? ($file->getMimeType() ?: 'application/pdf'),
+            'uploaded_at' => now()->toIso8601String(),
+            'review_status' => 'pending_review',
+            'resubmit_reason' => null,
+            'resubmitted_at' => now()->toIso8601String(),
+        ];
+
+        if (($draft['storage'] ?? '') === 'cloudinary' && ! empty($draft['url'])) {
+            $meta['storage'] = 'cloudinary';
+            $meta['public_id'] = $draft['public_id'] ?? null;
+            $meta['url'] = $draft['url'];
+            $meta['path'] = $draft['public_id'] ?? $draft['url'];
+
+            return $meta;
+        }
+
+        $draftPath = $this->normalizeStoragePath((string) ($draft['path'] ?? ''));
+        if ($draftPath === '' || ! Storage::disk(self::DISK)->exists($draftPath)) {
+            throw ValidationException::withMessages([
+                'file' => ['The replacement file could not be saved. Please upload it again.'],
+            ]);
+        }
+
+        $extension = pathinfo($draftPath, PATHINFO_EXTENSION) ?: 'pdf';
+        $permanentDirectory = $this->applicationDirectory($application->id);
+        Storage::disk(self::DISK)->makeDirectory($permanentDirectory);
+        $permanentPath = $permanentDirectory.'/'.$this->sanitizeQuestionId($questionId).'.'.$extension;
+
+        if ($draftPath !== $permanentPath) {
+            Storage::disk(self::DISK)->copy($draftPath, $permanentPath);
+        }
+
+        $meta['disk'] = self::DISK;
+        $meta['path'] = $permanentPath;
+        $meta['size'] = Storage::disk(self::DISK)->size($permanentPath);
+        $meta['mime'] = $this->mimeFromPath($permanentPath);
+
+        return $meta;
     }
 
     /**
@@ -78,6 +161,16 @@ class ProgramDocumentService
 
             if (Storage::disk(self::DISK)->exists($metaPath)) {
                 $meta = json_decode((string) Storage::disk(self::DISK)->get($metaPath), true);
+                if (is_array($meta) && (($meta['storage'] ?? '') === 'cloudinary') && ! empty($meta['url'])) {
+                    $documents[(string) $questionId] = $this->formatCloudinaryDocumentMeta(
+                        $scheduleProgramId,
+                        (string) $questionId,
+                        $meta,
+                    );
+
+                    continue;
+                }
+
                 if (is_array($meta) && ! empty($meta['path']) && Storage::disk(self::DISK)->exists($meta['path'])) {
                     $documents[(string) $questionId] = $this->formatDocumentMeta(
                         $scheduleProgramId,
@@ -120,11 +213,38 @@ class ProgramDocumentService
         $documents = [];
 
         foreach ($application->required_documents ?? [] as $questionId => $meta) {
-            if (! is_array($meta) || empty($meta['path'])) {
+            if (! is_array($meta)) {
                 continue;
             }
 
-            $documents[(string) $questionId] = $this->enrichDocumentUrls($meta, $application->id);
+            $qid = (string) $questionId;
+            if ($this->idReuseService->isReuseMeta($meta)) {
+                $owner = $application->kabataan_id
+                    ? User::query()->find($application->kabataan_id)
+                    : null;
+                if ($owner !== null) {
+                    $documents[$qid] = $this->idReuseService->enrichReuseMeta(
+                        $owner,
+                        $meta,
+                        (int) $application->program_id,
+                        $qid,
+                    );
+                    $documents[$qid]['question_id'] = $qid;
+                    $documents[$qid]['review_status'] = (string) ($meta['review_status'] ?? 'pending_review');
+                    $documents[$qid]['resubmit_reason'] = $meta['resubmit_reason'] ?? null;
+                }
+
+                continue;
+            }
+
+            if (empty($meta['path'])) {
+                continue;
+            }
+
+            $documents[$qid] = $this->enrichDocumentUrls($meta, $application->id);
+            $documents[$qid]['question_id'] = $qid;
+            $documents[$qid]['review_status'] = (string) ($meta['review_status'] ?? 'pending_review');
+            $documents[$qid]['resubmit_reason'] = $meta['resubmit_reason'] ?? null;
         }
 
         return $documents;
@@ -156,7 +276,30 @@ class ProgramDocumentService
             }
 
             $fileMeta = $this->resolveFileAnswerMeta($answer['answer'] ?? null);
-            $draftPath = is_string($fileMeta['path'] ?? null) ? $this->normalizeStoragePath($fileMeta['path']) : null;
+            if ($this->idReuseService->answerRequestsReuse($fileMeta)) {
+                continue;
+            }
+
+            if (is_array($fileMeta) && ($fileMeta['storage'] ?? '') === 'cloudinary' && ! empty($fileMeta['url'])) {
+                $documents[$questionId] = [
+                    'question_id' => $questionId,
+                    'question_label' => $answer['question_label'] ?? null,
+                    'storage' => 'cloudinary',
+                    'public_id' => $fileMeta['public_id'] ?? null,
+                    'url' => $fileMeta['url'],
+                    'path' => $fileMeta['public_id'] ?? $fileMeta['url'],
+                    'original_name' => $fileMeta['original_name'] ?? 'image',
+                    'size' => (int) ($fileMeta['size'] ?? 0),
+                    'mime' => $fileMeta['mime'] ?? 'image/jpeg',
+                    'uploaded_at' => $fileMeta['uploaded_at'] ?? now()->toIso8601String(),
+                ];
+
+                continue;
+            }
+
+            $draftPath = is_array($fileMeta) && is_string($fileMeta['path'] ?? null)
+                ? $this->normalizeStoragePath($fileMeta['path'])
+                : null;
 
             if ($draftPath === null || ! Storage::disk(self::DISK)->exists($draftPath)) {
                 $draftPath = $this->findDraftPath($user->id, $application->program_id, $questionId);
@@ -164,7 +307,7 @@ class ProgramDocumentService
 
             if ($draftPath === null || ! Storage::disk(self::DISK)->exists($draftPath)) {
                 throw ValidationException::withMessages([
-                    "answers.{$questionId}" => ['Please upload the required PDF document.'],
+                    "answers.{$questionId}" => ['Please upload the required document.'],
                 ]);
             }
 
@@ -182,7 +325,7 @@ class ProgramDocumentService
                 'path' => $permanentPath,
                 'original_name' => $fileMeta['original_name'] ?? basename($draftPath),
                 'size' => Storage::disk(self::DISK)->size($permanentPath),
-                'mime' => 'application/pdf',
+                'mime' => $this->mimeFromPath($permanentPath),
                 'uploaded_at' => $fileMeta['uploaded_at'] ?? now()->toIso8601String(),
             ];
         }
@@ -195,7 +338,7 @@ class ProgramDocumentService
         int $scheduleProgramId,
         string $questionId,
         bool $download = false,
-    ): StreamedResponse {
+    ): Response {
         $application = ProgramApplication::query()
             ->where('kabataan_id', $user->id)
             ->where('program_id', $scheduleProgramId)
@@ -206,12 +349,33 @@ class ProgramDocumentService
         $path = null;
         $originalName = 'document.pdf';
 
+        $meta = null;
+
         if ($application !== null) {
             $meta = ($application->required_documents ?? [])[$questionId] ?? null;
+            if ($this->idReuseService->isReuseMeta($meta)) {
+                $side = request()->query('side', 'front');
+
+                return $this->idReuseService->streamReuseMeta(
+                    $user,
+                    is_array($meta) ? $meta : [],
+                    is_string($side) ? $side : 'front',
+                    $download,
+                );
+            }
+            if (is_array($meta) && ($meta['storage'] ?? '') === 'cloudinary' && ! empty($meta['url'])) {
+                return redirect()->away((string) $meta['url']);
+            }
+
             if (is_array($meta) && ! empty($meta['path'])) {
                 $path = $meta['path'];
                 $originalName = $meta['original_name'] ?? basename($path);
             }
+        }
+
+        $draftMeta = $this->readDraftMeta($user->id, $scheduleProgramId, $questionId);
+        if (is_array($draftMeta) && ($draftMeta['storage'] ?? '') === 'cloudinary' && ! empty($draftMeta['url'])) {
+            return redirect()->away((string) $draftMeta['url']);
         }
 
         if ($path === null) {
@@ -226,11 +390,99 @@ class ProgramDocumentService
         $this->assertUserOwnsDocument($user, $path);
 
         $disposition = $download ? 'attachment' : 'inline';
+        $mime = is_array($meta) ? ($meta['mime'] ?? null) : null;
 
         return Storage::disk(self::DISK)->response($path, $originalName, [
-            'Content-Type' => 'application/pdf',
+            'Content-Type' => $mime ?: $this->mimeFromPath($path),
             'Content-Disposition' => $disposition.'; filename="'.addslashes($originalName).'"',
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function storeCloudinaryImageDraft(
+        User $user,
+        int $scheduleProgramId,
+        string $questionId,
+        UploadedFile $file,
+        string $mime,
+    ): array {
+        if (! $this->cloudinary->isConfigured()) {
+            throw ValidationException::withMessages([
+                'file' => ['Image upload is not available right now. Please try again later.'],
+            ]);
+        }
+
+        try {
+            $uploaded = $this->cloudinary->upload($file, 'program_'.$scheduleProgramId.'_'.$questionId);
+        } catch (\Throwable $exception) {
+            report($exception);
+            throw ValidationException::withMessages([
+                'file' => ['The image could not be uploaded. Please try again.'],
+            ]);
+        }
+
+        $safeQuestionId = $this->sanitizeQuestionId($questionId);
+        $directory = $this->draftDirectory($user->id, $scheduleProgramId);
+        Storage::disk(self::DISK)->makeDirectory($directory);
+
+        $meta = [
+            'question_id' => $questionId,
+            'storage' => 'cloudinary',
+            'public_id' => $uploaded['public_id'],
+            'url' => $uploaded['url'],
+            'path' => $uploaded['public_id'],
+            'original_name' => $file->getClientOriginalName(),
+            'size' => $file->getSize(),
+            'mime' => $mime,
+            'uploaded_at' => now()->toIso8601String(),
+        ];
+
+        Storage::disk(self::DISK)->put(
+            $directory.'/'.$safeQuestionId.'.meta.json',
+            json_encode($meta, JSON_THROW_ON_ERROR),
+        );
+
+        return $this->formatCloudinaryDocumentMeta($scheduleProgramId, $questionId, $meta);
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function formatCloudinaryDocumentMeta(int $scheduleProgramId, string $questionId, array $meta): array
+    {
+        $formatted = $this->formatDocumentMeta(
+            $scheduleProgramId,
+            $questionId,
+            (string) ($meta['original_name'] ?? 'image'),
+            (string) ($meta['original_name'] ?? 'image'),
+            (int) ($meta['size'] ?? 0),
+            (string) ($meta['uploaded_at'] ?? now()->toIso8601String()),
+        );
+        $formatted['storage'] = 'cloudinary';
+        $formatted['public_id'] = $meta['public_id'] ?? null;
+        $formatted['url'] = $meta['url'] ?? null;
+        $formatted['path'] = $meta['public_id'] ?? ($meta['url'] ?? '');
+        $formatted['mime'] = $meta['mime'] ?? 'image/jpeg';
+
+        return $formatted;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function readDraftMeta(int $userId, int $scheduleProgramId, string $questionId): ?array
+    {
+        $metaPath = $this->draftDirectory($userId, $scheduleProgramId).'/'.$this->sanitizeQuestionId($questionId).'.meta.json';
+        if (! Storage::disk(self::DISK)->exists($metaPath)) {
+            return null;
+        }
+
+        $meta = json_decode((string) Storage::disk(self::DISK)->get($metaPath), true);
+
+        return is_array($meta) ? $meta : null;
     }
 
     /**
@@ -250,7 +502,7 @@ class ProgramDocumentService
             'original_name' => $originalName,
             'size' => $size,
             'size_display' => $this->formatFileSize($size),
-            'mime' => 'application/pdf',
+            'mime' => $this->mimeFromPath($path),
             'uploaded_at' => $uploadedAt,
             'uploaded_at_display' => $this->formatTimestamp($uploadedAt),
             'preview_url' => MailUrl::sameOrigin(route('kabataan.programs.documents.show', [
@@ -291,7 +543,7 @@ class ProgramDocumentService
         return $meta;
     }
 
-    private function assertValidPdf(UploadedFile $file): void
+    public function assertValidUpload(UploadedFile $file, string $fileType = 'pdf', int $maxSizeKb = self::MAX_FILE_SIZE_KB): void
     {
         if (! $file->isValid()) {
             throw ValidationException::withMessages([
@@ -299,20 +551,50 @@ class ProgramDocumentService
             ]);
         }
 
-        $mime = $file->getMimeType();
-        $extension = strtolower($file->getClientOriginalExtension());
+        $maxSizeKb = $maxSizeKb > 0 ? $maxSizeKb : self::MAX_FILE_SIZE_KB;
+        if ($file->getSize() > $maxSizeKb * 1024) {
+            $maxMb = max(1, (int) ceil($maxSizeKb / 1024));
+            throw ValidationException::withMessages([
+                'file' => ['File must not exceed '.$maxMb.' MB.'],
+            ]);
+        }
 
-        if ($extension !== 'pdf' && $mime !== 'application/pdf') {
+        $mime = strtolower((string) $file->getMimeType());
+        $extension = strtolower($file->getClientOriginalExtension());
+        $isPdf = $extension === 'pdf' || $mime === 'application/pdf';
+        $isImage = in_array($mime, self::IMAGE_MIMES, true) || in_array($extension, ['jpg', 'jpeg', 'png'], true);
+
+        $fileType = in_array($fileType, ['pdf', 'image', 'pdf_or_image'], true) ? $fileType : 'pdf';
+
+        if ($fileType === 'pdf' && ! $isPdf) {
             throw ValidationException::withMessages([
                 'file' => ['Only PDF files are allowed.'],
             ]);
         }
 
-        if ($file->getSize() > self::MAX_FILE_SIZE_KB * 1024) {
+        if ($fileType === 'image' && ! $isImage) {
             throw ValidationException::withMessages([
-                'file' => ['PDF file must not exceed 5 MB.'],
+                'file' => ['Only JPG and PNG images are allowed.'],
             ]);
         }
+
+        if ($fileType === 'pdf_or_image' && ! $isPdf && ! $isImage) {
+            throw ValidationException::withMessages([
+                'file' => ['Only PDF, JPG, or PNG files are allowed.'],
+            ]);
+        }
+    }
+
+    private function mimeFromPath(string $path): string
+    {
+        $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+
+        return match ($extension) {
+            'png' => 'image/png',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'pdf' => 'application/pdf',
+            default => 'application/octet-stream',
+        };
     }
 
     private function assertUserOwnsDocument(User $user, string $path): void

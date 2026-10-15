@@ -5,8 +5,9 @@
 @endphp
 <div class="notif-nav-wrapper" data-tour="notifications">
     <button class="nav-icon-btn notif-nav-btn" id="notifNavBtn" data-tour="notifications" title="Notifications" aria-label="Notifications" aria-expanded="false" onclick="toggleNotifPopover(event)">
-        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
         </svg>
         <span class="notif-nav-badge" id="notifNavBadge" data-unread-total="{{ $unreadNotifCount }}" @if($unreadNotifCount <= 0) hidden @endif>{{ $unreadNotifLabel }}</span>
     </button>

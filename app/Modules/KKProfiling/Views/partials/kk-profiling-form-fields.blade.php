@@ -70,6 +70,8 @@
 
 
 
+
+
                     {{-- -- I. PROFILE -- --}}
 
                     <div class="kkp-section-heading">
@@ -85,12 +87,12 @@
 
                     <div class="kkp-row-label">Name of Respondent <span class="kkp-required">*</span></div>
 
-                    <div class="kkp-name-row">
+                    <div class="kkp-name-row" data-kkp-name-max="{{ \App\Support\KabataanRegistrationNameLimits::APPLICATION_MAX }}">
 
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="150" autocomplete="off">
+                                <input type="text" name="last_name" id="kkpLastName" class="kkp-uline kkp-name-input" placeholder=" " required  autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Last Name <span class="kkp-required">*</span></label>
@@ -100,7 +102,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required maxlength="150" autocomplete="off">
+                                <input type="text" name="first_name" id="kkpFirstName" class="kkp-uline kkp-name-input" placeholder=" " required  autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">First Name <span class="kkp-required">*</span></label>
@@ -110,7 +112,7 @@
                         <div class="kkp-name-col">
 
                             <div class="kkp-name-input-wrap">
-                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" " maxlength="150" autocomplete="off">
+                                <input type="text" name="middle_name" id="kkpMiddleName" class="kkp-uline kkp-name-input" placeholder=" "  autocomplete="off">
                             </div>
 
                             <label class="kkp-col-label">Middle Name</label>
@@ -283,17 +285,17 @@
 
                             <div class="kkp-inline-pair kkp-inline-pair--email">
 
-                                <label class="kkp-inline-label" for="kkpEmail">Email Address:@if(!empty($emailReadonly)) <span class="kkp-required">*</span>@else <span class="kkp-optional-label">(Optional)</span>@endif</label>
+                                <label class="kkp-inline-label" for="kkpEmail">Email Address:@if(!empty($emailReadonly) || !empty($emailRequired)) <span class="kkp-required">*</span>@else <span class="kkp-optional-label">(Optional)</span>@endif</label>
 
-                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " maxlength="64" autocomplete="email" autocapitalize="none" spellcheck="false" @if(!empty($emailReadonly)) required readonly tabindex="-1" @endif>
+                                <input type="email" name="email" id="kkpEmail" class="kkp-uline kkp-uline-med kkp-email-input{{ !empty($emailReadonly) ? ' kkp-readonly' : '' }}" placeholder=" " maxlength="64" autocomplete="email" autocapitalize="none" spellcheck="false" @if(!empty($emailReadonly) || !empty($emailRequired)) required @endif @if(!empty($emailReadonly)) readonly tabindex="-1" @endif>
 
                             </div>
 
                             <div class="kkp-inline-pair">
 
-                                <label class="kkp-inline-label">Contact #: <span class="kkp-required">*</span></label>
+                                <label class="kkp-inline-label">Contact #: <span class="kkp-optional-label">(Optional)</span></label>
 
-                                <input type="tel" name="contact_number" id="kkpContactNumber" class="kkp-uline kkp-uline-med" placeholder="09XXXXXXXXX" inputmode="numeric" pattern="09[0-9]{9}" maxlength="11" autocomplete="tel" required>
+                                <input type="tel" name="contact_number" id="kkpContactNumber" class="kkp-uline kkp-uline-med" placeholder="09XXXXXXXXX" inputmode="numeric" pattern="09[0-9]{9}" maxlength="11" autocomplete="tel">
 
                             </div>
 
@@ -626,7 +628,7 @@
                             <div class="kkp-sig-name-wrapper">
 
                                 <input type="text" id="kkpSignatureName" name="signature_name"
-
+                                       data-kkp-signature-max="{{ \App\Support\KabataanRegistrationNameLimits::SIGNATURE_NAME_MAX }}"
                                        placeholder="" readonly class="kkp-sig-name-input">
 
                             </div>
@@ -659,6 +661,12 @@
 
 
 
+                    @if (empty($hideProfilingAcknowledgment))
+                        @include('kkprofiling::partials.kk-profiling-acknowledgment', [
+                            'acknowledgmentClass' => 'kkp-acknowledgment-wrapper',
+                        ])
+                    @endif
+
                     {{-- -- SUBMIT -- --}}
 
                     <div class="kkp-submit-wrapper">
@@ -674,4 +682,3 @@
                         </button>
 
                     </div>
-

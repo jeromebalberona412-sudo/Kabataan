@@ -79,6 +79,10 @@ class TurnstileAttemptGuard
         if (! $this->turnstile->verify($token, $request->ip())) {
             $this->recordTurnstileFailure($action, $request);
 
+            if (method_exists($this->turnstile, 'wasUnreachable') && $this->turnstile->wasUnreachable()) {
+                return 'Security verification could not reach Cloudflare. Please try again.';
+            }
+
             return 'Security verification failed. Please try again.';
         }
 

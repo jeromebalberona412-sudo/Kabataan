@@ -16,8 +16,18 @@ function kkpNormalizeNameValue(value) {
 }
 
 const KKP_NAME_SOFT_MAX = 50;
-const KKP_NAME_MAX_CHARS = 150;
-const KKP_NAME_MAX_MSG = '150 maximum characters only.';
+
+function kkpSignatureNameMax() {
+    const el = document.getElementById('kkpSignatureName');
+    const parsed = Number(el?.getAttribute('data-kkp-signature-max') || '');
+    return Number.isInteger(parsed) && parsed >= 255 ? parsed : 500;
+}
+const KKP_NAME_MAX_CHARS = (function () {
+    const el = document.querySelector('[data-kkp-name-max]');
+    const parsed = Number(el?.getAttribute('data-kkp-name-max') || '');
+    return Number.isInteger(parsed) && parsed >= 2 ? parsed : 150;
+})();
+const KKP_NAME_MAX_MSG = KKP_NAME_MAX_CHARS + ' maximum characters only.';
 
 /** KK Profiling practical email limits (not RFC 254). */
 const KKP_EMAIL_TOTAL_MAX = 64;
@@ -28,8 +38,9 @@ const KKP_EMAIL_LOCAL_MAX = 30;
 /** Live typing: letters/.- , one space between words, no leading/pure multi-space. */
 function kkpSanitizeNameInput(value) {
     return String(value || '')
-        .toUpperCase()
-        .replace(/[^A-Z.\-\s]/g, '')
+        .normalize('NFC')
+        .toLocaleUpperCase('en-PH')
+        .replace(/[^\p{L}.'\-\s]/gu, '')
         .replace(/^\s+/, '')
         .replace(/\s{2,}/g, ' ');
 }
@@ -57,8 +68,8 @@ function kkpValidateNamePart(value, options = {}) {
         return KKP_NAME_MAX_MSG;
     }
 
-    if (!/^[A-Za-z.\-\s]+$/.test(v)) {
-        return 'Letters, spaces, periods, and hyphens only.';
+    if (!/^[\p{L}.'\-\s]+$/u.test(v)) {
+        return 'Letters, spaces, periods, hyphens, and apostrophes only.';
     }
 
     return null;
@@ -76,20 +87,62 @@ let kkpNameMeasureEl = null;
 let kkpNameMaxHintTimers = new WeakMap();
 const kkpLongNameAllowedByField = new WeakMap();
 let kkpPendingLongName = null;
+const KKP_LONG_NAME_STORAGE_KEY = 'kkp_long_name_confirmed_v1';
+
+function kkpLongNameFieldKey(el) {
+    return el?.id || el?.name || '';
+}
+
+function kkpReadLongNameConfirmed() {
+    try {
+        const parsed = JSON.parse(sessionStorage.getItem(KKP_LONG_NAME_STORAGE_KEY) || '{}');
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function kkpNameStepIsActive() {
+    const step1 = document.getElementById('kkpWizardStep1');
+    if (!step1) {
+        return true;
+    }
+
+    return !step1.hidden;
+}
 
 function kkpIsLongNameAllowed(el) {
-    return el ? kkpLongNameAllowedByField.get(el) === true : false;
+    if (!el) {
+        return false;
+    }
+    if (kkpLongNameAllowedByField.get(el) === true) {
+        return true;
+    }
+    const key = kkpLongNameFieldKey(el);
+
+    return key !== '' && kkpReadLongNameConfirmed()[key] === true;
 }
 
 function kkpSetLongNameAllowed(el, allowed) {
     if (!el) {
         return;
     }
+    const key = kkpLongNameFieldKey(el);
     if (allowed) {
         kkpLongNameAllowedByField.set(el, true);
-    } else {
-        kkpLongNameAllowedByField.delete(el);
+        if (!key) {
+            return;
+        }
+        const stored = kkpReadLongNameConfirmed();
+        stored[key] = true;
+        try {
+            sessionStorage.setItem(KKP_LONG_NAME_STORAGE_KEY, JSON.stringify(stored));
+        } catch (e) {
+            // ignore private-mode storage failures
+        }
+        return;
     }
+    kkpLongNameAllowedByField.delete(el);
 }
 
 function kkpGetNameMeasureEl() {
@@ -103,36 +156,46 @@ function kkpGetNameMeasureEl() {
     return kkpNameMeasureEl;
 }
 
-function kkpSyncNameMaxIndicator(el) {
-    const col = el?.closest('.kkp-name-col');
-    if (!col) {
-        return;
-    }
-
+function kkpClearNameMaxHint(el) {
     const prevTimer = kkpNameMaxHintTimers.get(el);
     if (prevTimer) {
         clearTimeout(prevTimer);
         kkpNameMaxHintTimers.delete(el);
     }
 
-    col.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
+    el?.closest('.kkp-name-col')?.querySelectorAll('.kkp-name-max-hint').forEach((node) => node.remove());
+}
 
-    const len = (el.value || '').length;
-    if (len < KKP_NAME_MAX_CHARS) {
+function kkpFlashNameMaxHint(el) {
+    const col = el?.closest('.kkp-name-col');
+    if (!col) {
         return;
     }
 
-    // Avoid duplicating the same text if validation already shows it as a field error.
-    const existingErr = col.querySelector('.kkp-field-error');
-    if (existingErr && existingErr.textContent === KKP_NAME_MAX_MSG) {
-        return;
+    let hint = col.querySelector('.kkp-name-max-hint');
+    if (!hint) {
+        hint = document.createElement('p');
+        hint.className = 'kkp-name-max-hint';
+        hint.setAttribute('role', 'status');
+        hint.textContent = KKP_NAME_MAX_MSG;
+        col.appendChild(hint);
     }
 
-    const hint = document.createElement('span');
-    hint.className = 'kkp-field-hint kkp-name-max-hint';
-    hint.setAttribute('role', 'status');
-    hint.textContent = KKP_NAME_MAX_MSG;
-    col.appendChild(hint);
+    const prevTimer = kkpNameMaxHintTimers.get(el);
+    if (prevTimer) {
+        clearTimeout(prevTimer);
+    }
+
+    kkpNameMaxHintTimers.set(el, setTimeout(() => {
+        hint.remove();
+        kkpNameMaxHintTimers.delete(el);
+    }, 900));
+}
+
+function kkpSyncNameMaxIndicator(el) {
+    if ((el?.value || '').length < KKP_NAME_MAX_CHARS) {
+        kkpClearNameMaxHint(el);
+    }
 }
 
 function kkpFitInputTextToWidth(el, options = {}) {
@@ -783,10 +846,12 @@ function kkpValidateContact(value, requireEmpty) {
 
     function openLongNameModal(el, nextValue, caret) {
         const modal = document.getElementById('kkpLongNameModal');
-        if (!modal) {
+        const keepSavedName = !modal || !kkpNameStepIsActive() || kkpIsLongNameAllowed(el);
+        if (keepSavedName) {
             kkpSetLongNameAllowed(el, true);
             el.value = nextValue.slice(0, KKP_NAME_MAX_CHARS);
             kkpSyncNameMaxIndicator(el);
+            kkpFitNameInputFont(el);
             return;
         }
 
@@ -882,7 +947,34 @@ function kkpValidateContact(value, requireEmpty) {
             return;
         }
 
-        el.addEventListener('input', function () {
+        el.addEventListener('beforeinput', function (event) {
+            if (!event.inputType || event.inputType.indexOf('insert') !== 0) {
+                return;
+            }
+
+            const start = this.selectionStart ?? this.value.length;
+            const end = this.selectionEnd ?? start;
+            const insertLength = event.data == null ? 1 : event.data.length;
+            const nextLength = this.value.length - (end - start) + insertLength;
+
+            if (nextLength > KKP_NAME_MAX_CHARS) {
+                kkpFlashNameMaxHint(this);
+            }
+        });
+
+        el.addEventListener('keydown', function (event) {
+            if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) {
+                return;
+            }
+
+            const start = this.selectionStart ?? this.value.length;
+            const end = this.selectionEnd ?? start;
+            if (this.value.length - (end - start) + 1 > KKP_NAME_MAX_CHARS) {
+                kkpFlashNameMaxHint(this);
+            }
+        });
+
+        el.addEventListener('input', function (event) {
             const start = this.selectionStart;
             const before = this.value;
             let next = kkpSanitizeNameInput(before);
@@ -894,7 +986,7 @@ function kkpValidateContact(value, requireEmpty) {
             if (next.length > KKP_NAME_MAX_CHARS) {
                 next = next.slice(0, KKP_NAME_MAX_CHARS);
                 this.value = next;
-                kkpSyncNameMaxIndicator(this);
+                kkpFlashNameMaxHint(this);
                 try {
                     this.setSelectionRange(KKP_NAME_MAX_CHARS, KKP_NAME_MAX_CHARS);
                 } catch (e) {
@@ -904,11 +996,19 @@ function kkpValidateContact(value, requireEmpty) {
                 return;
             }
 
-            if (next.length <= KKP_NAME_SOFT_MAX) {
-                kkpSetLongNameAllowed(this, false);
+            if (next.length <= KKP_NAME_SOFT_MAX && !kkpIsLongNameAllowed(this)) {
+                kkpLongNameAllowedByField.delete(this);
             }
 
+            const restoringSavedName = event.isTrusted === false || !kkpNameStepIsActive();
             if (!kkpIsLongNameAllowed(this) && next.length > KKP_NAME_SOFT_MAX) {
+                if (restoringSavedName) {
+                    kkpSetLongNameAllowed(this, true);
+                    this.value = next;
+                    kkpSyncNameMaxIndicator(this);
+                    kkpFitNameInputFont(this);
+                    return;
+                }
                 this.value = next.slice(0, KKP_NAME_SOFT_MAX);
                 openLongNameModal(this, next, caret);
                 kkpFitNameInputFont(this);
@@ -940,7 +1040,35 @@ function kkpValidateContact(value, requireEmpty) {
     const lastNameInput = document.getElementById('kkpLastName');
 
     // ── Email existence check (backend) — disabled in wizard mode (checked at Step 4 only) ──
+    window.kkpShowEmailTakenModal = function () {
+        const modal = document.getElementById('kkpEmailTakenModal');
+        if (!modal || modal.dataset.open === '1') {
+            return;
+        }
+        modal.dataset.open = '1';
+        modal.hidden = false;
+        modal.setAttribute('aria-hidden', 'false');
+        document.getElementById('kkpEmailTakenOkBtn')?.focus();
+    };
+
+    window.kkpHideEmailTakenModal = function () {
+        const modal = document.getElementById('kkpEmailTakenModal');
+        if (!modal) {
+            return;
+        }
+        modal.dataset.open = '0';
+        modal.hidden = true;
+        modal.setAttribute('aria-hidden', 'true');
+    };
+
     const emailInput = document.querySelector('input[name="email"]');
+    emailInput?.addEventListener('input', () => {
+        emailInput.dataset.emailExists = '0';
+        delete emailInput.dataset.emailAvailable;
+        window.kkpHideEmailTakenModal();
+    });
+    document.getElementById('kkpEmailTakenOkBtn')?.addEventListener('click', () => window.kkpHideEmailTakenModal());
+    document.getElementById('kkpEmailTakenBackdrop')?.addEventListener('click', () => window.kkpHideEmailTakenModal());
     const isWizardForm = document.getElementById('kkProfilingForm')?.dataset?.wizardMode === '1';
     let emailCheckTimer = null;
 
@@ -1543,8 +1671,16 @@ window.validateKkProfilingForm = async function (options = {}) {
         || document.getElementById('kkProfilingUpdateForm')?.dataset?.emailLocked === '1';
 
     // ── Clear previous errors ──
-    document.querySelectorAll('.kkp-field-error').forEach(el => el.remove());
+    document.querySelectorAll('.kkp-field-error').forEach((el) => {
+        if (el.id === 'kkpProfilingAcknowledgmentError') {
+            el.hidden = true;
+            el.textContent = '';
+            return;
+        }
+        el.remove();
+    });
     document.querySelectorAll('.kkp-input-err').forEach(el => el.classList.remove('kkp-input-err'));
+    document.getElementById('kkpProfilingAcknowledgmentWrap')?.classList.remove('is-invalid');
 
     const errors = [];
 
@@ -1729,7 +1865,7 @@ window.validateKkProfilingForm = async function (options = {}) {
 
     // ── 8. Contact # ──
     const contact = document.querySelector('input[name="contact_number"]');
-    const contactErr = kkpValidateContact(contact?.value || '', true);
+    const contactErr = kkpValidateContact(contact?.value || '', false);
     if (contactErr) {
         errors.push(contactErr);
         fieldError(contact, contactErr);
@@ -1816,8 +1952,18 @@ window.validateKkProfilingForm = async function (options = {}) {
                 sigSection.appendChild(err);
             }
         }
-    } else if (sigNameVal.length > 255) {
-        errors.push('Participant name must not exceed 255 characters.');
+    } else if (sigNameVal.length > kkpSignatureNameMax()) {
+        const sigMaxMsg = kkpSignatureNameMax() + ' maximum characters only.';
+        errors.push(sigMaxMsg);
+        const sigSection = document.querySelector('.kkp-sig-section-left');
+        if (sigSection) {
+            sigSection.querySelectorAll('.kkp-field-error').forEach((node) => node.remove());
+            const err = document.createElement('span');
+            err.className = 'kkp-field-error';
+            err.setAttribute('role', 'alert');
+            err.textContent = sigMaxMsg;
+            sigSection.appendChild(err);
+        }
     }
 
     const sigData = document.getElementById('kkpSignatureData');
@@ -1839,11 +1985,33 @@ window.validateKkProfilingForm = async function (options = {}) {
         }
     }
 
+    // ── Validate profiling acknowledgment checkbox ──
+    const acknowledgmentCheckbox = document.getElementById('kkpProfilingAcknowledgment')
+        || document.querySelector('input[name="profiling_acknowledgment"]');
+    if (acknowledgmentCheckbox && !acknowledgmentCheckbox.checked) {
+        const ackMessage = window.kkpProfilingAckMessage
+            || 'You must agree to the KK Profiling Terms and Conditions before submitting.';
+        errors.push(ackMessage);
+        if (typeof window.kkpOpenTermsModal === 'function') {
+            window.kkpOpenTermsModal();
+        }
+        if (typeof window.kkpSetProfilingAckError === 'function') {
+            window.kkpSetProfilingAckError(ackMessage);
+        } else {
+            fieldError(acknowledgmentCheckbox, ackMessage);
+        }
+    } else if (typeof window.kkpClearProfilingAckError === 'function') {
+        window.kkpClearProfilingAckError();
+    }
+
     // ── If errors, scroll to first error and stop ──
-    if (errors.length > 0) {
-        const firstErr = document.querySelector('.kkp-field-error, .kkp-demo-block-error, #kkpSignatureStatus.is-invalid');
+        if (errors.length > 0) {
+        const firstErr = Array.from(document.querySelectorAll('.kkp-field-error, .kkp-demo-block-error, #kkpSignatureStatus.is-invalid'))
+            .find((el) => !el.hidden && (el.textContent || '').trim() !== '');
         if (firstErr) {
-            firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstErr.scrollIntoView({ behavior: 'auto', block: 'center' });
+        } else {
+            acknowledgmentCheckbox?.scrollIntoView({ behavior: 'auto', block: 'center' });
         }
         return false;
     }
@@ -1856,7 +2024,9 @@ window.validateKkProfilingForm = async function (options = {}) {
     const originalEmail = (window.__KK_PROFILING_ORIGINAL_EMAIL || emailField?.dataset?.originalEmail || '').trim().toLowerCase();
     const emailUnchanged = originalEmail && (emailField?.value || '').trim().toLowerCase() === originalEmail;
 
-    if (!skipEmailExistenceCheck && !isWizardSubmit && !emailUnchanged && emailField && emailField.value.trim()) {
+    const normalizedEmail = (emailField?.value || '').trim().toLowerCase();
+    const emailAlreadyConfirmed = emailField?.dataset.emailAvailable === normalizedEmail;
+    if (!skipEmailExistenceCheck && !emailUnchanged && !emailAlreadyConfirmed && emailField && normalizedEmail) {
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
             const emailCheckResponse = await fetch('/api/kkprofiling/check-email-exists', {
@@ -1882,13 +2052,16 @@ window.validateKkProfilingForm = async function (options = {}) {
                 return false;
             }
             if (emailCheckResult.exists) {
+                delete emailField.dataset.emailAvailable;
                 emailField.dataset.emailExists = 'true';
-                fieldError(emailField, emailCheckResult.message || 'This email is already taken. Please use another email.');
-                emailField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                fieldError(emailField, 'This email address is already in use. Please use a new email address that is not registered in the system.');
+                kkpShowEmailTakenModal();
                 return false;
             }
+            emailField.dataset.emailAvailable = normalizedEmail;
         } catch (err) {
-            // Continue to submit; server will validate
+            fieldError(emailField, 'We could not check this email address. Please try again.');
+            return false;
         }
     }
 
@@ -1901,11 +2074,12 @@ window.handleFormSubmit = async function (event) {
     const form = document.getElementById('kkProfilingForm');
     const isWizardMode = form?.dataset?.wizardMode === '1';
 
-    if (!await window.validateKkProfilingForm()) {
+    if (isWizardMode) {
+        window.dispatchEvent(new CustomEvent('kkp:wizard-submit'));
         return false;
     }
 
-    if (isWizardMode) {
+    if (!await window.validateKkProfilingForm({ skipEmailExistenceCheck: true })) {
         return false;
     }
 

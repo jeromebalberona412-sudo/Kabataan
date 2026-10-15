@@ -11,6 +11,7 @@
     let scheduleProgramId = 0;
     let kkFieldLabels = {};
     let uploadedDocuments = {};
+    let idReuseChoices = {};
     let form = null;
 
     function getCsrfToken() {
@@ -178,20 +179,27 @@
 
     function renderFileCard(documentMeta) {
         const questionId = escapeHtml(documentMeta.question_id);
-        const sizeText = documentMeta.size_display || formatFileSize(documentMeta.size);
+        const reused = Boolean(documentMeta.reused || documentMeta.reuse);
+        const sizeText = reused ? 'KK Profiling' : (documentMeta.size_display || formatFileSize(documentMeta.size));
+        const isImage = global.ProgramIdReuse?.isImageMeta?.(documentMeta);
+        const badge = reused || isImage ? 'ID' : 'PDF';
+        const previewSrc = documentMeta.sides?.[0]?.preview_url || (isImage ? documentMeta.preview_url : '');
+        const icon = previewSrc
+            ? `<img src="${escapeHtml(previewSrc)}" alt="" class="gf-file-card-thumb">`
+            : `<svg class="gf-file-card-icon-svg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
 
         return `
             <div class="gf-file-uploaded-card">
                 <div class="gf-file-card">
                     <span class="gf-file-card-icon-wrap" aria-hidden="true">
-                        <svg class="gf-file-card-icon-svg" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        <span class="gf-file-card-badge">PDF</span>
+                        ${icon}
+                        <span class="gf-file-card-badge">${badge}</span>
                     </span>
                     <span class="gf-file-card-body">
                         <span class="gf-file-card-name">${escapeHtml(documentMeta.original_name)}</span>
                         <span class="gf-file-card-meta-row">
                             <span class="gf-file-card-meta">${escapeHtml(sizeText)}</span>
-                            <span class="gf-file-card-status">Uploaded</span>
+                            <span class="gf-file-card-status">${reused ? 'Using previously uploaded ID' : 'Uploaded'}</span>
                         </span>
                     </span>
                 </div>
@@ -205,25 +213,38 @@
         const label = escapeHtml(question.label || `Question ${index + 1}`);
         const questionId = escapeHtml(String(question.id));
         const name = `question_${question.id}`;
+        const isTeamName = question.field_key === 'team_name' || String(question.label || '').trim().toLowerCase() === 'team name';
+        const teamNameHelp = isTeamName
+            ? `<p class="gf-field-note" style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#92400e;">${escapeHtml(question.help_text || 'Important: All members of the same team must enter exactly the same Team Name. Use identical spelling, spacing, capitalization, and wording for every team member. Do not create different variations of your team\'s name.')}</p>`
+            : '';
 
         if (question.type === 'file') {
+            const reusable = global.ProgramIdReuse?.reusableForQuestion?.(program, question.id);
+            const settings = global.ProgramIdReuse?.fileSettings?.(question) || {
+                accept: 'application/pdf,.pdf',
+                hint: 'Accepted: PDF only, max 5 MB',
+                dropText: 'Drag and drop PDF files here or click to browse',
+            };
+            const reuseHtml = reusable ? global.ProgramIdReuse.renderReuseBlock(question, reusable) : '';
+
             return `
                 <div class="gf-card gf-question gf-question-file" data-file-question-id="${question.id}">
                     <label class="gf-question-label">${label} ${required}</label>
-                    <div class="gf-file-upload" data-file-upload="${question.id}">
-                        <input type="file" class="gf-file-input" accept="application/pdf,.pdf" data-question-id="${questionId}" data-question-label="${label}" ${requiredAttr}>
+                    ${reuseHtml}
+                    <div class="gf-file-upload" data-file-upload="${question.id}" ${reusable ? 'hidden' : ''}>
+                        <input type="file" class="gf-file-input" accept="${settings.accept}" data-question-id="${questionId}" data-question-label="${label}">
                         <div class="gf-file-drop-zone" data-drop-zone="${questionId}">
                             <svg class="gf-file-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            <p class="gf-file-text">Drag and drop PDF files here or click to browse</p>
-                            <p class="gf-file-hint">Accepted: PDF only, max 5 MB</p>
+                            <p class="gf-file-text">${escapeHtml(settings.dropText)}</p>
+                            <p class="gf-file-hint">${escapeHtml(settings.hint)}</p>
                         </div>
                         <div class="gf-file-progress" data-file-progress="${questionId}" hidden>
                             <div class="gf-file-progress-bar" data-file-progress-bar="${questionId}"></div>
                             <span class="gf-file-progress-text">Uploading...</span>
                         </div>
                         <p class="gf-file-error" data-file-error="${questionId}" hidden></p>
-                        <div class="gf-file-card-list" data-file-card-list="${questionId}"></div>
                     </div>
+                    <div class="gf-file-card-list" data-file-card-list="${questionId}"></div>
                 </div>`;
         }
 
@@ -287,7 +308,8 @@
         return `
             <div class="gf-card gf-question">
                 <label class="gf-question-label">${label} ${required}</label>
-                <input type="text" name="${name}" class="gf-input" placeholder="Your answer" data-question-id="${questionId}" data-question-type="text" data-question-label="${label}" ${requiredAttr}>
+                ${teamNameHelp}
+                <input type="text" name="${name}" class="gf-input" placeholder="Your answer" data-question-id="${questionId}" data-question-type="text" data-question-label="${label}" ${requiredAttr} autocomplete="off">
             </div>`;
     }
 
@@ -317,6 +339,45 @@
         });
 
         setupFileUploads();
+        bindIdReuse();
+        Object.entries(idReuseChoices).forEach(([questionId, choice]) => {
+            global.ProgramIdReuse?.restoreChoice?.(form, questionId, choice);
+        });
+    }
+
+    function bindIdReuse() {
+        (program.custom_questions || []).filter((q) => q.type === 'file').forEach((question) => {
+            const reusable = global.ProgramIdReuse?.reusableForQuestion?.(program, question.id);
+            if (!reusable) return;
+            const card = form?.querySelector(`[data-file-question-id="${question.id}"]`);
+            global.ProgramIdReuse.bind(card, question, reusable, {
+                onReuse: (questionId, payload) => {
+                    idReuseChoices[questionId] = 'reuse';
+                    uploadedDocuments[questionId] = {
+                        question_id: questionId,
+                        reuse: true,
+                        reused: true,
+                        source: 'kk_profiling',
+                        original_name: payload.document_type_label,
+                        document_type: payload.document_type,
+                        sides: payload.sides || [],
+                        preview_url: payload.sides?.[0]?.preview_url || '',
+                    };
+                    const list = form?.querySelector(`[data-file-card-list="${questionId}"]`);
+                    if (list) {
+                        list.innerHTML = renderFileCard(uploadedDocuments[questionId]);
+                        bindReplaceButtons(list);
+                    }
+                },
+                onNew: (questionId) => {
+                    idReuseChoices[questionId] = 'new';
+                    if (uploadedDocuments[questionId]?.reuse || uploadedDocuments[questionId]?.reused) {
+                        delete uploadedDocuments[questionId];
+                        showUploadArea(questionId);
+                    }
+                },
+            });
+        });
     }
 
     function setUploadState(questionId, state, message = '') {
@@ -337,13 +398,26 @@
         }
     }
 
-    async function uploadPdfFile(questionId, file, questionLabel) {
-        if (file.size > MAX_FILE_BYTES) {
-            setUploadState(questionId, 'error', 'PDF file must not exceed 5 MB.');
-            return;
+    function validateSelectedFile(question, file) {
+        const settings = global.ProgramIdReuse?.fileSettings?.(question) || { fileType: 'pdf', maxMb: 5 };
+        const maxBytes = settings.maxMb * 1024 * 1024;
+        if (file.size > maxBytes) {
+            return `File must not exceed ${settings.maxMb} MB.`;
         }
-        if (file.type !== PDF_MIME && !file.name.toLowerCase().endsWith('.pdf')) {
-            setUploadState(questionId, 'error', 'Only PDF files are allowed.');
+        const name = file.name.toLowerCase();
+        const isPdf = file.type === PDF_MIME || name.endsWith('.pdf');
+        const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png)$/.test(name);
+        if (settings.fileType === 'pdf' && !isPdf) return 'Only PDF files are allowed.';
+        if (settings.fileType === 'image' && !isImage) return 'Only JPG and PNG images are allowed.';
+        if (settings.fileType === 'pdf_or_image' && !isPdf && !isImage) return 'Only PDF, JPG, or PNG files are allowed.';
+        return '';
+    }
+
+    async function uploadPdfFile(questionId, file, questionLabel) {
+        const question = (program.custom_questions || []).find((item) => String(item.id) === String(questionId));
+        const errorMessage = validateSelectedFile(question, file);
+        if (errorMessage) {
+            setUploadState(questionId, 'error', errorMessage);
             return;
         }
 
@@ -377,13 +451,15 @@
             if (dropZone) dropZone.hidden = true;
             setUploadState(questionId, 'success');
         } catch (error) {
-            setUploadState(questionId, 'error', error.message || 'Unable to upload PDF.');
+            setUploadState(questionId, 'error', error.message || 'Unable to upload the document.');
         }
     }
 
     function showUploadArea(questionId) {
+        const uploadWrapper = form?.querySelector(`[data-file-upload="${questionId}"]`);
         const dropZone = form?.querySelector(`[data-drop-zone="${questionId}"]`);
         const list = form?.querySelector(`[data-file-card-list="${questionId}"]`);
+        if (uploadWrapper) uploadWrapper.hidden = false;
         if (dropZone) dropZone.hidden = false;
         if (list) list.innerHTML = '';
         setUploadState(questionId, 'idle');
@@ -396,6 +472,10 @@
                 const questionId = button.getAttribute('data-replace-document');
                 if (!questionId) return;
                 delete uploadedDocuments[questionId];
+                if (idReuseChoices[questionId] === 'reuse') {
+                    idReuseChoices[questionId] = 'new';
+                    global.ProgramIdReuse?.restoreChoice?.(form, questionId, 'new');
+                }
                 showUploadArea(questionId);
             });
         });
@@ -491,13 +571,21 @@
     function validateForm() {
         const questions = program.custom_questions || [];
 
+        if (form.querySelector('.is-uploading')) {
+            alert('Please wait for the file upload to finish before submitting.');
+            return false;
+        }
+
         for (const question of questions) {
             if (!question.required) continue;
 
             const questionId = String(question.id);
             if (question.type === 'file') {
                 if (!uploadedDocuments[questionId]) {
-                    setUploadState(questionId, 'error', 'Please upload the required PDF document.');
+                    const reusable = global.ProgramIdReuse?.reusableForQuestion?.(program, question.id);
+                    setUploadState(questionId, 'error', reusable
+                        ? 'Please reuse your previously uploaded ID or upload a new ID.'
+                        : 'Please upload the required document.');
                     return false;
                 }
                 continue;

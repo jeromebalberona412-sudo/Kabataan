@@ -18,6 +18,7 @@
                     </button>
                 </div>
             </div>
+            <button type="button" class="comms-msg-mark-all" style="display:flex;align-items:center;justify-content:center;width:calc(100% - 24px);margin:8px 12px;box-sizing:border-box;background:#0039A8;color:#fff;border:0;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;line-height:1.2;cursor:pointer;">Mark All as Read</button>
             <div class="comms-chat-fs-search-wrap">
                 <label class="comms-chat-fs-search" for="commsChatFsSearch">
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
