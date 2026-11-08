@@ -576,7 +576,7 @@
     };
     window.BarangayProfileConfig = {
         canEngage: @json((bool) ($canEngage ?? false)),
-        barangayId: @json((int) ($barangayId ?? 0)),
+        barangayId: @json(! empty($barangayId) ? \App\Support\OpaqueUrlId::encode((int) $barangayId) : ''),
         posts: @json($posts ?? []),
     };
     </script>
