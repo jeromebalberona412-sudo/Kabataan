@@ -205,11 +205,11 @@ function countComments(comments) {
 
 function sortComments(comments) {
     const list = [...(comments || [])];
-    if (sortMode === 'newest') return list.sort((a, b) => Number(b.id) - Number(a.id));
-    if (sortMode === 'oldest') return list.sort((a, b) => Number(a.id) - Number(b.id));
+    if (sortMode === 'newest') return list.sort((a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0));
+    if (sortMode === 'oldest') return list.sort((a, b) => Date.parse(a.created_at || 0) - Date.parse(b.created_at || 0));
     return list.sort((a, b) => {
         const likes = Number(b.likes || 0) - Number(a.likes || 0);
-        return likes !== 0 ? likes : Number(b.id) - Number(a.id);
+        return likes !== 0 ? likes : Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0);
     });
 }
 
@@ -388,7 +388,7 @@ function commentHtml(comment, isReply) {
             </div>
            </div>`
         : '';
-    const repliesOpen = !isReply && replies.length > 0 && expandedReplies.has(Number(comment.id));
+    const repliesOpen = !isReply && replies.length > 0 && expandedReplies.has(String(comment.id));
     const viewReplies = replies.length && !isReply
         ? `<button type="button" class="cp-view-replies${repliesOpen ? ' is-open' : ''}" data-toggle-replies="${comment.id}" data-count="${replies.length}">${CHEVRON_SVG} ${repliesOpen ? 'Hide replies' : `View ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}</button>`
         : '';
@@ -439,7 +439,7 @@ function bindReactionWrap(wrap) {
     let pressTimer = null;
     let didLongPress = false;
     const target = wrap.dataset.target;
-    const commentId = Number(wrap.dataset.commentId || 0);
+    const commentId = String(wrap.dataset.commentId || '');
 
     const apply = (type) => {
         if (target === 'comment') setCommentReaction(commentId, type);
@@ -629,7 +629,7 @@ async function setCommentReaction(commentId, type) {
 
 function updateCommentReaction(comments, id, data) {
     (comments || []).forEach((c) => {
-        if (Number(c.id) === Number(id)) {
+        if (String(c.id) === String(id)) {
             c.reaction_type = data.reaction_type;
             c.liked = data.liked;
             c.likes = data.count;
@@ -641,10 +641,10 @@ function updateCommentReaction(comments, id, data) {
 
 function threadRootId(commentId) {
     for (const c of post.comments || []) {
-        if (Number(c.id) === Number(commentId)) return Number(c.id);
-        if (findComment(c.replies || [], commentId)) return Number(c.id);
+        if (String(c.id) === String(commentId)) return String(c.id);
+        if (findComment(c.replies || [], commentId)) return String(c.id);
     }
-    return Number(commentId);
+    return String(commentId);
 }
 
 function appendToThread(parentId, comment) {
@@ -727,7 +727,7 @@ async function submitComment(body, parentId = null) {
         };
         removeTemp(post.comments);
         if (!findComment(post.comments, comment.id)) {
-            const actualParentId = comment.parent_id || parentId;
+            const actualParentId = parentId;
             if (actualParentId) {
                 appendToThread(actualParentId, comment);
             } else {
@@ -756,7 +756,7 @@ async function submitComment(body, parentId = null) {
 
 function findComment(comments, id) {
     for (const c of comments || []) {
-        if (Number(c.id) === Number(id)) return c;
+        if (String(c.id) === String(id)) return c;
         const nested = findComment(c.replies || [], id);
         if (nested) return nested;
     }
@@ -865,8 +865,8 @@ async function openPostReactionViewer(postId) {
     }
     bindReactionViewer();
     modal.hidden = false;
-    const cached = (window.BarangayProfileConfig?.posts || []).find((item) => Number(item.id) === Number(postId))
-        || (post && Number(post.id) === Number(postId) ? post : null);
+    const cached = (window.BarangayProfileConfig?.posts || []).find((item) => String(item.id) === String(postId))
+        || (post && String(post.id) === String(postId) ? post : null);
     viewerState = {
         data: {
             reactors: cached?.reactions_summary?.reactors || cached?.reactors || [],
@@ -877,7 +877,7 @@ async function openPostReactionViewer(postId) {
     };
     renderViewer('all');
     try {
-        viewerState = { data: await apiFetch(`/api/feed/${Number(postId)}/likes`), filter: 'all' };
+        viewerState = { data: await apiFetch(`/api/feed/${postId}/likes`), filter: 'all' };
         renderViewer('all');
     } catch (err) {
         if (!list.querySelector('.cp-viewer-row')) {
@@ -1018,7 +1018,7 @@ function bindPage() {
             }
             field.value = '';
             syncReplySend(field);
-            submitComment(text, Number(id));
+            submitComment(text, String(id));
         }
     });
 
@@ -1068,7 +1068,7 @@ function bindPage() {
 }
 
 function removeComment(comments, id) {
-    return (comments || []).filter((c) => Number(c.id) !== id).map((c) => ({
+    return (comments || []).filter((c) => String(c.id) !== String(id)).map((c) => ({
         ...c,
         replies: removeComment(c.replies || [], id),
     }));
@@ -1118,7 +1118,7 @@ function syncCommentsUrl(id) {
 
 function openCommentPreview(nextPost, { skipUrl, preserveScroll } = {}) {
     if (!nextPost) return;
-    const samePost = post && Number(post.id) === Number(nextPost.id);
+    const samePost = post && String(post.id) === String(nextPost.id);
     if (!samePost) {
         expandedReplies = new Set();
     }
@@ -1165,7 +1165,7 @@ window.openPostReactionViewer = openPostReactionViewer;
 function isReplyComment(commentId) {
     const comments = post?.comments || [];
     for (const comment of comments) {
-        if ((comment.replies || []).some((reply) => Number(reply.id) === Number(commentId))) {
+        if ((comment.replies || []).some((reply) => String(reply.id) === String(commentId))) {
             return true;
         }
     }
@@ -1185,8 +1185,8 @@ function previewStillOpen() {
 
 function editComment(postId, commentId) {
     pendingCommentAction = {
-        postId: Number(postId),
-        commentId: Number(commentId),
+        postId: String(postId),
+        commentId: String(commentId),
         isReply: isReplyComment(commentId),
     };
     document.querySelectorAll('.comment-options-menu.open, .cp-options-menu.open').forEach((menu) => {
@@ -1248,8 +1248,8 @@ async function confirmEditComment() {
 
 function deleteComment(postId, commentId) {
     pendingCommentAction = {
-        postId: Number(postId),
-        commentId: Number(commentId),
+        postId: String(postId),
+        commentId: String(commentId),
         isReply: isReplyComment(commentId),
     };
     document.querySelectorAll('.comment-options-menu.open, .cp-options-menu.open').forEach((menu) => {
@@ -1345,8 +1345,8 @@ window.addEventListener('popstate', () => {
         || window.location.pathname.match(/\/dashboard\/(\d+)\/comments\/?$/)
         || window.location.pathname.match(/\/barangay\/[^/]+\/(\d+)\/?$/);
     if (match) {
-        const id = Number(match[1]);
-        if (post && Number(post.id) === id) {
+        const id = String(match[1]);
+        if (post && String(post.id) === id) {
             openCommentPreview(post, { skipUrl: true });
             return;
         }
@@ -1368,7 +1368,7 @@ document.addEventListener('community-feed:comment-updated', (event) => {
 });
 
 document.addEventListener('community-feed:comment-deleted', (event) => {
-    const commentId = Number(event.detail?.commentId);
+    const commentId = String(event.detail?.commentId || '');
     if (!post || !commentId) return;
     post.comments = removeComment(post.comments, commentId);
     renderPost();

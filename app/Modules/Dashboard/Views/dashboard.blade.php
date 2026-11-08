@@ -978,7 +978,7 @@
     let feedRequestToken = 0;
     const renderedPostIds = new Set();
     const postCache = new Map();
-    const FEED_LS_KEY = 'kabataan_community_feed_v1';
+    const FEED_LS_KEY = 'kabataan_community_feed_v2';
 
     function getFeedYearsWithPosts() {
         const years = Array.isArray(window.CommunityFeedConfig?.feedYearsWithPosts)
@@ -1078,7 +1078,7 @@
     }
 
     function openShareModal(postId) {
-        const cached = postCache.get(Number(postId)) || {};
+        const cached = postCache.get(String(postId)) || {};
         const shareUrl = String(cached.share_url || '').trim();
         if (!shareUrl || cached.can_share === false) {
             notifyFeed('Sharing unavailable for this post.', 'error');
@@ -1162,7 +1162,7 @@
         }
         const fragment = document.createDocumentFragment();
         items.forEach((p) => {
-            const id = Number(p.id);
+            const id = String(p.id);
             if (!id) return;
             mergeCachedPost(p);
             if (renderedPostIds.has(String(id)) || container.querySelector(`.post-card[data-post-id="${id}"]`)) {
@@ -1277,7 +1277,7 @@
     }
 
     function mergeCachedPost(p) {
-        const id = Number(p.id);
+        const id = String(p.id);
         if (!id) return null;
         const prev = postCache.get(id) || {};
         const next = Object.assign({}, prev, p);
@@ -1290,7 +1290,7 @@
     }
 
     function mountFeedPost(p, mode = 'append') {
-        const id = Number(p.id);
+        const id = String(p.id);
         if (!id) return null;
         mergeCachedPost(p);
         const container = document.getElementById('feed-posts');
@@ -1555,10 +1555,10 @@
         const c = Number(post.comment_count ?? countFeedComments(post.comments || []));
         if (n <= 0 && c <= 0) return '';
         const left = n > 0
-            ? `<button type="button" class="reaction-summary-left" onclick="openFeedReactionViewer(${Number(post.id)})"><span class="reaction-faces">${reactionFacesHtml(post.reaction_counts)}</span><span class="reaction-total">${formatCount(n)}</span></button>`
+            ? `<button type="button" class="reaction-summary-left" onclick="openFeedReactionViewer('${String(post.id)}')"><span class="reaction-faces">${reactionFacesHtml(post.reaction_counts)}</span><span class="reaction-total">${formatCount(n)}</span></button>`
             : '<div class="reaction-summary-left"></div>';
         const right = c > 0
-            ? `<button type="button" class="reaction-summary-comments" onclick="openComments(${Number(post.id)})">${formatCount(c)} ${c === 1 ? 'comment' : 'comments'}</button>`
+            ? `<button type="button" class="reaction-summary-comments" onclick="openComments('${String(post.id)}')">${formatCount(c)} ${c === 1 ? 'comment' : 'comments'}</button>`
             : '';
         return `<div class="post-engage"><div class="reaction-summary" id="feed-reactions-${post.id}" data-reactions="${n}" data-comments="${c}">${left}${right}</div></div>`;
     }
@@ -1603,8 +1603,8 @@
             wrap.dataset.bound = '1';
             const btn = wrap.querySelector('.reaction-btn, .comment-like-btn');
             const picker = wrap.querySelector('.reaction-picker');
-            const postId = Number(wrap.dataset.postId);
-            const commentId = Number(wrap.dataset.commentId || 0);
+            const postId = String(wrap.dataset.postId || '');
+            const commentId = String(wrap.dataset.commentId || '');
             const isComment = wrap.dataset.target === 'comment';
             let hideTimer = null;
             let pressTimer = null;
@@ -1676,7 +1676,7 @@
         if (!list.length) return null;
         return [...list].sort(function (a, b) {
             const likes = Number(b.likes || 0) - Number(a.likes || 0);
-            return likes !== 0 ? likes : Number(b.id) - Number(a.id);
+            return likes !== 0 ? likes : String(b.id).localeCompare(String(a.id));
         })[0];
     }
 
@@ -1684,14 +1684,14 @@
         const total = countFeedComments(post.comments || []);
         const comment = pickPreviewComment(post.comments || []);
         if (!comment || total <= 0) {
-            return `<div class="comment-preview" id="comment-preview-${post.id}" hidden role="button" tabindex="0" onclick="openComments(${post.id})"></div>`;
+            return `<div class="comment-preview" id="comment-preview-${post.id}" hidden role="button" tabindex="0" onclick="openComments('${String(post.id)}')"></div>`;
         }
         const replyCount = Number(comment.reply_count || (comment.replies || []).length || 0);
         const more = total > 1 ? `<span class="comment-preview-more">View all ${total} comments</span>` : '';
         const replies = replyCount > 0
             ? `<span class="fb-view-replies">View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}</span>`
             : '';
-        return `<div class="comment-preview" id="comment-preview-${post.id}" role="button" tabindex="0" onclick="openComments(${post.id})">
+        return `<div class="comment-preview" id="comment-preview-${post.id}" role="button" tabindex="0" onclick="openComments('${String(post.id)}')">
             ${more}
             <div class="fb-comment-row">
                 ${feedImgTag(comment.author_avatar_url, comment.author_name, 'comment-avatar')}
@@ -1736,12 +1736,12 @@
         }).join('');
         const optionsHtml = comment.owned
             ? `<div class="comment-options-wrap">
-                <button type="button" class="comment-options-btn" onclick="toggleCommentOptions(${comment.id}, event)" aria-label="Comment options">
+                <button type="button" class="comment-options-btn" onclick="toggleCommentOptions('${String(comment.id)}', event)" aria-label="Comment options">
                   <svg viewBox="0 0 20 20" fill="currentColor"><path d="M6 10a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0zm6 0a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
                 </button>
                 <div class="comment-options-menu" id="comment-options-${comment.id}">
-                  <button type="button" onclick="editComment(${postId}, ${comment.id})">Edit</button>
-                  <button type="button" class="danger" onclick="deleteComment(${postId}, ${comment.id})">Delete</button>
+                  <button type="button" onclick="editComment('${String(postId)}', '${String(comment.id)}')">Edit</button>
+                  <button type="button" class="danger" onclick="deleteComment('${String(postId)}', '${String(comment.id)}')">Delete</button>
                 </div>
                </div>`
             : '';
@@ -1762,7 +1762,7 @@
                      <button type="button" class="comment-like-btn${comment.liked ? ' liked' : ''}" data-type="${feedEscape(type)}">${commentLikeInner(type)}</button>
                      ${reactionPickerHtml(type)}
                    </div>
-                   <button type="button" class="comment-reply-btn" onclick="feedStartReply(${postId}, ${comment.id}, '${feedEscape(feedTruncate(comment.author_name)).replace(/'/g, "\\'")}')">Reply</button>
+                   <button type="button" class="comment-reply-btn" onclick="feedStartReply('${String(postId)}', '${String(comment.id)}', '${feedEscape(feedTruncate(comment.author_name)).replace(/'/g, "\\'")}')">Reply</button>
                  </div>
                </div>
              </div>
@@ -1891,11 +1891,11 @@
               </button>
               ${reactionPickerHtml(p.reaction_type || (p.liked ? 'like' : ''))}
             </div>
-            <button class="action-btn comment-btn" onclick="openComments(${p.id})">
+            <button class="action-btn comment-btn" onclick="openComments('${String(p.id)}')">
               <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"/></svg>
               <span>Comment</span>
             </button>
-            <button type="button" class="action-btn share-btn" onclick="openShareModal(${p.id})" aria-label="Share post"${(p.can_share !== false && p.share_url) ? '' : ' disabled title="Sharing unavailable for this post"'}>
+            <button type="button" class="action-btn share-btn" onclick="openShareModal('${String(p.id)}')" aria-label="Share post"${(p.can_share !== false && p.share_url) ? '' : ' disabled title="Sharing unavailable for this post"'}>
               <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z"/></svg>
               <span>Share</span>
             </button>
@@ -1914,7 +1914,7 @@
     }
 
     function updateReactionsSummary(postId, postLike) {
-        const cached = postCache.get(Number(postId)) || postLike || {};
+        const cached = postCache.get(String(postId)) || postLike || {};
         const html = renderReactionsSummary({
             id: postId,
             likes: cached.likes,
@@ -2014,7 +2014,7 @@
         if (!modal) return;
         modal.classList.add('open');
         modal.setAttribute('aria-hidden', 'false');
-        const cached = postCache.get(Number(postId));
+        const cached = postCache.get(String(postId));
         const reactors = cached?.reactors || cached?.reactions_summary?.reactors || [];
         if (cached) {
             reactionViewerState = {
@@ -2055,7 +2055,7 @@
         const btn = document.getElementById('feed-like-btn-' + id);
         const current = btn?.dataset.type || '';
         const next = resolveNextReaction(current, type);
-        const cached = postCache.get(Number(id));
+        const cached = postCache.get(String(id));
         let count = Number(cached?.likes || 0);
         if (current && !next.liked) count = Math.max(0, count - 1);
         else if (!current && next.liked) count += 1;
@@ -2131,7 +2131,7 @@
     }
 
     function editComment(postId, commentId) {
-        pendingCommentAction = { postId: Number(postId), commentId: Number(commentId), isReply: isReplyComment(commentId) };
+        pendingCommentAction = { postId: String(postId), commentId: String(commentId), isReply: isReplyComment(commentId) };
         document.querySelectorAll('.comment-options-menu.open, .cp-options-menu.open').forEach(function (m) {
             m.classList.remove('open');
         });
@@ -2209,7 +2209,7 @@
     }
 
     function deleteComment(postId, commentId) {
-        pendingCommentAction = { postId: Number(postId), commentId: Number(commentId), isReply: isReplyComment(commentId) };
+        pendingCommentAction = { postId: String(postId), commentId: String(commentId), isReply: isReplyComment(commentId) };
         document.querySelectorAll('.comment-options-menu.open, .cp-options-menu.open').forEach(function (m) {
             m.classList.remove('open');
         });
@@ -2264,12 +2264,12 @@
         const shell = document.getElementById('commentPreviewShell');
         if (!shell?.classList.contains('is-open')) return false;
         if (postId == null) return true;
-        return Number(shell.dataset.postId || 0) === Number(postId);
+        return String(shell.dataset.postId || '') === String(postId);
     }
 
     async function refreshOpenCommentPreview() {
         const shell = document.getElementById('commentPreviewShell');
-        const postId = Number(shell?.dataset.postId || 0);
+        const postId = String(shell?.dataset.postId || '');
         if (!commentPreviewIsOpen(postId)) return;
         if (document.querySelector('#commentPreviewShell .cp-composer-input:focus, #commentPreviewShell [data-reply-input]:focus')) return;
         try {
@@ -2283,7 +2283,7 @@
     }
 
     async function openComments(id) {
-        const postId = Number(id);
+        const postId = String(id);
         let cached = postCache.get(postId);
         if (cached && typeof window.openCommentPreview === 'function') {
             window.openCommentPreview(cached);
@@ -2346,7 +2346,7 @@
     }
 
     function refreshFeedCommentUi(postId) {
-        const cached = postCache.get(Number(postId));
+        const cached = postCache.get(String(postId));
         if (!cached) return;
         const total = countFeedComments(cached.comments || []);
         cached.comment_count = total;
@@ -2365,11 +2365,11 @@
     }
 
     function insertFeedComment(postId, comment) {
-        const cached = postCache.get(Number(postId));
+        const cached = postCache.get(String(postId));
         if (!cached) return;
         cached.comments = cached.comments || [];
-        if (comment.parent_id) {
-            const parent = findCachedComment(cached.comments, comment.parent_id);
+        if (parentId) {
+            const parent = findCachedComment(cached.comments, parentId);
             if (parent) {
                 parent.replies = parent.replies || [];
                 parent.replies.push(comment);
@@ -2442,7 +2442,7 @@
             });
             const payload = await r.json().catch(() => ({}));
             if (!r.ok) {
-                const cached = postCache.get(Number(id));
+                const cached = postCache.get(String(id));
                 if (cached) removeCachedComment(cached.comments || [], tempId);
                 refreshFeedCommentUi(id);
                 if (r.status === 429) {
@@ -2454,14 +2454,14 @@
                 input.value = text;
                 return;
             }
-            const cached = postCache.get(Number(id));
+            const cached = postCache.get(String(id));
             if (cached) {
                 removeCachedComment(cached.comments || [], tempId);
                 insertFeedComment(id, payload);
             }
             notifyFeed(parentId ? 'Reply added successfully.' : 'Comment added successfully.');
         } catch (_) {
-            const cached = postCache.get(Number(id));
+            const cached = postCache.get(String(id));
             if (cached) removeCachedComment(cached.comments || [], tempId);
             refreshFeedCommentUi(id);
             notifyFeed(parentId ? 'Unable to add your reply. Please try again.' : 'Unable to add your comment. Please try again.', 'error');
@@ -2642,7 +2642,7 @@
             const items = data.data ?? [];
             const fresh = [];
             items.forEach((p) => {
-                const id = Number(p.id);
+                const id = String(p.id);
                 if (!id) return;
                 if (renderedPostIds.has(String(id)) || document.querySelector(`.post-card[data-post-id="${id}"]`)) {
                     mountFeedPost(p, 'append');

@@ -4,6 +4,7 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Models\Announcement;
 use App\Models\AnnouncementComment;
+use App\Support\OpaqueUrlId;
 use App\Models\Barangay;
 use App\Services\BarangayLogoUrlService;
 use App\Services\CloudinaryService;
@@ -174,7 +175,7 @@ class BarangaySkProfileService
                 $images = $this->resolvePostImages($post->id, $cloudinary, $post->image_url);
 
                 return [
-                    'id' => $post->id,
+                    'id' => OpaqueUrlId::encode($post->id),
                     'type' => $typeClass,
                     'type_class' => $typeClass,
                     'type_label' => ucfirst($typeClass),
@@ -236,10 +237,12 @@ class BarangaySkProfileService
         }
 
         return [
-            'id' => $comment->id,
+            'id' => OpaqueUrlId::encode($comment->id),
+            'is_reply' => $comment->parent_id !== null,
             'author_name' => Str::limit($comment->author_name ?? 'Member', 50, '...'),
             'body' => $comment->body,
             'time' => $comment->created_at?->diffForHumans() ?? '',
+            'created_at' => $comment->created_at?->toIso8601String(),
             'user_type' => $comment->user_type,
             'logo_url' => $logoUrl,
             'avatar_url' => $logoUrl ?: $this->uiAvatarUrl($comment->author_name),

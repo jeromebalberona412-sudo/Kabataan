@@ -17,6 +17,7 @@ use App\Services\GoogleDriveVideoUrlService;
 use App\Services\ProhibitedWordsService;
 use App\Services\SkOfficialsNotificationDispatcher;
 use App\Support\MailUrl;
+use App\Support\OpaqueUrlId;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -44,7 +45,11 @@ class AnnouncementFeedController extends Controller
     {
         $user = Auth::user();
         $barangayId = $this->resolveBarangayId($user);
-        $scopeBarangayId = (int) $request->query('barangay_id', 0);
+        $tenantId = $this->resolveTenantId($user);
+        $scopeBarangayToken = (string) $request->query('barangay_id', '');
+        $scopeBarangayId = $scopeBarangayToken !== ''
+            ? OpaqueUrlId::decode($scopeBarangayToken)
+            : 0;
 
         if ($scopeBarangayId > 0) {
             abort_unless($this->canViewBarangay($user, $scopeBarangayId), 404);
@@ -58,6 +63,7 @@ class AnnouncementFeedController extends Controller
             ])
                 ->withCount(['reactions', 'comments'])
                 ->active()
+                ->visibleToTenant($tenantId ?? 0)
                 ->where('barangay_id', $scopeBarangayId)
                 ->whereRaw('"is_federation_wide" = false')
                 ->whereNull('deleted_at')
@@ -99,6 +105,7 @@ class AnnouncementFeedController extends Controller
         ])
             ->withCount(['reactions', 'comments'])
             ->active()
+            ->visibleToTenant($tenantId ?? 0)
             ->where(function ($q) use ($barangayId) {
                 $q->where('barangay_id', $barangayId)
                     ->orWhereRaw('"is_federation_wide" = true');
@@ -160,6 +167,7 @@ class AnnouncementFeedController extends Controller
         ])
             ->withCount('reactions')
             ->active()
+            ->visibleToTenant($this->resolveTenantId($user) ?? 0)
             ->where('id', $id)
             ->firstOrFail();
 
@@ -170,6 +178,17 @@ class AnnouncementFeedController extends Controller
         $data['can_engage'] = $this->canEngageWithPost($user, $post);
 
         return $data;
+    }
+
+    public function isVisibleArchivedPost(User $user, int $id): bool
+    {
+        $post = Announcement::query()
+            ->with('barangay')
+            ->whereKey($id)
+            ->where('is_archived', true)
+            ->first();
+
+        return $post !== null && $this->canViewPost($user, $post);
     }
 
     /**
@@ -188,6 +207,7 @@ class AnnouncementFeedController extends Controller
         ])
             ->withCount('reactions')
             ->active()
+            ->visibleToTenant($this->resolveTenantId($user) ?? 0)
             ->where('barangay_id', $barangayId)
             ->whereRaw('"is_federation_wide" = false')
             ->whereNull('deleted_at')
@@ -329,7 +349,7 @@ class AnnouncementFeedController extends Controller
 
         $request->validate([
             'body' => 'required|string|max:'.FeedCommentRateLimiter::MAX_BODY_LENGTH,
-            'parent_id' => 'nullable|integer',
+            'parent_id' => 'nullable|string|max:255',
         ]);
 
         $this->prohibitedWords->assertClean((string) $request->input('body'), 'body');
@@ -342,9 +362,13 @@ class AnnouncementFeedController extends Controller
         $post = Announcement::query()->active()->findOrFail($id);
         abort_unless($this->canEngageWithPost($user, $post), 403, 'You can only comment on posts from your barangay.');
 
-        if ($request->filled('parent_id')) {
+        $parentId = $request->filled('parent_id')
+            ? OpaqueUrlId::decode((string) $request->input('parent_id'))
+            : null;
+
+        if ($parentId !== null) {
             AnnouncementComment::query()
-                ->where('id', (int) $request->parent_id)
+                ->where('id', $parentId)
                 ->where('community_feed_id', $id)
                 ->firstOrFail();
         }
@@ -356,7 +380,7 @@ class AnnouncementFeedController extends Controller
 
         $comment = AnnouncementComment::create([
             'community_feed_id' => $id,
-            'parent_id' => $request->input('parent_id'),
+            'parent_id' => $parentId,
             'user_id' => $user->id,
             'user_type' => self::USER_TYPE,
             'author_name' => Str::limit($authorName !== '' ? $authorName : $user->name, 50, '...'),
@@ -548,7 +572,7 @@ class AnnouncementFeedController extends Controller
             : ['count' => array_sum($reactionCounts), 'names_label' => '', 'reactors' => []];
 
         return [
-            'id' => $post->id,
+            'id' => OpaqueUrlId::encode($post->id),
             'type' => $post->type,
             'title' => $post->title,
             'body' => $post->body,
@@ -690,8 +714,9 @@ class AnnouncementFeedController extends Controller
         $post = $comment->relationLoaded('communityFeed') ? $comment->communityFeed : null;
 
         return [
-            'id' => $comment->id,
-            'parent_id' => $comment->parent_id,
+            'id' => OpaqueUrlId::encode($comment->id),
+            'created_at' => $comment->created_at?->toIso8601String(),
+            'is_reply' => $comment->parent_id !== null,
             'author_name' => Str::limit($comment->author_name ?? 'Member', 50, '...'),
             'body' => $comment->body,
             'time' => $comment->created_at?->diffForHumans() ?? 'Just now',
@@ -951,7 +976,12 @@ class AnnouncementFeedController extends Controller
     private function canViewPost(User $user, Announcement $post): bool
     {
         if ($post->is_federation_wide) {
-            return true;
+            $tenantId = $this->resolveTenantId($user);
+            $postTenantId = $post->relationLoaded('user')
+                ? $post->user?->tenant_id
+                : $post->user()->value('tenant_id');
+
+            return $tenantId !== null && $postTenantId !== null && (int) $postTenantId === $tenantId;
         }
 
         $viewerBarangayId = $this->resolveBarangayId($user);

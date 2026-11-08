@@ -25,7 +25,7 @@
     }
 
     function cachedPost(postId) {
-        return (cfg.posts || []).find((item) => Number(item.id) === Number(postId)) || null;
+        return (cfg.posts || []).find((item) => String(item.id) === String(postId)) || null;
     }
 
     function mergeCachedPost(fresh) {
@@ -36,7 +36,7 @@
             cfg.posts = [];
         }
         const merged = Object.assign({}, cachedPost(fresh.id) || {}, fresh, { comments_loaded: true });
-        const idx = cfg.posts.findIndex((item) => Number(item.id) === Number(fresh.id));
+        const idx = cfg.posts.findIndex((item) => String(item.id) === String(fresh.id));
         if (idx >= 0) {
             cfg.posts[idx] = merged;
         } else {
@@ -53,7 +53,7 @@
         if (postId == null) {
             return true;
         }
-        return Number(shell.dataset.postId || 0) === Number(postId);
+        return String(shell.dataset.postId || '') === String(postId);
     }
 
     function commentComposerIsFocused() {
@@ -144,7 +144,7 @@
 
     async function refreshOpenCommentPreview() {
         const shell = document.getElementById('commentPreviewShell');
-        const postId = Number(shell?.dataset.postId || 0);
+        const postId = String(shell?.dataset.postId || '');
         if (!commentPreviewIsOpen(postId) || commentComposerIsFocused()) {
             return;
         }
@@ -160,7 +160,7 @@
     }
 
     async function openComments(id) {
-        const postId = Number(id);
+        const postId = String(id);
         const cached = cachedPost(postId);
         if (cached && typeof window.openCommentPreview === 'function') {
             window.openCommentPreview(cached);
@@ -323,7 +323,7 @@
             }
             wrap.dataset.bound = '1';
             const btn = wrap.querySelector('.reaction-btn');
-            const postId = Number(wrap.dataset.postId);
+            const postId = String(wrap.dataset.postId || '');
             let hideTimer = null;
             let pressTimer = null;
             let didLongPress = false;
@@ -383,7 +383,7 @@
     }
 
     function applyPolledPost(post) {
-        const postId = Number(post.id);
+        const postId = String(post.id);
         if (!postId || inflight.has(String(postId))) {
             return;
         }
@@ -405,7 +405,7 @@
     }
 
     async function pollFeedUpdates() {
-        const barangayId = Number(cfg.barangayId || 0);
+        const barangayId = String(cfg.barangayId || '');
         if (!barangayId || document.hidden || pollInFlight) {
             return;
         }
@@ -414,7 +414,8 @@
             if (commentPreviewIsOpen()) {
                 await refreshOpenCommentPreview();
             }
-            const res = await fetch('/api/feed?barangay_id=' + barangayId, {
+            const params = new URLSearchParams({ barangay_id: barangayId });
+            const res = await fetch('/api/feed?' + params.toString(), {
                 headers: {
                     Accept: 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',

@@ -63,7 +63,7 @@ class DashboardController extends Controller
             'barangayProfiles' => $barangayProfiles,
             'kabataanPrograms' => $kabataanPrograms,
             'commentPreviewPost' => null,
-            'feedYearsWithPosts' => $this->yearsWithPosts($barangayId),
+            'feedYearsWithPosts' => $this->yearsWithPosts($barangayId, $tenantId),
         ];
 
         return view('dashboard::dashboard', $viewData)->withHeaders([
@@ -78,7 +78,17 @@ class DashboardController extends Controller
             return redirect()->route('sign-in');
         }
 
-        $post = app(AnnouncementFeedController::class)->formattedVisiblePost(Auth::user(), $id);
+        $feedController = app(AnnouncementFeedController::class);
+        try {
+            $post = $feedController->formattedVisiblePost(Auth::user(), $id);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $exception) {
+            if (! $feedController->isVisibleArchivedPost(Auth::user(), $id)) {
+                throw $exception;
+            }
+
+            return redirect('/dashboard')->with('success', 'This post is no longer available.');
+        }
+
         $response = $this->index($request);
         if ($response instanceof View) {
             return $response->with('commentPreviewPost', $post);
@@ -159,7 +169,7 @@ class DashboardController extends Controller
     /**
      * @return list<int>
      */
-    private function yearsWithPosts(int $barangayId): array
+    private function yearsWithPosts(int $barangayId, int $tenantId): array
     {
         if ($barangayId <= 0) {
             return [(int) date('Y')];
@@ -173,6 +183,7 @@ class DashboardController extends Controller
 
         return Announcement::query()
             ->active()
+            ->visibleToTenant($tenantId)
             ->where(function ($q) use ($barangayId) {
                 $q->where('barangay_id', $barangayId)
                     ->orWhereRaw('"is_federation_wide" = true');
